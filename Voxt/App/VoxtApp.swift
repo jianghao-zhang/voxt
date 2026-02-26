@@ -87,6 +87,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: NSWindowController?
 
     private var isSessionActive = false
+    private var pendingSessionFinishTask: Task<Void, Never>?
+    private let sessionFinishDelay: TimeInterval = 2.0
 
     override init() {
         let repo = UserDefaults.standard.string(forKey: AppPreferenceKey.mlxModelRepo)
@@ -233,6 +235,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func beginRecording() {
         guard !isSessionActive else { return }
+        pendingSessionFinishTask?.cancel()
+        pendingSessionFinishTask = nil
 
         if transcriptionEngine == .mlxAudio {
             switch mlxModelManager.state {
@@ -270,10 +274,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             mlxTranscriber?.stopRecording()
         } else {
             speechTranscriber.stopRecording()
-            let waitingForAI = enhancementMode == .appleIntelligence && enhancer != nil
-            if !waitingForAI {
-                finishSession(after: 0.6)
-            }
         }
     }
 
@@ -390,15 +390,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func finishSession(after delay: TimeInterval = 0) {
-        guard delay > 0 else {
-            overlayWindow.hide()
-            isSessionActive = false
-            return
-        }
+        pendingSessionFinishTask?.cancel()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.overlayWindow.hide()
-            self?.isSessionActive = false
+        let resolvedDelay = delay > 0 ? delay : sessionFinishDelay
+        pendingSessionFinishTask = Task { [weak self] in
+            guard let self else { return }
+
+            if resolvedDelay > 0 {
+                do {
+                    try await Task.sleep(for: .seconds(resolvedDelay))
+                } catch {
+                    return
+                }
+            }
+
+            guard !Task.isCancelled else { return }
+            self.overlayWindow.hide()
+            self.isSessionActive = false
+            self.pendingSessionFinishTask = nil
         }
     }
 

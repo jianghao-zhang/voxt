@@ -137,6 +137,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             case .token(let token):
                 streamedText += token
                 transcribedText = streamedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                await Task.yield()
             case .info:
                 break
             case .result(let output):
