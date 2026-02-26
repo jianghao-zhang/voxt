@@ -26,11 +26,11 @@ struct WaveformView: View {
     var body: some View {
         VStack(spacing: isCompact ? 0 : 8) {
             HStack(spacing: 10) {
-                // Icon: spinner when enhancing, kaze icon otherwise
+                // Icon: spinner when enhancing, voxt icon otherwise
                 if isEnhancing {
                     processingSpinner
                 } else {
-                    Image("kaze-icon")
+                    Image("voxt")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 16, height: 16)

@@ -131,7 +131,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
-            if let icon = NSImage(named: "kaze-icon") {
+            if let icon = NSImage(named: "voxt") {
                 icon.size = NSSize(width: 18, height: 18)
                 icon.isTemplate = true
                 button.image = icon
