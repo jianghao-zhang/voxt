@@ -3,7 +3,9 @@
 Voxt is a menu-bar macOS app for push-to-talk transcription.
 Hold a global shortcut, speak, and Voxt pastes the result into the currently focused app while restoring your previous clipboard content.
 
-https://github.com/user-attachments/assets/8fde004a-e07a-45fc-ae3c-8f8a216873d3
+
+https://github.com/user-attachments/assets/23d42c24-7128-4bdb-bc1d-98509e69d97e
+
 
 ## How It Works
 
