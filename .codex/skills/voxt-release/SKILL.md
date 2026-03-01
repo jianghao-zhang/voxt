@@ -20,9 +20,10 @@ It is used when the user asks to:
 
 1. Confirm release target and current repository state.
 2. Follow the local release flow (no auto GitHub release workflow is used).
-3. Keep `CHANGELOG.md`, `build/release/artifacts/*`, and `updates/appcast.json` consistent.
-4. Mandatory before build: `CHANGELOG.md` must include a new release section for the target version.
-5. Create/push git tag and publish GitHub release assets when shipping.
+3. Prepare release artifacts locally in Xcode and place them in `build/release/artifacts/`.
+4. Keep `CHANGELOG.md`, `build/release/artifacts/*`, and `updates/appcast.json` consistent.
+5. Mandatory before release: `CHANGELOG.md` must include a new release section for the target version.
+6. Create/push git tag and publish GitHub release assets when shipping.
 
 ## Required Inputs
 
@@ -53,25 +54,49 @@ echo "### Changed"
 git log ${BASE_TAG:+${BASE_TAG}..HEAD} --grep='^refactor\\|^perf\\|^chore' --pretty='- %s'
 ```
 
-### Step 2 — Build release artifacts locally
+### Step 2 — Build release artifacts locally in Xcode
 
-From repository root:
+In Xcode:
 
 ```bash
-chmod +x scripts/release/build_release.sh scripts/release/publish_manifest.sh
-scripts/release/build_release.sh 1.2.3
-scripts/release/publish_manifest.sh
+1. In Xcode, run Archive and export:
+   - `Voxt-<VERSION>.app.zip`
+   - `Voxt-<VERSION>.pkg`
+2. Copy both artifacts into:
+   - `build/release/artifacts/Voxt-<VERSION>.app.zip`
+   - `build/release/artifacts/Voxt-<VERSION>.pkg`
 ```
 
 Expected outputs:
 
 - `build/release/artifacts/Voxt-<VERSION>.app.zip`
 - `build/release/artifacts/Voxt-<VERSION>.pkg`
-- `build/release/artifacts/appcast.json`
 
-### Step 3 — Update in-repo manifest
+### Step 3 — Update in-repo manifest from local artifacts
 
-- Verify `updates/appcast.json` points to `Voxt-<VERSION>.pkg` and contains updated version/hash.
+Run:
+
+```bash
+VERSION="1.2.3"
+PKG_PATH="build/release/artifacts/Voxt-${VERSION}.pkg"
+SHA256="$(shasum -a 256 "${PKG_PATH}" | awk '{print $1}')"
+cat > updates/appcast.json <<JSON
+{
+  "version": "${VERSION}",
+  "minimumSupportedVersion": "${VERSION}",
+  "downloadURL": "https://github.com/hehehai/voxt/releases/download/v${VERSION}/Voxt-${VERSION}.pkg",
+  "releaseNotes": "See CHANGELOG.md for details.",
+  "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "sha256": "${SHA256}"
+}
+JSON
+```
+
+If your generated manifest already exists at `build/release/artifacts/appcast.json`, use:
+
+```bash
+scripts/release/publish_manifest.sh build/release/artifacts/appcast.json updates/appcast.json
+```
 
 ### Step 4 — Commit
 
