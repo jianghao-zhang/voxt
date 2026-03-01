@@ -53,3 +53,4 @@ The format is based on Keep a Changelog.
 ### Fixed
 - Added microphone permission checks before starting dictation recording.
 - Fixed hotkey event callback ownership handling in the event tap callback.
+- Fixed update installer download handling by staging the package before completion callback returns.
