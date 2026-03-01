@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-03-01
+
+### Added
+- Release v1.1.2.
+
+
 ### Added
 - Test release based on local Voxt.app archive package.
 - In-app update checks with menu entry and optional automatic check at launch.
