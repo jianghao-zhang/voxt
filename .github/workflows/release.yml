@@ -38,45 +38,55 @@ jobs:
       contents: read
     outputs:
       should_skip: ${{ steps.release_state.outputs.should_skip }}
-      tag: ${{ steps.version.outputs.tag }}
-      version: ${{ steps.version.outputs.version }}
-      draft_release: ${{ steps.flags.outputs.draft_release }}
-      update_appcast: ${{ steps.flags.outputs.update_appcast }}
-      skip_if_assets_exist: ${{ steps.flags.outputs.skip_if_assets_exist }}
+      tag: ${{ steps.version_dispatch.outputs.tag || steps.version_push.outputs.tag }}
+      version: ${{ steps.version_dispatch.outputs.version || steps.version_push.outputs.version }}
+      draft_release: ${{ steps.flags_dispatch.outputs.draft_release || steps.flags_push.outputs.draft_release }}
+      update_appcast: ${{ steps.flags_dispatch.outputs.update_appcast || steps.flags_push.outputs.update_appcast }}
+      skip_if_assets_exist: ${{ steps.flags_dispatch.outputs.skip_if_assets_exist || steps.flags_push.outputs.skip_if_assets_exist }}
     steps:
-      - name: Resolve runtime flags
-        id: flags
+      - name: Resolve runtime flags (dispatch)
+        id: flags_dispatch
+        if: github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            echo "draft_release=${{ inputs.draft_release }}" >> "$GITHUB_OUTPUT"
-            echo "update_appcast=${{ inputs.update_appcast }}" >> "$GITHUB_OUTPUT"
-            echo "skip_if_assets_exist=${{ inputs.skip_if_assets_exist }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "draft_release=false" >> "$GITHUB_OUTPUT"
-            echo "update_appcast=true" >> "$GITHUB_OUTPUT"
-            echo "skip_if_assets_exist=true" >> "$GITHUB_OUTPUT"
-          fi
+          echo "draft_release=${{ github.event.inputs.draft_release }}" >> "$GITHUB_OUTPUT"
+          echo "update_appcast=${{ github.event.inputs.update_appcast }}" >> "$GITHUB_OUTPUT"
+          echo "skip_if_assets_exist=${{ github.event.inputs.skip_if_assets_exist }}" >> "$GITHUB_OUTPUT"
 
-      - name: Validate tag and extract version
-        id: version
+      - name: Resolve runtime flags (push)
+        id: flags_push
+        if: github.event_name != 'workflow_dispatch'
         run: |
           set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
-            if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)([-+][0-9A-Za-z.-]+)?$ ]]; then
-              echo "::error::Manual tag must be vX.Y.Z or vX.Y.Z-suffix, got: $TAG"
-              exit 1
-            fi
-            VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
-          else
-            TAG="${GITHUB_REF_NAME}"
-            if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              echo "::error::Tag must be vX.Y.Z, got: $TAG"
-              exit 1
-            fi
-            VERSION="${TAG#v}"
+          echo "draft_release=false" >> "$GITHUB_OUTPUT"
+          echo "update_appcast=true" >> "$GITHUB_OUTPUT"
+          echo "skip_if_assets_exist=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag and extract version (dispatch)
+        id: version_dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag }}"
+          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Manual tag must be vX.Y.Z or vX.Y.Z-suffix, got: $TAG"
+            exit 1
           fi
+          VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag and extract version (push)
+        id: version_push
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Tag must be vX.Y.Z, got: $TAG"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -84,8 +94,8 @@ jobs:
         id: release_state
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-          SKIP_IF_ASSETS_EXIST: ${{ steps.flags.outputs.skip_if_assets_exist }}
+          TAG: ${{ steps.version_dispatch.outputs.tag || steps.version_push.outputs.tag }}
+          SKIP_IF_ASSETS_EXIST: ${{ steps.flags_dispatch.outputs.skip_if_assets_exist || steps.flags_push.outputs.skip_if_assets_exist }}
         run: |
           set -euo pipefail
           if [ "$SKIP_IF_ASSETS_EXIST" != "true" ]; then
@@ -138,10 +148,7 @@ jobs:
             DEVELOPER_ID_INSTALLER_CERT_PASSWORD \
             DEVELOPER_ID_APP_IDENTITY \
             DEVELOPER_ID_INSTALLER_IDENTITY \
-            KEYCHAIN_PASSWORD \
-            APPLE_ID \
-            APPLE_TEAM_ID \
-            APPLE_APP_SPECIFIC_PASSWORD; do
+            KEYCHAIN_PASSWORD; do
             if [ -z "${!key:-}" ]; then
               echo "::error::Missing required secret: $key"
               exit 1
