@@ -16,7 +16,7 @@ on:
         default: true
         type: boolean
       update_appcast:
-        description: "Commit updates/appcast.json to main"
+        description: "Commit updates/appcast.xml to main"
         required: true
         default: false
         type: boolean
@@ -121,6 +121,7 @@ jobs:
     env:
       VERSION: ${{ needs.preflight.outputs.version }}
       TAG: ${{ needs.preflight.outputs.tag }}
+      UPDATE_APPCAST: ${{ needs.preflight.outputs.update_appcast }}
       DEVELOPER_ID_APP_CERT_P12: ${{ secrets.DEVELOPER_ID_APP_CERT_P12 }}
       DEVELOPER_ID_APP_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APP_CERT_PASSWORD }}
       DEVELOPER_ID_INSTALLER_CERT_P12: ${{ secrets.DEVELOPER_ID_INSTALLER_CERT_P12 }}
@@ -135,6 +136,7 @@ jobs:
       APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
       APPLE_NOTARIZATION_KEY: ${{ secrets.APPLE_NOTARIZATION_KEY }}
       NOTARY_PROFILE_NAME: ${{ secrets.NOTARY_PROFILE_NAME }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -167,6 +169,11 @@ jobs:
 
           if [ "$HAS_API_KEY_AUTH" -eq 0 ] && [ "$HAS_APPLE_ID_AUTH" -eq 0 ]; then
             echo "::error::Missing notarization credentials: provide API key (APPLE_NOTARIZATION_ISSUER/KEY_ID/KEY) or Apple ID credentials (APPLE_ID/APPLE_TEAM_ID/APPLE_APP_SPECIFIC_PASSWORD)."
+            exit 1
+          fi
+
+          if [ "${UPDATE_APPCAST:-false}" = "true" ] && [ -z "${SPARKLE_PRIVATE_KEY:-}" ]; then
+            echo "::error::Missing required secret for Sparkle appcast signing: SPARKLE_PRIVATE_KEY"
             exit 1
           fi
 
@@ -467,6 +474,63 @@ jobs:
           SHA_PATH="build/Voxt-${VERSION}.pkg.sha256"
           shasum -a 256 "$PKG_PATH" | awk '{print $1}' > "$SHA_PATH"
 
+      - name: Generate Sparkle edSignature metadata
+        if: needs.preflight.outputs.update_appcast == 'true'
+        run: |
+          set -euo pipefail
+          PKG_PATH="build/Voxt-${VERSION}.pkg"
+          KEY_FILE="build/sparkle-private-key.pem"
+          SIG_ENV_FILE="build/sparkle-signature.env"
+
+          if [ ! -f "$PKG_PATH" ]; then
+            echo "::error::Package file missing: $PKG_PATH"
+            exit 1
+          fi
+
+          if [ -z "${SPARKLE_PRIVATE_KEY:-}" ]; then
+            echo "::error::SPARKLE_PRIVATE_KEY is empty"
+            exit 1
+          fi
+
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          SIGN_UPDATE_BIN="$(find build/DerivedData/SourcePackages/checkouts -path '*/Sparkle/bin/sign_update' -type f | head -n 1 || true)"
+          if [ -z "$SIGN_UPDATE_BIN" ]; then
+            echo "::error::Unable to locate Sparkle sign_update binary from SwiftPM checkout"
+            exit 1
+          fi
+
+          SIGN_OUTPUT="$("$SIGN_UPDATE_BIN" "$PKG_PATH" --ed-key-file "$KEY_FILE" 2>/tmp/sign_update.err || true)"
+          if [ -z "$SIGN_OUTPUT" ]; then
+            SIGN_OUTPUT="$("$SIGN_UPDATE_BIN" "$PKG_PATH" "$KEY_FILE" 2>>/tmp/sign_update.err || true)"
+          fi
+
+          SPARKLE_ED_SIGNATURE="$(printf '%s\n' "$SIGN_OUTPUT" | rg -o 'sparkle:edSignature="[^"]+"' | head -n 1 | sed -E 's/^[^"]*"([^"]+)".*$/\1/')"
+          SPARKLE_ED_LENGTH="$(printf '%s\n' "$SIGN_OUTPUT" | rg -o 'length="[0-9]+"' | head -n 1 | sed -E 's/^[^"]*"([0-9]+)".*$/\1/')"
+          if [ -z "$SPARKLE_ED_LENGTH" ]; then
+            SPARKLE_ED_LENGTH="$(stat -f%z "$PKG_PATH")"
+          fi
+
+          if [ -z "$SPARKLE_ED_SIGNATURE" ]; then
+            echo "::error::Failed to parse sparkle:edSignature from sign_update output"
+            cat /tmp/sign_update.err || true
+            printf '%s\n' "$SIGN_OUTPUT"
+            exit 1
+          fi
+
+          if ! [[ "$SPARKLE_ED_LENGTH" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid Sparkle package length: $SPARKLE_ED_LENGTH"
+            exit 1
+          fi
+
+          {
+            printf 'SPARKLE_ED_SIGNATURE=%s\n' "$SPARKLE_ED_SIGNATURE"
+            printf 'SPARKLE_ED_LENGTH=%s\n' "$SPARKLE_ED_LENGTH"
+          } > "$SIG_ENV_FILE"
+
+          rm -f "$KEY_FILE"
+
       - uses: actions/upload-artifact@v4
         with:
           name: release-artifacts-${{ needs.preflight.outputs.version }}
@@ -474,6 +538,7 @@ jobs:
             build/Voxt-${{ needs.preflight.outputs.version }}-macOS.zip
             build/Voxt-${{ needs.preflight.outputs.version }}.pkg
             build/Voxt-${{ needs.preflight.outputs.version }}.pkg.sha256
+            build/sparkle-signature.env
 
   publish_release:
     name: Publish GitHub Release Assets
@@ -546,7 +611,7 @@ jobs:
           fi
 
   update_appcast_main:
-    name: Update updates/appcast.json on main
+    name: Update updates/appcast.xml on main
     runs-on: ubuntu-latest
     needs: [preflight, build_sign_notarize, publish_release]
     if: needs.preflight.outputs.should_skip != 'true' && needs.preflight.outputs.update_appcast == 'true'
@@ -569,27 +634,41 @@ jobs:
           name: release-artifacts-${{ needs.preflight.outputs.version }}
           path: build
 
-      - name: Generate appcast.json
+      - name: Generate appcast.xml
         run: |
           set -euo pipefail
           PKG_NAME="Voxt-${VERSION}.pkg"
-          SHA_FILE="build/${PKG_NAME}.sha256"
+          PKG_PATH="build/${PKG_NAME}"
+          SIG_ENV_FILE="build/sparkle-signature.env"
 
-          if [ ! -f "$SHA_FILE" ]; then
-            echo "::error::Checksum file missing: $SHA_FILE"
+          if [ ! -f "$PKG_PATH" ]; then
+            echo "::error::Package file missing: $PKG_PATH"
             exit 1
           fi
 
-          SHA256="$(tr -d '\r\n' < "$SHA_FILE")"
-          if [ -z "$SHA256" ]; then
-            echo "::error::Checksum is empty"
+          if [ ! -f "$SIG_ENV_FILE" ]; then
+            echo "::error::Sparkle signature metadata file missing: $SIG_ENV_FILE"
+            exit 1
+          fi
+
+          set -a
+          . "$SIG_ENV_FILE"
+          set +a
+
+          if [ -z "${SPARKLE_ED_SIGNATURE:-}" ]; then
+            echo "::error::SPARKLE_ED_SIGNATURE is missing in $SIG_ENV_FILE"
+            exit 1
+          fi
+
+          if ! [[ "${SPARKLE_ED_LENGTH:-}" =~ ^[0-9]+$ ]]; then
+            echo "::error::SPARKLE_ED_LENGTH is invalid in $SIG_ENV_FILE: ${SPARKLE_ED_LENGTH:-}"
             exit 1
           fi
 
           RELEASE_BODY="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json body --jq '.body // ""')"
-          RELEASE_NOTES="$(printf '%s' "$RELEASE_BODY" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+          RELEASE_NOTES="$(printf '%s' "$RELEASE_BODY")"
           if [ -z "$RELEASE_NOTES" ]; then
-            RELEASE_NOTES="Release ${TAG}."
+            RELEASE_NOTES="Release ${VERSION}."
           fi
 
           PUBLISHED_AT="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json publishedAt --jq '.publishedAt // ""')"
@@ -597,36 +676,96 @@ jobs:
             PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           fi
 
+          RELEASE_URL="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json url --jq '.url // ""')"
+          if [ -z "$RELEASE_URL" ]; then
+            RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          SPARKLE_VERSION="$((10#$MAJOR * 1000000 + 10#$MINOR * 1000 + 10#$PATCH))"
           DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${PKG_NAME}"
 
-          jq -n \
-            --arg version "$VERSION" \
-            --arg minimumSupportedVersion "$VERSION" \
-            --arg downloadURL "$DOWNLOAD_URL" \
-            --arg releaseNotes "$RELEASE_NOTES" \
-            --arg publishedAt "$PUBLISHED_AT" \
-            --arg sha256 "$SHA256" \
-            '{
-              version: $version,
-              minimumSupportedVersion: $minimumSupportedVersion,
-              downloadURL: $downloadURL,
-              releaseNotes: $releaseNotes,
-              publishedAt: $publishedAt,
-              sha256: $sha256
-            }' > updates/appcast.json
+          APPCAST_VERSION="$VERSION" \
+          APPCAST_SPARKLE_VERSION="$SPARKLE_VERSION" \
+          APPCAST_DOWNLOAD_URL="$DOWNLOAD_URL" \
+          APPCAST_RELEASE_URL="$RELEASE_URL" \
+          APPCAST_RELEASE_NOTES="$RELEASE_NOTES" \
+          APPCAST_PKG_SIZE="$SPARKLE_ED_LENGTH" \
+          APPCAST_ED_SIGNATURE="$SPARKLE_ED_SIGNATURE" \
+          APPCAST_PUBLISHED_AT="$PUBLISHED_AT" \
+          python3 - <<'PY' > updates/appcast.xml
+          import os
+          from datetime import datetime, timezone
+          from email.utils import format_datetime
+          from xml.sax.saxutils import escape, quoteattr
 
-      - name: Commit and push appcast.json to main
+          published_at = os.environ["APPCAST_PUBLISHED_AT"].strip()
+          try:
+              if published_at.endswith("Z"):
+                  dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+              else:
+                  dt = datetime.fromisoformat(published_at)
+              if dt.tzinfo is None:
+                  dt = dt.replace(tzinfo=timezone.utc)
+              dt = dt.astimezone(timezone.utc)
+          except Exception:
+              dt = datetime.now(timezone.utc)
+          pub_date = format_datetime(dt)
+
+          version = os.environ["APPCAST_VERSION"]
+          sparkle_version = os.environ["APPCAST_SPARKLE_VERSION"]
+          download_url = os.environ["APPCAST_DOWNLOAD_URL"]
+          release_url = os.environ["APPCAST_RELEASE_URL"]
+          notes = os.environ.get("APPCAST_RELEASE_NOTES", "").strip() or f"Release {version}."
+          pkg_size = os.environ["APPCAST_PKG_SIZE"]
+          ed_signature = os.environ["APPCAST_ED_SIGNATURE"]
+
+          enclosure_attrs = [
+              f"url={quoteattr(download_url)}",
+              'type="application/octet-stream"',
+              f"length={quoteattr(pkg_size)}",
+              f"sparkle:shortVersionString={quoteattr(version)}",
+              f"sparkle:version={quoteattr(sparkle_version)}",
+              f"sparkle:edSignature={quoteattr(ed_signature)}",
+          ]
+
+          lines = [
+              '<?xml version="1.0" encoding="utf-8"?>',
+              '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">',
+              "  <channel>",
+              "    <title>Voxt Updates</title>",
+              f"    <link>{escape(release_url)}</link>",
+              "    <description>Latest Voxt releases</description>",
+              "    <language>en</language>",
+              "    <item>",
+              f"      <title>Voxt {escape(version)}</title>",
+              f"      <pubDate>{escape(pub_date)}</pubDate>",
+              f"      <description>{escape(notes)}</description>",
+              f"      <sparkle:releaseNotesLink>{escape(release_url)}</sparkle:releaseNotesLink>",
+              f"      <enclosure {' '.join(enclosure_attrs)} />",
+          ]
+
+          lines.extend([
+              "    </item>",
+              "  </channel>",
+              "</rss>",
+          ])
+
+          print("\n".join(lines))
+          PY
+
+      - name: Commit and push appcast.xml to main
         run: |
           set -euo pipefail
-          if git diff --quiet -- updates/appcast.json; then
-            echo "No updates/appcast.json changes to commit."
+          if git diff --quiet -- updates/appcast.xml; then
+            echo "No updates/appcast.xml changes to commit."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add updates/appcast.json
-          git commit -m "ci: update appcast for ${TAG}"
+          git add updates/appcast.xml
+          git commit -m "ci: update sparkle appcast for ${TAG}"
 
           PUSH_TOKEN="${GH_RELEASE_TOKEN:-$GITHUB_TOKEN}"
           git remote set-url origin "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
