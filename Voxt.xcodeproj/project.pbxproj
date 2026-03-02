@@ -426,7 +426,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Voxt needs microphone access to transcribe your speech.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Voxt uses speech recognition for direct dictation.";
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/hehehai/voxt/main/updates/appcast.xml";
-				INFOPLIST_KEY_SUPublicEDKey = iMt1voRdgfUUpKxdY7DliGLaOl17gJFB8Jhlo5ox2eE=;
+				INFOPLIST_KEY_SUPublicEDKey = "iMt1voRdgfUUpKxdY7DliGLaOl17gJFB8Jhlo5ox2eE=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -467,7 +467,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Voxt needs microphone access to transcribe your speech.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Voxt uses speech recognition for direct dictation.";
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/hehehai/voxt/main/updates/appcast.xml";
-				INFOPLIST_KEY_SUPublicEDKey = iMt1voRdgfUUpKxdY7DliGLaOl17gJFB8Jhlo5ox2eE=;
+				INFOPLIST_KEY_SUPublicEDKey = "iMt1voRdgfUUpKxdY7DliGLaOl17gJFB8Jhlo5ox2eE=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
