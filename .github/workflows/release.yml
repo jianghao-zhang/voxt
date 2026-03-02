@@ -121,6 +121,10 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_NOTARIZATION_ISSUER: ${{ secrets.APPLE_NOTARIZATION_ISSUER }}
+      APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
+      APPLE_NOTARIZATION_KEY: ${{ secrets.APPLE_NOTARIZATION_KEY }}
+      NOTARY_PROFILE_NAME: ${{ secrets.NOTARY_PROFILE_NAME }}
     steps:
       - uses: actions/checkout@v4
 
@@ -143,6 +147,21 @@ jobs:
               exit 1
             fi
           done
+
+          HAS_API_KEY_AUTH=0
+          if [ -n "${APPLE_NOTARIZATION_ISSUER:-}" ] && [ -n "${APPLE_NOTARIZATION_KEY_ID:-}" ] && [ -n "${APPLE_NOTARIZATION_KEY:-}" ]; then
+            HAS_API_KEY_AUTH=1
+          fi
+
+          HAS_APPLE_ID_AUTH=0
+          if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
+            HAS_APPLE_ID_AUTH=1
+          fi
+
+          if [ "$HAS_API_KEY_AUTH" -eq 0 ] && [ "$HAS_APPLE_ID_AUTH" -eq 0 ]; then
+            echo "::error::Missing notarization credentials: provide API key (APPLE_NOTARIZATION_ISSUER/KEY_ID/KEY) or Apple ID credentials (APPLE_ID/APPLE_TEAM_ID/APPLE_APP_SPECIFIC_PASSWORD)."
+            exit 1
+          fi
 
       - name: Validate MARKETING_VERSION matches tag
         run: |
@@ -186,6 +205,29 @@ jobs:
           if ! security find-identity -v -p basic build.keychain | grep -F "$DEVELOPER_ID_INSTALLER_IDENTITY" >/dev/null; then
             echo "::error::Developer ID Installer identity not found in keychain: $DEVELOPER_ID_INSTALLER_IDENTITY"
             exit 1
+          fi
+
+      - name: Setup notarytool authentication mode
+        run: |
+          set -euo pipefail
+
+          PROFILE="${NOTARY_PROFILE_NAME:-notarytool-profile}"
+          echo "NOTARY_PROFILE_NAME=$PROFILE" >> "$GITHUB_ENV"
+
+          if [ -n "${APPLE_NOTARIZATION_ISSUER:-}" ] && [ -n "${APPLE_NOTARIZATION_KEY_ID:-}" ] && [ -n "${APPLE_NOTARIZATION_KEY:-}" ]; then
+            KEY_FILE="build/notary-api-key.p8"
+            mkdir -p build
+            printf '%s' "$APPLE_NOTARIZATION_KEY" > "$KEY_FILE"
+            xcrun notarytool store-credentials "$PROFILE" \
+              --key "$KEY_FILE" \
+              --key-id "$APPLE_NOTARIZATION_KEY_ID" \
+              --issuer "$APPLE_NOTARIZATION_ISSUER"
+            rm -f "$KEY_FILE"
+            echo "NOTARY_AUTH_MODE=profile" >> "$GITHUB_ENV"
+            echo "Using notary auth mode: profile"
+          else
+            echo "NOTARY_AUTH_MODE=apple-id" >> "$GITHUB_ENV"
+            echo "Using notary auth mode: apple-id"
           fi
 
       - name: Build app (unsigned)
@@ -244,29 +286,184 @@ jobs:
         run: |
           set -euo pipefail
           PKG_PATH="build/Voxt-${VERSION}.pkg"
+          NOTARY_LOG_FILE="build/notary-log-${VERSION}.json"
+          SUBMIT_JSON="build/notary-submit.json"
+          SUBMIT_ERR="build/notary-submit.err.log"
+          INFO_JSON="build/notary-info.json"
+          INFO_ERR="build/notary-info.err.log"
 
-          MAX_ATTEMPTS=8
-          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-            echo "Notarization attempt $attempt..."
-            if xcrun notarytool submit "$PKG_PATH" \
-              --apple-id "$APPLE_ID" \
-              --team-id "$APPLE_TEAM_ID" \
-              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-              --wait; then
+          classify_retryable() {
+            local err_file="$1"
+            if rg -q "HTTP status code: 5[0-9][0-9]|statusCode: 500|UNEXPECTED_ERROR|Internal Server Error" "$err_file"; then
+              return 0
+            fi
+            return 1
+          }
+
+          run_notarytool_submit() {
+            if [ "${NOTARY_AUTH_MODE:-apple-id}" = "profile" ]; then
+              xcrun notarytool submit "$PKG_PATH" \
+                --keychain-profile "$NOTARY_PROFILE_NAME" \
+                --output-format json \
+                >"$SUBMIT_JSON" 2>"$SUBMIT_ERR"
+            else
+              xcrun notarytool submit "$PKG_PATH" \
+                --apple-id "$APPLE_ID" \
+                --team-id "$APPLE_TEAM_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                --output-format json \
+                >"$SUBMIT_JSON" 2>"$SUBMIT_ERR"
+            fi
+          }
+
+          run_notarytool_info() {
+            local submission_id="$1"
+            if [ "${NOTARY_AUTH_MODE:-apple-id}" = "profile" ]; then
+              xcrun notarytool info "$submission_id" \
+                --keychain-profile "$NOTARY_PROFILE_NAME" \
+                --output-format json \
+                >"$INFO_JSON" 2>"$INFO_ERR"
+            else
+              xcrun notarytool info "$submission_id" \
+                --apple-id "$APPLE_ID" \
+                --team-id "$APPLE_TEAM_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                --output-format json \
+                >"$INFO_JSON" 2>"$INFO_ERR"
+            fi
+          }
+
+          fetch_notary_log() {
+            local submission_id="$1"
+            if [ "${NOTARY_AUTH_MODE:-apple-id}" = "profile" ]; then
+              xcrun notarytool log "$submission_id" \
+                --keychain-profile "$NOTARY_PROFILE_NAME" \
+                >"$NOTARY_LOG_FILE" 2>&1 || true
+            else
+              xcrun notarytool log "$submission_id" \
+                --apple-id "$APPLE_ID" \
+                --team-id "$APPLE_TEAM_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                >"$NOTARY_LOG_FILE" 2>&1 || true
+            fi
+          }
+
+          SUBMISSION_ID=""
+          MAX_SUBMIT_ATTEMPTS=8
+          for attempt in $(seq 1 "$MAX_SUBMIT_ATTEMPTS"); do
+            echo "Notarization submit attempt $attempt..."
+            if run_notarytool_submit; then
+              SUBMISSION_ID="$(python3 - <<'PY'
+import json
+with open("build/notary-submit.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+print(data.get("id", ""))
+PY
+)"
+              if [ -z "$SUBMISSION_ID" ]; then
+                echo "::error::notarytool submit succeeded but no submission id was returned"
+                exit 1
+              fi
+              echo "Notary submission id: $SUBMISSION_ID"
               break
             fi
-            if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
-              echo "::error::Notarization failed after ${MAX_ATTEMPTS} attempts"
+
+            if classify_retryable "$SUBMIT_ERR"; then
+              if [ "$attempt" -eq "$MAX_SUBMIT_ATTEMPTS" ]; then
+                echo "::error::Notarization submit failed after ${MAX_SUBMIT_ATTEMPTS} attempts (retryable server errors)"
+                cat "$SUBMIT_ERR"
+                exit 1
+              fi
+              BACKOFF=$((attempt * 30))
+              REQUEST_ID="$(rg -o "Request ID: [A-Z0-9.]+" "$SUBMIT_ERR" | head -n 1 || true)"
+              if [ -n "$REQUEST_ID" ]; then
+                echo "Retryable Apple notary error ($REQUEST_ID). Retrying in ${BACKOFF}s..."
+              else
+                echo "Retryable Apple notary error. Retrying in ${BACKOFF}s..."
+              fi
+              sleep "$BACKOFF"
+              continue
+            fi
+
+            echo "::error::Notarization submit failed with non-retryable error"
+            cat "$SUBMIT_ERR"
+            exit 1
+          done
+
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "::error::No notary submission id available"
+            exit 1
+          fi
+
+          POLL_INTERVAL=25
+          MAX_POLL_SECONDS=$((30 * 60))
+          START_TS="$(date +%s)"
+          ACCEPTED=0
+
+          while true; do
+            NOW_TS="$(date +%s)"
+            ELAPSED=$((NOW_TS - START_TS))
+            if [ "$ELAPSED" -ge "$MAX_POLL_SECONDS" ]; then
+              echo "::error::Notary polling timed out after ${MAX_POLL_SECONDS}s for submission $SUBMISSION_ID"
+              fetch_notary_log "$SUBMISSION_ID"
               exit 1
             fi
-            BACKOFF=$((attempt * 30))
-            echo "Notarization attempt $attempt failed. Retrying in ${BACKOFF}s..."
-            sleep "$BACKOFF"
+
+            if ! run_notarytool_info "$SUBMISSION_ID"; then
+              if classify_retryable "$INFO_ERR"; then
+                echo "Retryable error while checking notary status, continuing..."
+                sleep "$POLL_INTERVAL"
+                continue
+              fi
+              echo "::error::Failed to fetch notary status (non-retryable)"
+              cat "$INFO_ERR"
+              fetch_notary_log "$SUBMISSION_ID"
+              exit 1
+            fi
+
+            STATUS="$(python3 - <<'PY'
+import json
+with open("build/notary-info.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+print((data.get("status") or "").strip())
+PY
+)"
+            echo "Notary status: ${STATUS:-<empty>}"
+
+            if [ "$STATUS" = "Accepted" ]; then
+              ACCEPTED=1
+              break
+            fi
+
+            if [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+              echo "::error::Notary status is $STATUS for submission $SUBMISSION_ID"
+              fetch_notary_log "$SUBMISSION_ID"
+              [ -f "$NOTARY_LOG_FILE" ] && tail -n 120 "$NOTARY_LOG_FILE" || true
+              exit 1
+            fi
+
+            sleep "$POLL_INTERVAL"
           done
+
+          if [ "$ACCEPTED" -ne 1 ]; then
+            echo "::error::Notary status did not reach Accepted"
+            fetch_notary_log "$SUBMISSION_ID"
+            exit 1
+          fi
 
           xcrun stapler staple "$PKG_PATH"
           xcrun stapler validate "$PKG_PATH"
           spctl -a -vv -t install "$PKG_PATH"
+
+      - name: Upload notarization diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notarization-diagnostics-${{ needs.preflight.outputs.version }}
+          path: |
+            build/notary-*.log
+            build/notary-*.json
+          if-no-files-found: ignore
 
       - name: Generate checksum
         run: |
