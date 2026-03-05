@@ -6,6 +6,19 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-03-05
+
+### Changed
+- Refactored app startup and runtime logic into focused `AppDelegate` extensions for better maintainability:
+  - `AppDelegate+MenuWindow`
+  - `AppDelegate+PreferencesAndHistory`
+  - `AppDelegate+EnhancementPrompt`
+  - `AppDelegate+RecordingSession`
+- Extracted shared settings/domain types and reusable UI components to reduce file size and duplication.
+
+### Fixed
+- Sparkle update channel selection now defaults to stable feed unless `VOXT_UPDATE_CHANNEL=beta` is explicitly set, avoiding accidental use of test beta appcast entries that can trigger EdDSA security warnings.
+
 ## [1.3.0-beta.1] - 2026-03-04
 
 ### Added

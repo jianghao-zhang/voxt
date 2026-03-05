@@ -3,13 +3,6 @@ import AppKit
 import Combine
 
 struct ModelSettingsView: View {
-    private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter
-    }()
-
     @AppStorage(AppPreferenceKey.transcriptionEngine) private var engineRaw = TranscriptionEngine.mlxAudio.rawValue
     @AppStorage(AppPreferenceKey.enhancementMode) private var enhancementModeRaw = EnhancementMode.off.rawValue
     @AppStorage(AppPreferenceKey.enhancementSystemPrompt) private var systemPrompt = AppPreferenceKey.defaultEnhancementPrompt
@@ -239,13 +232,19 @@ struct ModelSettingsView: View {
                     String(
                         format: NSLocalizedString("Downloading: %d%% • %@", comment: ""),
                         Int(progress * 100),
-                        downloadProgressText(completed: completed, total: total)
+                        ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
                     )
                 )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                Text(downloadFileProgressText(currentFile: currentFile, completedFiles: completedFiles, totalFiles: totalFiles))
+                Text(
+                    ModelDownloadProgressFormatter.fileProgressText(
+                        currentFile: currentFile,
+                        completedFiles: completedFiles,
+                        totalFiles: totalFiles
+                    )
+                )
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -297,13 +296,19 @@ struct ModelSettingsView: View {
                     String(
                         format: NSLocalizedString("Custom LLM downloading: %d%% • %@", comment: ""),
                         Int(progress * 100),
-                        downloadProgressText(completed: completed, total: total)
+                        ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
                     )
                 )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                Text(downloadFileProgressText(currentFile: currentFile, completedFiles: completedFiles, totalFiles: totalFiles))
+                Text(
+                    ModelDownloadProgressFormatter.fileProgressText(
+                        currentFile: currentFile,
+                        completedFiles: completedFiles,
+                        totalFiles: totalFiles
+                    )
+                )
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -402,32 +407,6 @@ struct ModelSettingsView: View {
         }
     }
 
-    private func downloadProgressText(completed: Int64, total: Int64) -> String {
-        let completedText = Self.byteFormatter.string(fromByteCount: completed)
-        if total > 0 {
-            return AppLocalization.format(
-                "Downloaded: %@ / %@",
-                completedText,
-                Self.byteFormatter.string(fromByteCount: total)
-            )
-        }
-        return AppLocalization.format("Downloaded: %@", completedText)
-    }
-
-    private func downloadFileProgressText(currentFile: String?, completedFiles: Int, totalFiles: Int) -> String {
-        let filesText: String
-        if totalFiles > 0 {
-            filesText = AppLocalization.format("%d/%d files", completedFiles, totalFiles)
-        } else {
-            filesText = AppLocalization.format("%d files", completedFiles)
-        }
-        guard let currentFile, !currentFile.isEmpty else {
-            return AppLocalization.format("Preparing download... (%@)", filesText)
-        }
-        let fileName = (currentFile as NSString).lastPathComponent
-        return AppLocalization.format("Downloading: %@ (%@)", fileName, filesText)
-    }
-
     private func useModel(_ repo: String) {
         let canonicalRepo = MLXModelManager.canonicalModelRepo(repo)
         modelRepo = canonicalRepo
@@ -468,7 +447,10 @@ struct ModelSettingsView: View {
     private func modelStatusText(for repo: String) -> String {
         if isDownloadingModel(repo),
            case .downloading(_, let completed, let total, _, _, _) = mlxModelManager.state {
-            return AppLocalization.format("Downloading %@", downloadProgressText(completed: completed, total: total))
+            return AppLocalization.format(
+                "Downloading %@",
+                ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
+            )
         }
 
         if isCurrentModel(repo), case .error(let message) = mlxModelManager.state {
@@ -526,7 +508,10 @@ struct ModelSettingsView: View {
     private func customLLMStatusText(for repo: String) -> String {
         if isDownloadingCustomLLM(repo),
            case .downloading(_, let completed, let total, _, _, _) = customLLMManager.state {
-            return AppLocalization.format("Downloading %@", downloadProgressText(completed: completed, total: total))
+            return AppLocalization.format(
+                "Downloading %@",
+                ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
+            )
         }
 
         if isCurrentCustomLLM(repo), case .error(let message) = customLLMManager.state {
@@ -595,133 +580,5 @@ struct ModelSettingsView: View {
             }
             return LocalizedStringKey("")
         }
-    }
-}
-
-private struct PromptEditorView: View {
-    @Binding var text: String
-
-    var body: some View {
-        TextEditor(text: $text)
-            .font(.system(size: 11, design: .monospaced))
-            .frame(height: 100)
-            .scrollContentBackground(.hidden)
-            .padding(6)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.quaternary.opacity(0.5))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(.quaternary, lineWidth: 1)
-            )
-    }
-}
-
-private struct ModelTableAction {
-    let title: LocalizedStringKey
-    var role: ButtonRole? = nil
-    var isEnabled: Bool = true
-    let handler: () -> Void
-}
-
-private struct ModelTableRow: Identifiable {
-    let id: String
-    let title: String
-    let isActive: Bool
-    let status: String
-    var isTitleUnderlined: Bool = false
-    var onTapTitle: (() -> Void)? = nil
-    let actions: [ModelTableAction]
-}
-
-private struct ModelTableView: View {
-    let title: LocalizedStringKey
-    let rows: [ModelTableRow]
-    var maxHeight: CGFloat? = nil
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                Spacer()
-                Text("Actions")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .overlay(alignment: .bottom) {
-                Divider()
-            }
-
-            ScrollView(.vertical) {
-                VStack(spacing: 0) {
-                    tableRows
-                }
-            }
-            .frame(maxHeight: maxHeight)
-        }
-        .tableContainerStyle
-    }
-
-    @ViewBuilder
-    private var tableRows: some View {
-        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-            VStack(spacing: 0) {
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        if let onTapTitle = row.onTapTitle {
-                            Button(action: onTapTitle) {
-                                Text(row.title)
-                                    .font(.subheadline.weight(row.isActive ? .semibold : .regular))
-                                    .underline(row.isTitleUnderlined)
-                                    .foregroundStyle(row.isTitleUnderlined ? Color.accentColor : Color.primary)
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            Text(row.title)
-                                .font(.subheadline.weight(row.isActive ? .semibold : .regular))
-                                .underline(row.isTitleUnderlined)
-                        }
-                        Text(row.status)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 8)
-
-                    HStack(spacing: 6) {
-                        ForEach(Array(row.actions.enumerated()), id: \.offset) { _, action in
-                            Button(action.title, role: action.role) {
-                                action.handler()
-                            }
-                            .controlSize(.small)
-                            .disabled(!action.isEnabled)
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-
-                if index < rows.count - 1 {
-                    Divider()
-                }
-            }
-        }
-    }
-}
-
-private extension View {
-    var tableContainerStyle: some View {
-        background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        )
     }
 }

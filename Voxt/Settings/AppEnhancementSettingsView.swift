@@ -77,38 +77,7 @@ struct AppEnhancementSettingsView: View {
     }
 
     private var sourceTabs: some View {
-        HStack(spacing: 2) {
-            ForEach(SourceTab.allCases) { tab in
-                Button {
-                    sourceTab = tab
-                } label: {
-                    Text(tab.title)
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 22)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(sourceTab == tab ? Color.accentColor : Color.secondary)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(sourceTab == tab ? Color.accentColor.opacity(0.14) : .clear)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(sourceTab == tab ? Color.accentColor.opacity(0.45) : .clear, lineWidth: 1)
-                }
-            }
-        }
-        .padding(2)
-        .frame(width: 154)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        SourceTabPicker(selectedTab: $sourceTab)
     }
 
     private var appsGrid: some View {
@@ -153,58 +122,18 @@ struct AppEnhancementSettingsView: View {
     private func urlRow(_ item: BranchURLItem) -> some View {
         let group = groupForURL(id: item.id)
 
-        return HStack(spacing: 10) {
-            Image(systemName: "globe")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
-
-            Text(item.pattern)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            Spacer()
-
-            if let group {
-                HStack(spacing: 4) {
-                    Text(group.name)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Button {
-                        removeURLFromGroup(urlID: item.id)
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(Color.accentColor))
-                .frame(maxWidth: 56, alignment: .trailing)
-            }
-
-            Button(AppLocalization.localizedString("Edit")) {
+        return URLPatternRowView(
+            pattern: item.pattern,
+            groupName: group?.name,
+            onRemoveFromGroup: group == nil ? nil : { removeURLFromGroup(urlID: item.id) },
+            onEdit: {
                 urlDraft = item.pattern
                 modalErrorMessage = nil
                 modal = .editURL(item.id)
-            }
-            .controlSize(.small)
-
-            Button(AppLocalization.localizedString("Delete")) {
+            },
+            onDelete: {
                 deleteURLItem(id: item.id)
             }
-            .controlSize(.small)
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 36)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
         )
     }
 
@@ -850,4 +779,3 @@ struct AppEnhancementSettingsView: View {
         }
     }
 }
-

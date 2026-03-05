@@ -52,8 +52,18 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
     }
 
     private var selectedFeedURLString: String {
-        let bundleID = Bundle.main.bundleIdentifier?.lowercased() ?? ""
-        let isBetaBuild = bundleID.contains(".dev") || bundleID.contains(".beta")
-        return isBetaBuild ? betaFeedURLString : stableFeedURLString
+        // Prefer stable feed by default. Beta feed should be explicitly opted in
+        // because local/dev beta channels may contain test-only appcast entries.
+        if let channel = ProcessInfo.processInfo.environment["VOXT_UPDATE_CHANNEL"]?.lowercased() {
+            switch channel {
+            case "beta":
+                return betaFeedURLString
+            case "stable":
+                return stableFeedURLString
+            default:
+                break
+            }
+        }
+        return stableFeedURLString
     }
 }
