@@ -21,6 +21,16 @@ extension AppDelegate {
         checkUpdatesItem.target = self
         menu.addItem(checkUpdatesItem)
 
+        if appUpdateManager.hasUpdate, let latestVersion = appUpdateManager.latestVersion {
+            let updateInfoItem = NSMenuItem(
+                title: "New version: \(latestVersion)",
+                action: nil,
+                keyEquivalent: ""
+            )
+            updateInfoItem.isEnabled = false
+            menu.addItem(updateInfoItem)
+        }
+
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: AppLocalization.localizedString("Quit Voxt"), action: #selector(quit), keyEquivalent: "q"))
         statusItem?.menu = menu

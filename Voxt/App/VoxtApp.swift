@@ -108,6 +108,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindowController: NSWindowController?
     private var defaultsObserver: NSObjectProtocol?
     private var interfaceLanguageObserver: NSObjectProtocol?
+    private var updateAvailabilityObserver: NSObjectProtocol?
 
     var isSessionActive = false
     var pendingSessionFinishTask: Task<Void, Never>?
@@ -229,6 +230,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.buildMenu()
             }
         }
+        updateAvailabilityObserver = NotificationCenter.default.addObserver(
+            forName: .voxtUpdateAvailabilityDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.buildMenu()
+            }
+        }
 
         setupHotkey()
 
@@ -242,6 +252,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let interfaceLanguageObserver {
             NotificationCenter.default.removeObserver(interfaceLanguageObserver)
+        }
+        if let updateAvailabilityObserver {
+            NotificationCenter.default.removeObserver(updateAvailabilityObserver)
         }
     }
 

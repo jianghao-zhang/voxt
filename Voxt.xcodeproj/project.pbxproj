@@ -417,7 +417,7 @@
 				CODE_SIGN_ENTITLEMENTS = Voxt/Voxt.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1003003;
+				CURRENT_PROJECT_VERSION = 1003004;
 				DEVELOPMENT_TEAM = RY2TQTYSKQ;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -430,6 +430,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Voxt needs microphone access to transcribe your speech.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Voxt uses speech recognition for direct dictation.";
+				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/hehehai/voxt/main/updates/appcast.xml";
 				INFOPLIST_KEY_SUPublicEDKey = "iMt1voRdgfUUpKxdY7DliGLaOl17gJFB8Jhlo5ox2eE=";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -437,7 +438,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.3.3;
+				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.voxt.Voxt.dev;
 				PRODUCT_NAME = "$(TARGET_NAME) Dev";
 				REGISTER_APP_GROUPS = YES;
@@ -459,7 +460,7 @@
 				CODE_SIGN_ENTITLEMENTS = Voxt/Voxt.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1003003;
+				CURRENT_PROJECT_VERSION = 1003004;
 				DEVELOPMENT_TEAM = RY2TQTYSKQ;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -472,6 +473,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Voxt needs microphone access to transcribe your speech.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Voxt uses speech recognition for direct dictation.";
+				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/hehehai/voxt/main/updates/appcast.xml";
 				INFOPLIST_KEY_SUPublicEDKey = "iMt1voRdgfUUpKxdY7DliGLaOl17gJFB8Jhlo5ox2eE=";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -479,8 +481,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.3.3;
-				"MARKETING_VERSION[sdk=macosx*]" = 1.3.3;
+				MARKETING_VERSION = 1.3.4;
+				"MARKETING_VERSION[sdk=macosx*]" = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.voxt.Voxt;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

@@ -27,6 +27,15 @@
 		<string>company.thebrowser.Browser</string>
 	</array>
 
+	<!-- Sparkle sandboxed updater helper lookup -->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.voxt.Voxt-spks</string>
+		<string>com.voxt.Voxt-spki</string>
+		<string>com.voxt.Voxt.dev-spks</string>
+		<string>com.voxt.Voxt.dev-spki</string>
+	</array>
+
 	<!-- Accessibility (for CGEvent tap to detect Option key globally) -->
 	<!-- Note: this is requested at runtime; the user must grant it in System Settings -->
 </dict>

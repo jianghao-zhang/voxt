@@ -19,18 +19,12 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
     private let stableFeedURLString = "https://voxt.actnow.dev/updates/stable/appcast.xml"
     private let betaFeedURLString = "https://voxt.actnow.dev/updates/beta/appcast.xml"
     private var lastCheckSource: CheckSource = .automatic
+    private(set) var hasUpdate = false
+    private(set) var latestVersion: String?
 
     // Background/dockless apps should opt into Sparkle's gentle reminder support
     // to avoid missing scheduled update alerts.
     var supportsGentleScheduledUpdateReminders: Bool { true }
-
-    var hasUpdate: Bool {
-        false
-    }
-
-    var latestVersion: String? {
-        nil
-    }
 
     var automaticallyChecksForUpdates: Bool {
         get { updaterController.updater.automaticallyChecksForUpdates }
@@ -64,6 +58,9 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
     }
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        hasUpdate = true
+        latestVersion = "\(item.displayVersionString) (\(item.versionString))"
+        NotificationCenter.default.post(name: .voxtUpdateAvailabilityDidChange, object: nil)
         VoxtLog.info(
             """
             Sparkle found update. source=\(lastCheckSource.description), \
@@ -74,6 +71,9 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
     }
 
     func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: any Error) {
+        hasUpdate = false
+        latestVersion = nil
+        NotificationCenter.default.post(name: .voxtUpdateAvailabilityDidChange, object: nil)
         let nsError = error as NSError
         VoxtLog.info(
             """
@@ -154,4 +154,8 @@ private extension AppUpdateManager.CheckSource {
             return "manual"
         }
     }
+}
+
+extension Notification.Name {
+    static let voxtUpdateAvailabilityDidChange = Notification.Name("voxt.update.availability.didChange")
 }

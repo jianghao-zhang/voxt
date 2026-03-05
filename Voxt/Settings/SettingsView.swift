@@ -84,7 +84,7 @@ struct SettingsView: View {
                                 case .hotkey:
                                     HotkeySettingsView()
                                 case .about:
-                                    AboutSettingsView()
+                                    AboutSettingsView(appUpdateManager: appUpdateManager)
                                 case .history:
                                     EmptyView()
                                 }

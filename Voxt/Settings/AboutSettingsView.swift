@@ -1,12 +1,15 @@
 import SwiftUI
-import AppKit
 import UniformTypeIdentifiers
 
 struct AboutSettingsView: View {
+    let appUpdateManager: AppUpdateManager
     @Environment(\.locale) private var locale
 
     @State private var latestLogUpdateDate: Date?
     @State private var logExportStatus: String?
+    @State private var isExportingLogs = false
+    @State private var exportDocument = LogExportDocument(text: "")
+    @State private var exportSuggestedFilename = "voxt-log.log"
 
     private var appVersionText: String? {
         let bundle = Bundle.main
@@ -36,9 +39,16 @@ struct AboutSettingsView: View {
                         .foregroundStyle(.secondary)
 
                     if let version = appVersionText {
-                        HStack(spacing: 4) {
-                            Text("Version")
-                            Text(version)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            HStack(spacing: 4) {
+                                Text("Version")
+                                Text(version)
+                            }
+                            Spacer(minLength: 0)
+                            Button(String(localized: "Check for Updates…")) {
+                                appUpdateManager.checkForUpdates(source: .manual)
+                            }
+                            .controlSize(.small)
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -140,6 +150,20 @@ struct AboutSettingsView: View {
         .onAppear {
             refreshLogUpdateDate()
         }
+        .fileExporter(
+            isPresented: $isExportingLogs,
+            document: exportDocument,
+            contentType: .plainText,
+            defaultFilename: exportSuggestedFilename
+        ) { result in
+            switch result {
+            case .success(let destinationURL):
+                logExportStatus = localizedFormat("Exported to %@", destinationURL.lastPathComponent)
+            case .failure(let error):
+                logExportStatus = localizedFormat("Export failed: %@", error.localizedDescription)
+            }
+            refreshLogUpdateDate()
+        }
     }
 
     private func refreshLogUpdateDate() {
@@ -149,53 +173,15 @@ struct AboutSettingsView: View {
     private func exportLatestLogs() {
         do {
             let generatedURL = try VoxtLog.exportLatestLogs(limit: 2000)
-            let panel = NSSavePanel()
-            panel.canCreateDirectories = true
-            panel.allowedContentTypes = [.plainText]
-            panel.nameFieldStringValue = generatedURL.lastPathComponent
-            panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            let content = try String(contentsOf: generatedURL, encoding: .utf8)
+            exportDocument = LogExportDocument(text: content)
+            exportSuggestedFilename = generatedURL.lastPathComponent
             logExportStatus = String(localized: "Preparing export…")
-
-            if let hostWindow = NSApp.keyWindow ?? NSApp.mainWindow {
-                panel.beginSheetModal(for: hostWindow) { response in
-                    handleExportPanelResult(
-                        response: response,
-                        destinationURL: panel.url,
-                        generatedURL: generatedURL
-                    )
-                }
-            } else {
-                NSApp.activate(ignoringOtherApps: true)
-                let response = panel.runModal()
-                handleExportPanelResult(
-                    response: response,
-                    destinationURL: panel.url,
-                    generatedURL: generatedURL
-                )
-            }
+            isExportingLogs = true
         } catch {
             logExportStatus = localizedFormat("Export failed: %@", error.localizedDescription)
             refreshLogUpdateDate()
         }
-    }
-
-    private func handleExportPanelResult(response: NSApplication.ModalResponse, destinationURL: URL?, generatedURL: URL) {
-        guard response == .OK, let destinationURL else {
-            logExportStatus = String(localized: "Export cancelled")
-            refreshLogUpdateDate()
-            return
-        }
-
-        do {
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try FileManager.default.removeItem(at: destinationURL)
-            }
-            try FileManager.default.copyItem(at: generatedURL, to: destinationURL)
-            logExportStatus = localizedFormat("Exported to %@", destinationURL.lastPathComponent)
-        } catch {
-            logExportStatus = localizedFormat("Export failed: %@", error.localizedDescription)
-        }
-        refreshLogUpdateDate()
     }
 
     private func localizedFormat(_ key: String, _ argument: String) -> String {
