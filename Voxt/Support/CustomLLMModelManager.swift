@@ -402,6 +402,7 @@ class CustomLLMModelManager: ObservableObject {
                         totalFiles: totalFiles
                     )
 
+                    let destination = try destinationFileURL(for: entry.path, under: modelDir)
                     cancelDownloadProgressTask()
                     downloadProgressTask = Task { [weak self] in
                         let startTime = Date()
@@ -433,7 +434,7 @@ class CustomLLMModelManager: ObservableObject {
                     _ = try await client.downloadFile(
                         at: entry.path,
                         from: repoID,
-                        to: modelDir,
+                        to: destination,
                         kind: .model,
                         revision: "main",
                         progress: progress,
@@ -588,6 +589,24 @@ class CustomLLMModelManager: ObservableObject {
             completedFiles: completedFiles,
             totalFiles: totalFiles
         )
+    }
+
+    private func destinationFileURL(for entryPath: String, under directory: URL) throws -> URL {
+        let base = directory.standardizedFileURL
+        let destination = base.appendingPathComponent(entryPath).standardizedFileURL
+        let basePrefix = base.path.hasSuffix("/") ? base.path : "\(base.path)/"
+        guard destination.path.hasPrefix(basePrefix) else {
+            throw NSError(
+                domain: "Voxt.CustomLLM",
+                code: 1002,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid model file path: \(entryPath)"]
+            )
+        }
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        return destination
     }
 
     private static func inFlightBytes(
