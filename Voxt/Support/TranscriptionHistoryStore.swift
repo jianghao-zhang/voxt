@@ -95,6 +95,7 @@ final class TranscriptionHistoryStore: ObservableObject {
     private let maxStoredEntries = 1000
 
     private let fileManager = FileManager.default
+    private let defaults = UserDefaults.standard
 
     init() {
         reload()
@@ -106,6 +107,14 @@ final class TranscriptionHistoryStore: ObservableObject {
 
     var allHistoryEntries: [TranscriptionHistoryEntry] {
         allEntries
+    }
+
+    func updateRetentionPolicy() {
+        if applyRetentionPolicyIfNeeded() {
+            loadedCount = min(loadedCount, allEntries.count)
+            entries = Array(allEntries.prefix(loadedCount))
+            persist()
+        }
     }
 
     func reload() {
@@ -120,8 +129,12 @@ final class TranscriptionHistoryStore: ObservableObject {
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode([TranscriptionHistoryEntry].self, from: data)
             allEntries = decoded.sorted { $0.createdAt > $1.createdAt }
+            let didPrune = applyRetentionPolicyIfNeeded()
             loadedCount = min(pageSize, allEntries.count)
             entries = Array(allEntries.prefix(loadedCount))
+            if didPrune {
+                persist()
+            }
         } catch {
             allEntries = []
             entries = []
@@ -173,6 +186,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         if allEntries.count > maxStoredEntries {
             allEntries = Array(allEntries.prefix(maxStoredEntries))
         }
+        _ = applyRetentionPolicyIfNeeded()
 
         loadedCount = min(max(loadedCount + 1, pageSize), allEntries.count)
         entries = Array(allEntries.prefix(loadedCount))
@@ -202,6 +216,25 @@ final class TranscriptionHistoryStore: ObservableObject {
         } catch {
             // Keep UI responsive even if persistence fails.
         }
+    }
+
+    private var historyEnabled: Bool {
+        defaults.bool(forKey: AppPreferenceKey.historyEnabled)
+    }
+
+    private var historyRetentionPeriod: HistoryRetentionPeriod {
+        let raw = defaults.string(forKey: AppPreferenceKey.historyRetentionPeriod)
+        return HistoryRetentionPeriod(rawValue: raw ?? "") ?? .thirtyDays
+    }
+
+    private func applyRetentionPolicyIfNeeded(referenceDate: Date = Date()) -> Bool {
+        guard historyEnabled else { return false }
+        guard let days = historyRetentionPeriod.days else { return false }
+
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: referenceDate) ?? referenceDate
+        let originalCount = allEntries.count
+        allEntries.removeAll { $0.createdAt < cutoff }
+        return allEntries.count != originalCount
     }
 
     private func historyFileURL() throws -> URL {

@@ -183,6 +183,56 @@ enum TranslationTargetLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+enum HistoryRetentionPeriod: String, CaseIterable, Identifiable {
+    case oneDay
+    case sevenDays
+    case fifteenDays
+    case thirtyDays
+    case ninetyDays
+    case oneHundredEightyDays
+    case forever
+
+    var id: String { rawValue }
+
+    var days: Int? {
+        switch self {
+        case .oneDay:
+            return 1
+        case .sevenDays:
+            return 7
+        case .fifteenDays:
+            return 15
+        case .thirtyDays:
+            return 30
+        case .ninetyDays:
+            return 90
+        case .oneHundredEightyDays:
+            return 180
+        case .forever:
+            return nil
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .oneDay:
+            return AppLocalization.localizedString("1 Day")
+        case .sevenDays:
+            return AppLocalization.localizedString("7 Days")
+        case .fifteenDays:
+            return AppLocalization.localizedString("15 Days")
+        case .thirtyDays:
+            return AppLocalization.localizedString("30 Days")
+        case .ninetyDays:
+            return AppLocalization.localizedString("90 Days")
+        case .oneHundredEightyDays:
+            return AppLocalization.localizedString("180 Days")
+        case .forever:
+            return AppLocalization.localizedString("Forever")
+        }
+    }
+}
+
 enum InteractionSoundPreset: String, CaseIterable, Identifiable {
     case soft
     case glass

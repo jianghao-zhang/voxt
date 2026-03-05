@@ -282,3 +282,12 @@
 "Browser URL read test failed: browser is not running." = "ブラウザ URL 読み取りテストに失敗しました：ブラウザが起動していません。";
 "Browser URL read test failed (error: %@)." = "ブラウザ URL 読み取りテストに失敗しました（エラー: %@）。";
 "Browser URL read test failed." = "ブラウザ URL 読み取りテストに失敗しました。";
+"Retention" = "保持期間";
+"1 Day" = "1日";
+"7 Days" = "7日";
+"15 Days" = "15日";
+"30 Days" = "30日";
+"90 Days" = "90日";
+"180 Days" = "180日";
+"Forever" = "無期限";
+"History older than the selected retention time is automatically deleted." = "選択した保持期間を超えた履歴は自動的に削除されます。";

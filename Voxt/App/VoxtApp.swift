@@ -112,6 +112,7 @@ enum AppPreferenceKey {
     static let launchAtLogin = "launchAtLogin"
     static let showInDock = "showInDock"
     static let historyEnabled = "historyEnabled"
+    static let historyRetentionPeriod = "historyRetentionPeriod"
     static let autoCheckForUpdates = "autoCheckForUpdates"
 
     static let defaultEnhancementPrompt = """
@@ -340,6 +341,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.launchAtLogin: false,
             AppPreferenceKey.showInDock: false,
             AppPreferenceKey.historyEnabled: false,
+            AppPreferenceKey.historyRetentionPeriod: HistoryRetentionPeriod.thirtyDays.rawValue,
             AppPreferenceKey.autoCheckForUpdates: true,
         ])
         HotkeyPreference.registerDefaults()

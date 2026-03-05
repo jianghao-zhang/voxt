@@ -282,3 +282,12 @@
 "Browser URL read test failed: browser is not running." = "浏览器 URL 读取测试失败：浏览器未运行。";
 "Browser URL read test failed (error: %@)." = "浏览器 URL 读取测试失败（错误：%@）。";
 "Browser URL read test failed." = "浏览器 URL 读取测试失败。";
+"Retention" = "保留时长";
+"1 Day" = "1 天";
+"7 Days" = "7 天";
+"15 Days" = "15 天";
+"30 Days" = "30 天";
+"90 Days" = "90 天";
+"180 Days" = "180 天";
+"Forever" = "永久";
+"History older than the selected retention time is automatically deleted." = "超过所选保留时长的历史会自动删除。";
