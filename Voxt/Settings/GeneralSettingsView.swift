@@ -45,7 +45,9 @@ struct GeneralSettingsView: View {
                                 Text(device.name).tag(Int(device.id))
                             }
                         }
-                        .frame(width: 260)
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(width: 260, alignment: .trailing)
                     }
 
                     Toggle("Interaction Sounds", isOn: $interactionSoundsEnabled)
