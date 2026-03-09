@@ -251,7 +251,7 @@ struct ModelSettingsView: View {
         .sheet(item: $editingASRProvider) { provider in
             RemoteProviderConfigurationSheet(
                 providerTitle: provider.title,
-                credentialHint: provider == .doubaoASR ? "Doubao uses App ID + Access Token for streaming API." : nil,
+                credentialHint: asrCredentialHint(for: provider),
                 showsDoubaoFields: provider == .doubaoASR,
                 testTarget: .asr(provider),
                 configuration: RemoteModelConfigurationStore.resolvedASRConfiguration(
@@ -512,6 +512,17 @@ struct ModelSettingsView: View {
                     }
                 ]
             )
+        }
+    }
+
+    private func asrCredentialHint(for provider: RemoteASRProvider) -> String? {
+        switch provider {
+        case .doubaoASR:
+            return "Doubao uses App ID + Access Token for streaming API."
+        case .aliyunBailianASR:
+            return "Aliyun Bailian ASR uses API Key with chat/completions (input_audio)."
+        case .openAIWhisper, .glmASR:
+            return nil
         }
     }
 
@@ -978,6 +989,30 @@ private struct RemoteProviderConfigurationSheet: View {
                         .foregroundStyle(.secondary)
                     TextField("https://...", text: $endpoint)
                         .textFieldStyle(.roundedBorder)
+                    if !endpointPresets.isEmpty {
+                        HStack(spacing: 10) {
+                            Menu("Apply Preset") {
+                                ForEach(endpointPresets, id: \.id) { preset in
+                                    Button(preset.title) {
+                                        endpoint = preset.url
+                                    }
+                                }
+                            }
+                            .controlSize(.small)
+
+                            if !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Button("Clear") {
+                                    endpoint = ""
+                                }
+                                .controlSize(.small)
+                            }
+
+                            Spacer()
+                        }
+                        Text("Aliyun API keys are region-specific; use the matching endpoint.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -1153,7 +1188,51 @@ private struct RemoteProviderConfigurationSheet: View {
                 headers: ["Authorization": "Bearer \(configuration.apiKey)"],
                 model: configuration.model.isEmpty ? "glm-asr-1" : configuration.model
             )
+        case .aliyunBailianASR:
+            guard !configuration.apiKey.isEmpty else {
+                throw NSError(domain: "Voxt.Settings", code: -5, userInfo: [NSLocalizedDescriptionKey: AppLocalization.localizedString("Aliyun Bailian API Key is required for testing.")])
+            }
+            let endpoint = resolvedAliyunASRChatEndpoint(
+                endpoint: configuration.endpoint,
+                defaultValue: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            )
+            return try await testAliyunASRReachability(
+                endpoint: endpoint,
+                apiKey: configuration.apiKey,
+                model: configuration.model.isEmpty ? "qwen3-asr-flash" : configuration.model
+            )
         }
+    }
+
+    private func testAliyunASRReachability(
+        endpoint: String,
+        apiKey: String,
+        model: String
+    ) async throws -> String {
+        let audioDataURI = "data:audio/wav;base64,\(silentTestWavData().base64EncodedString())"
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [
+                [
+                    "role": "user",
+                    "content": [
+                        [
+                            "type": "input_audio",
+                            "input_audio": [
+                                "data": audioDataURI,
+                                "format": "wav"
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            "stream": false
+        ]
+        return try await testJSONPOSTReachability(
+            endpoint: endpoint,
+            headers: ["Authorization": "Bearer \(apiKey)"],
+            body: body
+        )
     }
 
     private func testASRMultipartReachability(
@@ -1301,6 +1380,26 @@ private struct RemoteProviderConfigurationSheet: View {
         return trimmed
     }
 
+    private func resolvedAliyunASRChatEndpoint(endpoint: String, defaultValue: String) -> String {
+        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return defaultValue }
+        guard let url = URL(string: trimmed) else { return trimmed }
+        let normalizedPath = url.path.lowercased()
+        if normalizedPath.hasSuffix("/chat/completions") {
+            return trimmed
+        }
+        if normalizedPath.hasSuffix("/models") {
+            return replacingPathSuffix(in: trimmed, oldSuffix: "/models", newSuffix: "/chat/completions")
+        }
+        if normalizedPath.hasSuffix("/v1") {
+            return appendingPath(trimmed, suffix: "/chat/completions")
+        }
+        if normalizedPath.isEmpty || normalizedPath == "/" {
+            return trimmed.hasSuffix("/") ? trimmed + "v1/chat/completions" : trimmed + "/v1/chat/completions"
+        }
+        return trimmed
+    }
+
     private func testLLMProvider(_ provider: RemoteLLMProvider, configuration: RemoteProviderConfiguration) async throws -> String {
         let model = configuration.model.isEmpty ? provider.suggestedModel : configuration.model
         let endpoint = resolvedLLMTestEndpoint(provider: provider, endpoint: configuration.endpoint, model: model)
@@ -1324,7 +1423,7 @@ private struct RemoteProviderConfigurationSheet: View {
             }
             headers["Authorization"] = "Bearer \(configuration.apiKey)"
             return try await testMiniMaxReachability(endpoint: endpoint, headers: headers, model: model)
-        case .openAI, .ollama, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio:
+        case .openAI, .ollama, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio, .aliyunBailian:
             if !configuration.apiKey.isEmpty {
                 headers["Authorization"] = "Bearer \(configuration.apiKey)"
             }
@@ -1886,6 +1985,8 @@ private struct RemoteProviderConfigurationSheet: View {
             return "http://127.0.0.1:1234/v1/models"
         case .minimax:
             return "https://api.minimax.chat/v1/text/chatcompletion_v2"
+        case .aliyunBailian:
+            return "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
         }
     }
 
@@ -1945,7 +2046,7 @@ private struct RemoteProviderConfigurationSheet: View {
             if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
             if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/api/chat") }
             return base
-        case .openAI, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio:
+        case .openAI, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio, .aliyunBailian:
             if path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
                 return base
             }
@@ -2133,9 +2234,34 @@ private struct RemoteProviderConfigurationSheet: View {
         }
         return resolvedSelectionForPicker
     }
+
+    private var endpointPresets: [RemoteEndpointPreset] {
+        switch testTarget {
+        case .asr(let provider):
+            guard provider == .aliyunBailianASR else { return [] }
+            return [
+                RemoteEndpointPreset(id: "aliyun-asr-cn-beijing", title: "Beijing", url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"),
+                RemoteEndpointPreset(id: "aliyun-asr-ap-southeast-1", title: "Singapore", url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"),
+                RemoteEndpointPreset(id: "aliyun-asr-us-east-1", title: "US (Virginia)", url: "https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions")
+            ]
+        case .llm(let provider):
+            guard provider == .aliyunBailian else { return [] }
+            return [
+                RemoteEndpointPreset(id: "aliyun-llm-cn-beijing", title: "Beijing", url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"),
+                RemoteEndpointPreset(id: "aliyun-llm-ap-southeast-1", title: "Singapore", url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"),
+                RemoteEndpointPreset(id: "aliyun-llm-us-east-1", title: "US (Virginia)", url: "https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions")
+            ]
+        }
+    }
 }
 
 private enum RemoteProviderTestTarget {
     case asr(RemoteASRProvider)
     case llm(RemoteLLMProvider)
+}
+
+private struct RemoteEndpointPreset: Identifiable {
+    let id: String
+    let title: String
+    let url: String
 }

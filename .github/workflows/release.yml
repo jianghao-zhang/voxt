@@ -332,7 +332,13 @@ jobs:
             /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Contents/Info.plist" 2>/dev/null || true
           )"
           if [ -z "${APP_BUNDLE_ID}" ]; then
-            echo "::error::Unable to resolve app bundle identifier from $APP_PATH/Contents/Info.plist"
+            APP_BUNDLE_ID="$(
+              xcodebuild -project Voxt.xcodeproj -scheme Voxt -configuration Release -showBuildSettings \
+                | awk -F' = ' '/ PRODUCT_BUNDLE_IDENTIFIER = / {print $2; exit}'
+            )"
+          fi
+          if [ -z "${APP_BUNDLE_ID}" ]; then
+            echo "::error::Unable to resolve app bundle identifier from either app Info.plist or build settings"
             exit 1
           fi
 

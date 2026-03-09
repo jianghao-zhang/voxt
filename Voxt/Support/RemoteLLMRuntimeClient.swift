@@ -403,6 +403,8 @@ struct RemoteLLMRuntimeClient {
             return "http://127.0.0.1:1234/v1/models"
         case .minimax:
             return "https://api.minimax.chat/v1/text/chatcompletion_v2"
+        case .aliyunBailian:
+            return "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
         }
     }
 
@@ -462,7 +464,7 @@ struct RemoteLLMRuntimeClient {
             if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
             if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/api/chat") }
             return base
-        case .openAI, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio:
+        case .openAI, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio, .aliyunBailian:
             if path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
                 return base
             }

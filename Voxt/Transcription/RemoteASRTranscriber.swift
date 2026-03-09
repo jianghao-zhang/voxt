@@ -167,6 +167,8 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             return try await transcribeGLM(fileURL: fileURL, configuration: configuration)
         case .doubaoASR:
             return try await transcribeDoubao(fileURL: fileURL, configuration: configuration)
+        case .aliyunBailianASR:
+            return try await transcribeAliyunBailian(fileURL: fileURL, configuration: configuration)
         }
     }
 
@@ -251,6 +253,64 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             resourceID: resourceID,
             endpoint: normalizedEndpoint(configuration.endpoint, defaultValue: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel")
         )
+    }
+
+    private func transcribeAliyunBailian(fileURL: URL, configuration: RemoteProviderConfiguration) async throws -> String {
+        let endpoint = URL(string: normalizedEndpoint(configuration.endpoint, defaultValue: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"))!
+        let token = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            throw NSError(domain: "Voxt.RemoteASR", code: -30, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian API key is empty."])
+        }
+
+        let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RemoteASRProvider.aliyunBailianASR.suggestedModel : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fileData = try Data(contentsOf: fileURL)
+        let dataURI = "data:\(audioMIMEType(for: fileURL));base64,\(fileData.base64EncodedString())"
+
+        let payload: [String: Any] = [
+            "model": model,
+            "messages": [
+                [
+                    "role": "user",
+                    "content": [
+                        [
+                            "type": "input_audio",
+                            "input_audio": [
+                                "data": dataURI,
+                                "format": "wav"
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            "stream": false
+        ]
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await VoxtNetworkSession.active.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw NSError(domain: "Voxt.RemoteASR", code: -31, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun Bailian HTTP response."])
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let message = String(data: data.prefix(300), encoding: .utf8) ?? ""
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian ASR request failed (HTTP \(http.statusCode)): \(message)"]
+            )
+        }
+
+        let object = try JSONSerialization.jsonObject(with: data)
+        if let text = extractAliyunBailianASRText(from: object), !text.isEmpty {
+            return text
+        }
+        throw NSError(domain: "Voxt.RemoteASR", code: -32, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian ASR returned no text content."])
     }
 
     private func transcribeDoubaoWebSocket(
@@ -1281,6 +1341,50 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         return body
+    }
+
+    private func audioMIMEType(for fileURL: URL) -> String {
+        switch fileURL.pathExtension.lowercased() {
+        case "mp3":
+            return "audio/mpeg"
+        case "m4a":
+            return "audio/mp4"
+        case "ogg":
+            return "audio/ogg"
+        default:
+            return "audio/wav"
+        }
+    }
+
+    private func extractAliyunBailianASRText(from object: Any) -> String? {
+        guard let dict = object as? [String: Any],
+              let choices = dict["choices"] as? [[String: Any]],
+              let first = choices.first,
+              let message = first["message"] as? [String: Any]
+        else {
+            return nil
+        }
+
+        if let content = message["content"] as? String {
+            let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+
+        if let blocks = message["content"] as? [[String: Any]] {
+            let texts = blocks.compactMap { block -> String? in
+                if let text = block["text"] as? String {
+                    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                return nil
+            }.filter { !$0.isEmpty }
+            if !texts.isEmpty {
+                return texts.joined(separator: "\n")
+            }
+        }
+
+        return nil
     }
 
     private func collectText(from bytes: URLSession.AsyncBytes) async throws -> String {

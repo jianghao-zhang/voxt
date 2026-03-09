@@ -9,6 +9,7 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
     case openAIWhisper
     case doubaoASR
     case glmASR
+    case aliyunBailianASR
 
     var id: String { rawValue }
 
@@ -20,6 +21,8 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
             return AppLocalization.localizedString("Doubao ASR")
         case .glmASR:
             return AppLocalization.localizedString("GLM ASR")
+        case .aliyunBailianASR:
+            return AppLocalization.localizedString("Aliyun Bailian ASR")
         }
     }
 
@@ -31,6 +34,8 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
             return "volc.bigasr.sauc.duration"
         case .glmASR:
             return "glm-asr-1"
+        case .aliyunBailianASR:
+            return "qwen3-asr-flash"
         }
     }
 
@@ -51,6 +56,11 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "glm-asr-2512", title: "GLM-ASR-2512"),
                 RemoteModelOption(id: "glm-asr-1", title: "GLM-ASR-1")
             ]
+        case .aliyunBailianASR:
+            return [
+                RemoteModelOption(id: "qwen3-asr-flash", title: "Qwen3 ASR Flash"),
+                RemoteModelOption(id: "qwen3-asr-flash-filetrans", title: "Qwen3 ASR Flash FileTrans")
+            ]
         }
     }
 }
@@ -68,6 +78,7 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
     case kimi
     case lmStudio
     case minimax
+    case aliyunBailian
 
     var id: String { rawValue }
 
@@ -97,6 +108,8 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
             return AppLocalization.localizedString("LM Studio")
         case .minimax:
             return AppLocalization.localizedString("MiniMax")
+        case .aliyunBailian:
+            return AppLocalization.localizedString("Aliyun Bailian")
         }
     }
 
@@ -126,6 +139,8 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
             return "llama3.1"
         case .minimax:
             return "MiniMax-M2.5"
+        case .aliyunBailian:
+            return "qwen-plus-latest"
         }
     }
 
@@ -226,6 +241,12 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "MiniMax-M2.5-Lightning", title: "MiniMax M2.5 Lightning"),
                 RemoteModelOption(id: "MiniMax-M2.1", title: "MiniMax M2.1")
             ]
+        case .aliyunBailian:
+            return [
+                RemoteModelOption(id: "qwen-max-latest", title: "Qwen Max Latest"),
+                RemoteModelOption(id: "qwen-plus-latest", title: "Qwen Plus Latest"),
+                RemoteModelOption(id: "qwen-turbo-latest", title: "Qwen Turbo Latest")
+            ]
         }
     }
 
@@ -298,6 +319,11 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "MiniMax-Text-01", title: "MiniMax Text 01"),
                 RemoteModelOption(id: "MiniMax-M2", title: "MiniMax M2"),
                 RemoteModelOption(id: "MiniMax-M2.1-Lightning", title: "MiniMax M2.1 Lightning")
+            ]
+        case .aliyunBailian:
+            return [
+                RemoteModelOption(id: "qwen-plus", title: "Qwen Plus"),
+                RemoteModelOption(id: "qwen-turbo", title: "Qwen Turbo")
             ]
         }
     }
@@ -372,6 +398,11 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
             return [
                 RemoteModelOption(id: "MiniMax-M2-Stable", title: "MiniMax M2 Stable"),
                 RemoteModelOption(id: "MiniMax-M2.1", title: "MiniMax M2.1")
+            ]
+        case .aliyunBailian:
+            return [
+                RemoteModelOption(id: "qwen-max", title: "Qwen Max"),
+                RemoteModelOption(id: "qwq-plus", title: "QwQ Plus")
             ]
         }
     }
