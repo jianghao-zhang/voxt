@@ -90,8 +90,7 @@ extension AppDelegate {
     }
 
     func enhanceTextForCurrentMode(_ text: String) async throws -> String {
-        let promptTemplate = resolvedEnhancementPrompt()
-        let prompt = resolveEnhancementPromptTemplate(promptTemplate, rawTranscription: text)
+        let promptResolution = resolvedEnhancementPrompt(rawTranscription: text)
 
         switch enhancementMode {
         case .off:
@@ -99,22 +98,37 @@ extension AppDelegate {
         case .appleIntelligence:
             guard let enhancer else { return text }
             if #available(macOS 26.0, *) {
-                return try await enhancer.enhance(text, systemPrompt: prompt)
+                switch promptResolution.delivery {
+                case .systemPrompt:
+                    return try await enhancer.enhance(text, systemPrompt: promptResolution.content)
+                case .userMessage:
+                    return try await enhancer.enhance(userPrompt: promptResolution.content)
+                }
             }
             return text
         case .customLLM:
-            return try await customLLMManager.enhance(text, systemPrompt: prompt)
+            switch promptResolution.delivery {
+            case .systemPrompt:
+                return try await customLLMManager.enhance(text, systemPrompt: promptResolution.content)
+            case .userMessage:
+                return try await customLLMManager.enhance(userPrompt: promptResolution.content)
+            }
         case .remoteLLM:
             let context = resolvedRemoteLLMContext(forTranslation: false)
                 VoxtLog.llm(
                     "Remote LLM enhancement request. provider=\(context.provider.rawValue), model=\(context.configuration.model)"
                 )
-            return try await RemoteLLMRuntimeClient().enhance(
-                text: text,
-                systemPrompt: prompt,
-                provider: context.provider,
-                configuration: context.configuration
-            )
+            switch promptResolution.delivery {
+            case .systemPrompt:
+                return try await RemoteLLMRuntimeClient().enhance(
+                    text: text,
+                    systemPrompt: promptResolution.content,
+                    provider: context.provider,
+                    configuration: context.configuration
+                )
+            case .userMessage:
+                return try await RemoteLLMRuntimeClient().enhance(userPrompt: promptResolution.content, provider: context.provider, configuration: context.configuration)
+            }
         }
     }
 }

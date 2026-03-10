@@ -157,6 +157,7 @@ struct PermissionsSettingsView: View {
             }
         }
         .onAppear {
+            _ = AccessibilityPermissionManager.request(prompt: false)
             refreshStates()
             loadBrowserTargets()
             refreshBrowserAutomationStates()
@@ -274,7 +275,7 @@ struct PermissionsSettingsView: View {
         case .speechRecognition:
             return SFSpeechRecognizer.authorizationStatus() == .authorized ? .enabled : .disabled
         case .accessibility:
-            return AXIsProcessTrusted() ? .enabled : .disabled
+            return AccessibilityPermissionManager.isTrusted() ? .enabled : .disabled
         case .inputMonitoring:
             if #available(macOS 10.15, *) {
                 return CGPreflightListenEventAccess() ? .enabled : .disabled
@@ -297,8 +298,7 @@ struct PermissionsSettingsView: View {
         case .speechRecognition:
             SFSpeechRecognizer.requestAuthorization { _ in }
         case .accessibility:
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(options)
+            _ = AccessibilityPermissionManager.request(prompt: true)
         case .inputMonitoring:
             if #available(macOS 10.15, *) {
                 _ = CGRequestListenEventAccess()

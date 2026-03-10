@@ -403,3 +403,23 @@
 "Rewrite" = "转写";
 
 "Version metadata missing" = "版本元数据缺失";
+"Supported variables" = "支持变量";
+"Click a variable to copy it. Hover to view usage tips." = "点击变量即可复制，悬停可查看使用说明。";
+"Copied %@" = "已复制 %@";
+"Template tip {{RAW_TRANSCRIPTION}}" = "增强前的原始转录文本。需要在提示词中引用原始识别结果时使用它。";
+"Template tip {{TARGET_LANGUAGE}}" = "当前选择的翻译目标语言，例如英语或日语。";
+"Template tip {{SOURCE_TEXT}}" = "将要被翻译或改写的原始文本。";
+"Template tip {{DICTATED_PROMPT}}" = "从语音中识别出来的改写指令内容。";
+"Preset" = "预设";
+"fn Combo" = "fn 组合";
+"Command Combo" = "Command 组合";
+"Custom" = "自定义";
+"Distinguish Left/Right Modifiers" = "区分左右修饰键";
+"When enabled, Left Shift and Right Shift are treated as different shortcuts." = "开启后，左 Shift 和右 Shift 会被视为不同的快捷键。";
+"Enable left/right modifier distinction only if you want shortcuts such as Right Command and Right Shift to behave differently from their left-side counterparts." = "只有当你希望像右 Command、右 Shift 这类按键与左侧对应按键表现不同时，才需要开启左右修饰键区分。";
+"Left %@" = "左侧%@";
+"Right %@" = "右侧%@";
+"Shift" = "Shift";
+"Control" = "Control";
+"Option" = "Option";
+"Command" = "Command";

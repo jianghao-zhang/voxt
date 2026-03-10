@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct PromptEditorView: View {
     @Binding var text: String
@@ -17,6 +18,205 @@ struct PromptEditorView: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(.quaternary, lineWidth: 1)
             )
+    }
+}
+
+struct PromptTemplateVariableDescriptor: Identifiable {
+    let token: String
+    let tipKey: String
+
+    var id: String { token }
+}
+
+struct PromptTemplateVariablesView: View {
+    let variables: [PromptTemplateVariableDescriptor]
+
+    @State private var copiedToken: String?
+    @State private var resetTask: Task<Void, Never>?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(AppLocalization.localizedString("Supported variables"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                ForEach(variables) { variable in
+                    PromptTemplateVariableChip(
+                        variable: variable,
+                        isCopied: copiedToken == variable.token,
+                        onCopy: { copy(variable.token) }
+                    )
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func copy(_ token: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(token, forType: .string)
+        copiedToken = token
+        resetTask?.cancel()
+        resetTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.6))
+            guard !Task.isCancelled else { return }
+            if copiedToken == token {
+                copiedToken = nil
+            }
+            resetTask = nil
+        }
+    }
+}
+
+private enum PromptTemplateTooltipPlacement {
+    case above
+    case below
+}
+
+private struct PromptTemplateVariableChip: View {
+    let variable: PromptTemplateVariableDescriptor
+    let isCopied: Bool
+    let onCopy: () -> Void
+
+    @State private var isShowingTip = false
+    @State private var isHoveringBadge = false
+    @State private var isHoveringTip = false
+    @State private var badgeScreenFrame: CGRect = .zero
+    @State private var dismissTask: Task<Void, Never>?
+
+    var body: some View {
+        Button(action: onCopy) {
+            HStack(spacing: 2) {
+                Image(systemName: isCopied ? "checkmark.circle.fill" : "document.on.document")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(isCopied ? Color.green : Color.secondary)
+                    .frame(width: 10, height: 10)
+                Text(variable.token)
+                    .font(.caption.monospaced())
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 0)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .background(
+            PromptTemplateBadgeFrameReader { frame in
+                badgeScreenFrame = frame
+            }
+        )
+        .onHover { hovering in
+            isHoveringBadge = hovering
+            if hovering {
+                dismissTask?.cancel()
+                isShowingTip = true
+            } else {
+                scheduleTipDismissal()
+            }
+        }
+        .popover(
+            isPresented: $isShowingTip,
+            attachmentAnchor: .rect(.bounds),
+            arrowEdge: tooltipPlacement == .above ? .bottom : .top
+        ) {
+            Text(AppLocalization.localizedString(variable.tipKey))
+                .font(.caption)
+                .multilineTextAlignment(.leading)
+                .frame(width: 260, alignment: .leading)
+                .padding(10)
+                .onHover { hovering in
+                    isHoveringTip = hovering
+                    if hovering {
+                        dismissTask?.cancel()
+                    } else {
+                        scheduleTipDismissal()
+                    }
+                }
+        }
+    }
+
+    private var tooltipPlacement: PromptTemplateTooltipPlacement {
+        guard
+            !badgeScreenFrame.isEmpty,
+            let visibleFrame = NSScreen.main?.visibleFrame
+        else {
+            return .above
+        }
+
+        let preferredHeight: CGFloat = 72
+        let availableAbove = visibleFrame.maxY - badgeScreenFrame.maxY
+        let availableBelow = badgeScreenFrame.minY - visibleFrame.minY
+
+        if availableAbove >= preferredHeight {
+            return .above
+        }
+        if availableBelow >= preferredHeight {
+            return .below
+        }
+        return availableAbove >= availableBelow ? .above : .below
+    }
+
+    private func scheduleTipDismissal() {
+        dismissTask?.cancel()
+        dismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            guard !isHoveringBadge, !isHoveringTip else { return }
+            isShowingTip = false
+            dismissTask = nil
+        }
+    }
+}
+
+private struct PromptTemplateBadgeFrameReader: NSViewRepresentable {
+    let onUpdate: (CGRect) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = FrameReportingView()
+        view.onUpdate = onUpdate
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let view = nsView as? FrameReportingView else { return }
+        view.onUpdate = onUpdate
+        DispatchQueue.main.async {
+            view.reportFrameIfNeeded()
+        }
+    }
+}
+
+private final class FrameReportingView: NSView {
+    var onUpdate: ((CGRect) -> Void)?
+    private var lastReportedFrame: CGRect = .zero
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        reportFrameIfNeeded()
+    }
+
+    override func layout() {
+        super.layout()
+        reportFrameIfNeeded()
+    }
+
+    func reportFrameIfNeeded() {
+        guard let window else { return }
+        let frameInWindow = convert(bounds, to: nil)
+        let frameInScreen = window.convertToScreen(frameInWindow)
+        guard frameInScreen != lastReportedFrame else { return }
+        lastReportedFrame = frameInScreen
+        onUpdate?(frameInScreen)
     }
 }
 

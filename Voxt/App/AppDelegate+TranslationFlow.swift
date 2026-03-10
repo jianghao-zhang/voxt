@@ -206,8 +206,18 @@ extension AppDelegate {
     }
 
     private func enhanceTextIfNeeded(_ text: String, useAppBranchPrompt: Bool = true) async throws -> String {
-        let promptTemplate = useAppBranchPrompt ? resolvedEnhancementPrompt() : resolvedGlobalEnhancementPrompt()
-        let prompt = resolveEnhancementPromptTemplate(promptTemplate, rawTranscription: text)
+        let promptResolution: EnhancementPromptResolution
+        if useAppBranchPrompt {
+            promptResolution = resolvedEnhancementPrompt(rawTranscription: text)
+        } else {
+            promptResolution = EnhancementPromptResolution(
+                content: resolveGlobalEnhancementPromptTemplate(
+                    resolvedGlobalEnhancementPrompt(),
+                    rawTranscription: text
+                ),
+                delivery: .systemPrompt
+            )
+        }
         if !useAppBranchPrompt {
             VoxtLog.info("Enhancement prompt source: global/default (translation flow)")
         }
@@ -218,20 +228,35 @@ extension AppDelegate {
         case .appleIntelligence:
             guard let enhancer else { return text }
             if #available(macOS 26.0, *) {
-                return try await enhancer.enhance(text, systemPrompt: prompt)
+                switch promptResolution.delivery {
+                case .systemPrompt:
+                    return try await enhancer.enhance(text, systemPrompt: promptResolution.content)
+                case .userMessage:
+                    return try await enhancer.enhance(userPrompt: promptResolution.content)
+                }
             }
             return text
         case .customLLM:
             guard customLLMManager.isModelDownloaded(repo: customLLMManager.currentModelRepo) else { return text }
-            return try await customLLMManager.enhance(text, systemPrompt: prompt)
+            switch promptResolution.delivery {
+            case .systemPrompt:
+                return try await customLLMManager.enhance(text, systemPrompt: promptResolution.content)
+            case .userMessage:
+                return try await customLLMManager.enhance(userPrompt: promptResolution.content)
+            }
         case .remoteLLM:
             let context = resolvedRemoteLLMContext(forTranslation: false)
-            return try await RemoteLLMRuntimeClient().enhance(
-                text: text,
-                systemPrompt: prompt,
-                provider: context.provider,
-                configuration: context.configuration
-            )
+            switch promptResolution.delivery {
+            case .systemPrompt:
+                return try await RemoteLLMRuntimeClient().enhance(
+                    text: text,
+                    systemPrompt: promptResolution.content,
+                    provider: context.provider,
+                    configuration: context.configuration
+                )
+            case .userMessage:
+                return try await RemoteLLMRuntimeClient().enhance(userPrompt: promptResolution.content, provider: context.provider, configuration: context.configuration)
+            }
         }
     }
 

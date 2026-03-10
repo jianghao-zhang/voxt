@@ -73,7 +73,7 @@ extension AppDelegate {
     }
 
     private func selectedTextFromAXFocusedElement() -> String? {
-        guard AXIsProcessTrusted() else { return nil }
+        guard AccessibilityPermissionManager.isTrusted() else { return nil }
 
         let systemWide = AXUIElementCreateSystemWide()
         var focusedElementRef: CFTypeRef?
@@ -110,7 +110,7 @@ extension AppDelegate {
     }
 
     private func selectedTextBySimulatedCopy() -> String? {
-        guard AXIsProcessTrusted() else { return nil }
+        guard AccessibilityPermissionManager.isTrusted() else { return nil }
         guard let source = CGEventSource(stateID: .hidSystemState) else { return nil }
 
         let pasteboard = NSPasteboard.general
@@ -171,7 +171,7 @@ extension AppDelegate {
 
         let pasteboard = NSPasteboard.general
         let previous = pasteboard.string(forType: .string) ?? ""
-        let accessibilityTrusted = AXIsProcessTrusted()
+        let accessibilityTrusted = AccessibilityPermissionManager.isTrusted()
         let keepResultInClipboard = autoCopyWhenNoFocusedInput
 
         pasteboard.clearContents()
@@ -213,7 +213,6 @@ extension AppDelegate {
     }
 
     private func promptForAccessibilityPermission() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+        _ = AccessibilityPermissionManager.request(prompt: true)
     }
 }

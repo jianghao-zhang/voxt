@@ -43,6 +43,23 @@ class TextEnhancer {
         return enhanced.isEmpty ? rawText : enhanced
     }
 
+    func enhance(userPrompt: String) async throws -> String {
+        let input = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return "" }
+        guard TextEnhancer.isAvailable else {
+            return input
+        }
+
+        let session = LanguageModelSession(instructions: "")
+        let response = try await session.respond(
+            to: input,
+            generating: EnhancementOutput.self
+        )
+
+        let enhanced = Self.normalizeResultText(response.content.resultText)
+        return enhanced.isEmpty ? input : enhanced
+    }
+
     /// Translates text to the requested target language.
     func translate(
         _ text: String,

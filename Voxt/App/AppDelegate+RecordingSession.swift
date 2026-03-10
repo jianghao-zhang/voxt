@@ -69,6 +69,10 @@ extension AppDelegate {
 
     func endRecording() {
         guard isSessionActive else { return }
+        guard recordingStoppedAt == nil else {
+            VoxtLog.hotkey("Recording stop ignored: session is already stopping.")
+            return
+        }
         VoxtLog.info("Recording stop requested.")
 
         silenceMonitorTask?.cancel()
@@ -299,6 +303,11 @@ extension AppDelegate {
             position: overlayPosition
         )
         mlx.startRecording()
+        guard mlx.isRecording else {
+            VoxtLog.warning("MLX recording session did not enter recording state.")
+            resetSessionAfterFailedStart()
+            return
+        }
     }
 
     private func startSpeechRecordingSession() {
@@ -309,6 +318,7 @@ extension AppDelegate {
                 self.showOverlayReminder(
                     String(localized: "Please enable required permissions in Settings > Permissions.")
                 )
+                self.resetSessionAfterFailedStart()
                 return
             }
 
@@ -323,6 +333,11 @@ extension AppDelegate {
                 position: self.overlayPosition
             )
             self.speechTranscriber.startRecording()
+            guard self.speechTranscriber.isRecording else {
+                VoxtLog.warning("Speech recording session did not enter recording state.")
+                self.resetSessionAfterFailedStart()
+                return
+            }
         }
     }
 
@@ -334,6 +349,7 @@ extension AppDelegate {
                 self.showOverlayReminder(
                     String(localized: "Please enable required permissions in Settings > Permissions.")
                 )
+                self.resetSessionAfterFailedStart()
                 return
             }
 
@@ -349,6 +365,31 @@ extension AppDelegate {
             )
             self.remoteASRTranscriber.startRecording()
         }
+    }
+
+    private func resetSessionAfterFailedStart() {
+        pendingSessionFinishTask?.cancel()
+        pendingSessionFinishTask = nil
+        stopRecordingFallbackTask?.cancel()
+        stopRecordingFallbackTask = nil
+        silenceMonitorTask?.cancel()
+        silenceMonitorTask = nil
+        pauseLLMTask?.cancel()
+        pauseLLMTask = nil
+        isSessionActive = false
+        isSessionCancellationRequested = false
+        didCommitSessionOutput = false
+        activeRecordingSessionID = UUID()
+        sessionOutputMode = .transcription
+        recordingStartedAt = nil
+        recordingStoppedAt = nil
+        transcriptionProcessingStartedAt = nil
+        transcriptionResultReceivedAt = nil
+        isSelectedTextTranslationFlow = false
+        enhancementContextSnapshot = nil
+        lastEnhancementPromptContext = nil
+        overlayState.reset()
+        overlayWindow.hide()
     }
 
     private func requestMicrophonePermission() async -> Bool {
@@ -372,7 +413,7 @@ extension AppDelegate {
             return false
         }
 
-        if !AXIsProcessTrusted() {
+        if !AccessibilityPermissionManager.isTrusted() {
             showOverlayStatus(
                 String(localized: "Please enable required permissions in Settings > Permissions."),
                 clearAfter: 2.2

@@ -403,3 +403,23 @@
 "Rewrite" = "Rewrite";
 
 "Version metadata missing" = "Version metadata missing";
+"Supported variables" = "Supported variables";
+"Click a variable to copy it. Hover to view usage tips." = "Click a variable to copy it. Hover to view usage tips.";
+"Copied %@" = "Copied %@";
+"Template tip {{RAW_TRANSCRIPTION}}" = "The raw transcription text before enhancement. Use it when you want the prompt to reference the original recognized text.";
+"Template tip {{TARGET_LANGUAGE}}" = "The target language selected for translation, such as English or Japanese.";
+"Template tip {{SOURCE_TEXT}}" = "The source text that will be translated or rewritten.";
+"Template tip {{DICTATED_PROMPT}}" = "The spoken rewrite instruction captured from your dictation.";
+"Preset" = "Preset";
+"fn Combo" = "fn Combo";
+"Command Combo" = "Command Combo";
+"Custom" = "Custom";
+"Distinguish Left/Right Modifiers" = "Distinguish Left/Right Modifiers";
+"When enabled, Left Shift and Right Shift are treated as different shortcuts." = "When enabled, Left Shift and Right Shift are treated as different shortcuts.";
+"Enable left/right modifier distinction only if you want shortcuts such as Right Command and Right Shift to behave differently from their left-side counterparts." = "Enable left/right modifier distinction only if you want shortcuts such as Right Command and Right Shift to behave differently from their left-side counterparts.";
+"Left %@" = "Left %@";
+"Right %@" = "Right %@";
+"Shift" = "Shift";
+"Control" = "Control";
+"Option" = "Option";
+"Command" = "Command";

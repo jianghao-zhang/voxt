@@ -3,10 +3,22 @@ import AppKit
 import ApplicationServices
 
 extension AppDelegate {
-    func resolveEnhancementPromptTemplate(_ prompt: String, rawTranscription: String) -> String {
+    static let rawTranscriptionTemplateVariable = "{{RAW_TRANSCRIPTION}}"
+
+    struct EnhancementPromptResolution {
+        enum Delivery {
+            case systemPrompt
+            case userMessage
+        }
+
+        let content: String
+        let delivery: Delivery
+    }
+
+    func resolveGlobalEnhancementPromptTemplate(_ prompt: String, rawTranscription: String) -> String {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else { return AppPreferenceKey.defaultEnhancementPrompt }
-        return trimmedPrompt.replacingOccurrences(of: "{{RAW_TRANSCRIPTION}}", with: rawTranscription)
+        return trimmedPrompt.replacingOccurrences(of: Self.rawTranscriptionTemplateVariable, with: rawTranscription)
     }
 
     func resolvedGlobalEnhancementPrompt() -> String {
@@ -16,18 +28,22 @@ extension AppDelegate {
         return fallbackPrompt
     }
 
-    func resolvedEnhancementPrompt() -> String {
+    func resolvedEnhancementPrompt(rawTranscription: String) -> EnhancementPromptResolution {
         let fallbackPrompt = resolvedGlobalEnhancementPrompt()
+        let resolvedFallback = EnhancementPromptResolution(
+            content: resolveGlobalEnhancementPromptTemplate(fallbackPrompt, rawTranscription: rawTranscription),
+            delivery: .systemPrompt
+        )
 
         guard appEnhancementEnabled else {
             VoxtLog.info("Enhancement prompt source: global/default (app branch disabled)")
-            return fallbackPrompt
+            return resolvedFallback
         }
 
         let groups = loadAppBranchGroups()
         guard !groups.isEmpty else {
             VoxtLog.info("Enhancement prompt source: global/default (no app branch groups)")
-            return fallbackPrompt
+            return resolvedFallback
         }
 
         let urlsByID = loadAppBranchURLsByID()
@@ -46,7 +62,7 @@ extension AppDelegate {
                     matchedURLGroupName: nil
                 )
                 VoxtLog.info("Enhancement prompt source: global/default (browser url unavailable), bundleID=\(frontmostBundleID ?? "nil")")
-                return fallbackPrompt
+                return resolvedFallback
             }
 
             if let match = firstURLPromptMatch(groups: groups, urlsByID: urlsByID, normalizedURL: normalizedActiveURL) {
@@ -56,7 +72,10 @@ extension AppDelegate {
                     matchedURLGroupName: match.groupName
                 )
                 VoxtLog.info("Enhancement prompt source: group(url) group=\(match.groupName), pattern=\(match.pattern), url=\(normalizedActiveURL)")
-                return match.prompt
+                return EnhancementPromptResolution(
+                    content: match.prompt.replacingOccurrences(of: Self.rawTranscriptionTemplateVariable, with: rawTranscription),
+                    delivery: .userMessage
+                )
             }
 
             lastEnhancementPromptContext = EnhancementPromptContext(
@@ -65,7 +84,7 @@ extension AppDelegate {
                 matchedURLGroupName: nil
             )
             VoxtLog.info("Enhancement prompt source: global/default (browser url no group match), bundleID=\(frontmostBundleID ?? "nil"), url=\(normalizedActiveURL)")
-            return fallbackPrompt
+            return resolvedFallback
         }
 
         if let frontmostBundleID {
@@ -78,7 +97,10 @@ extension AppDelegate {
                         matchedURLGroupName: nil
                     )
                     VoxtLog.info("Enhancement prompt source: group(app) group=\(group.name), bundleID=\(frontmostBundleID)")
-                    return prompt
+                    return EnhancementPromptResolution(
+                        content: prompt.replacingOccurrences(of: Self.rawTranscriptionTemplateVariable, with: rawTranscription),
+                        delivery: .userMessage
+                    )
                 }
             }
         }
@@ -89,7 +111,7 @@ extension AppDelegate {
             matchedURLGroupName: nil
         )
         VoxtLog.info("Enhancement prompt source: global/default (no group match), bundleID=\(frontmostBundleID ?? "nil")")
-        return fallbackPrompt
+        return resolvedFallback
     }
 
     func captureEnhancementContextSnapshot() -> EnhancementContextSnapshot {
@@ -329,7 +351,7 @@ extension AppDelegate {
     }
 
     private func activeBrowserTabURLFromAccessibility(frontmostBundleID: String) -> String? {
-        guard AXIsProcessTrusted() else {
+        guard AccessibilityPermissionManager.isTrusted() else {
             VoxtLog.info("Browser active-tab AX fallback unavailable: accessibility not trusted")
             return nil
         }

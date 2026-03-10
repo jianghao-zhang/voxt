@@ -27,6 +27,7 @@ struct RemoteLLMRuntimeClient {
         """
         let output = try await complete(
             systemPrompt: systemPrompt,
+            debugInput: text,
             userPrompt: prompt,
             inputTextLength: text.count,
             intent: .enhancement,
@@ -35,6 +36,25 @@ struct RemoteLLMRuntimeClient {
         )
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? text : trimmed
+    }
+
+    func enhance(
+        userPrompt: String,
+        provider: RemoteLLMProvider,
+        configuration: RemoteProviderConfiguration
+    ) async throws -> String {
+        let input = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return "" }
+        let output = try await complete(
+            systemPrompt: "",
+            debugInput: input,
+            userPrompt: input,
+            inputTextLength: input.count,
+            intent: .enhancement,
+            provider: provider,
+            configuration: configuration
+        )
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func translate(
@@ -50,6 +70,7 @@ struct RemoteLLMRuntimeClient {
         """
         let output = try await complete(
             systemPrompt: systemPrompt,
+            debugInput: text,
             userPrompt: prompt,
             inputTextLength: text.count,
             intent: .translation,
@@ -77,6 +98,13 @@ struct RemoteLLMRuntimeClient {
         """
         let output = try await complete(
             systemPrompt: systemPrompt,
+            debugInput: """
+            Spoken instruction:
+            \(dictatedPrompt)
+
+            Selected source text:
+            \(sourceText)
+            """,
             userPrompt: prompt,
             inputTextLength: sourceText.count + dictatedPrompt.count,
             intent: .rewrite,
@@ -89,6 +117,7 @@ struct RemoteLLMRuntimeClient {
 
     private func complete(
         systemPrompt: String,
+        debugInput: String,
         userPrompt: String,
         inputTextLength: Int,
         intent: CompletionIntent,
@@ -132,14 +161,18 @@ struct RemoteLLMRuntimeClient {
                 }
                 request.setValue(configuration.apiKey, forHTTPHeaderField: "x-api-key")
                 request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-                request.httpBody = try JSONSerialization.data(withJSONObject: [
+                var payload: [String: Any] = [
                     "model": model,
                     "max_tokens": 2048,
-                    "system": systemPrompt,
                     "messages": [
                         ["role": "user", "content": userPrompt]
                     ]
-                ])
+                ]
+                let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedSystem.isEmpty {
+                    payload["system"] = systemPrompt
+                }
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
             case .google:
                 let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !apiKey.isEmpty else {
@@ -154,12 +187,16 @@ struct RemoteLLMRuntimeClient {
                     components.queryItems = items
                 }
                 request.url = components.url
-                request.httpBody = try JSONSerialization.data(withJSONObject: [
-                    "system_instruction": ["parts": [["text": systemPrompt]]],
+                var payload: [String: Any] = [
                     "contents": [
                         ["parts": [["text": userPrompt]]]
                     ]
-                ])
+                ]
+                let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedSystem.isEmpty {
+                    payload["system_instruction"] = ["parts": [["text": systemPrompt]]]
+                }
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
             case .minimax:
                 let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !apiKey.isEmpty else {
@@ -168,10 +205,7 @@ struct RemoteLLMRuntimeClient {
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
                 request.httpBody = try JSONSerialization.data(withJSONObject: [
                     "model": model,
-                    "messages": [
-                        ["role": "system", "content": systemPrompt],
-                        ["role": "user", "content": userPrompt]
-                    ]
+                    "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt)
                 ])
             default:
                 let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -180,10 +214,7 @@ struct RemoteLLMRuntimeClient {
                 }
                 request.httpBody = try JSONSerialization.data(withJSONObject: [
                     "model": model,
-                    "messages": [
-                        ["role": "system", "content": systemPrompt],
-                        ["role": "user", "content": userPrompt]
-                    ],
+                    "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt),
                     "stream": false,
                     "max_tokens": tuning.maxTokens,
                     "temperature": tuning.temperature,
@@ -197,6 +228,17 @@ struct RemoteLLMRuntimeClient {
             let networkMode = VoxtNetworkSession.modeDescription
             VoxtLog.llm(
                 "Remote LLM request started. provider=\(provider.rawValue), endpoint=\(endpointValue), model=\(model), timeoutSec=\(Int(request.timeoutInterval)), inputChars=\(inputTextLength), systemChars=\(systemPrompt.count), userChars=\(userPrompt.count), maxTokens=\(tuning.maxTokens), temp=\(tuning.temperature), topP=\(tuning.topP), networkMode=\(networkMode), proxy=\(proxyRoute)"
+            )
+            VoxtLog.llm(
+                """
+                Remote LLM request content. provider=\(provider.rawValue), endpoint=\(endpointValue), model=\(model)
+                [system_prompt]
+                \(VoxtLog.llmPreview(systemPrompt))
+                [input]
+                \(VoxtLog.llmPreview(debugInput))
+                [request_content]
+                \(VoxtLog.llmPreview(userPrompt))
+                """
             )
             do {
                 let (data, response) = try await VoxtNetworkSession.active.data(for: request)
@@ -221,6 +263,13 @@ struct RemoteLLMRuntimeClient {
                 if let content = extractPrimaryText(from: object), !content.isEmpty {
                     VoxtLog.llm(
                         "Remote LLM response received. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode), attempt=\(attempt)/\(endpoints.count), bytes=\(data.count), networkMs=\(responseElapsedMs), decodeMs=\(decodeElapsedMs), totalMs=\(totalElapsedMs)"
+                    )
+                    VoxtLog.llm(
+                        """
+                        Remote LLM response content. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode)
+                        [output]
+                        \(VoxtLog.llmPreview(content))
+                        """
                     )
                     return content
                 }
@@ -403,6 +452,19 @@ struct RemoteLLMRuntimeClient {
             return merged.isEmpty ? nil : merged
         }
         return nil
+    }
+
+    private func openAICompatibleMessages(systemPrompt: String, userPrompt: String) -> [[String: String]] {
+        let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedSystem.isEmpty {
+            return [
+                ["role": "user", "content": userPrompt]
+            ]
+        }
+        return [
+            ["role": "system", "content": systemPrompt],
+            ["role": "user", "content": userPrompt]
+        ]
     }
 
     private func providerDefaultEndpoint(_ provider: RemoteLLMProvider) -> String {

@@ -29,6 +29,7 @@ class HotkeyManager {
     private var activeTranslationKeyCode: UInt16?
     private var isRewriteKeyDown = false
     private var activeRewriteKeyCode: UInt16?
+    private var currentSidedModifiers: SidedModifierFlags = []
     private var suppressTranscriptionTapUntil = Date.distantPast
     private var pendingTranscriptionTapTask: Task<Void, Never>?
     private var pendingTranscriptionLongPressReleaseTask: Task<Void, Never>?
@@ -45,9 +46,10 @@ class HotkeyManager {
         let transcriptionHotkey = HotkeyPreference.load()
         let translationHotkey = HotkeyPreference.loadTranslation()
         let rewriteHotkey = HotkeyPreference.loadRewrite()
+        let distinguishModifierSides = HotkeyPreference.loadDistinguishModifierSides()
         VoxtLog.info("Starting hotkey manager.")
         VoxtLog.hotkey(
-            "Hotkey bindings. transcription=\(HotkeyPreference.displayString(for: transcriptionHotkey)), translation=\(HotkeyPreference.displayString(for: translationHotkey)), rewrite=\(HotkeyPreference.displayString(for: rewriteHotkey)), trigger=\(HotkeyPreference.loadTriggerMode().rawValue)"
+            "Hotkey bindings. transcription=\(HotkeyPreference.displayString(for: transcriptionHotkey, distinguishModifierSides: distinguishModifierSides)), translation=\(HotkeyPreference.displayString(for: translationHotkey, distinguishModifierSides: distinguishModifierSides)), rewrite=\(HotkeyPreference.displayString(for: rewriteHotkey, distinguishModifierSides: distinguishModifierSides)), trigger=\(HotkeyPreference.loadTriggerMode().rawValue)"
         )
         guard preflightAndPromptPermissionsIfNeeded() else {
             scheduleRetry()
@@ -103,6 +105,7 @@ class HotkeyManager {
         activeTranslationKeyCode = nil
         isRewriteKeyDown = false
         activeRewriteKeyCode = nil
+        currentSidedModifiers = []
         pendingTranscriptionTapTask?.cancel()
         pendingTranscriptionTapTask = nil
         pendingTranscriptionLongPressReleaseTask?.cancel()
@@ -115,7 +118,7 @@ class HotkeyManager {
     }
 
     private func preflightAndPromptPermissionsIfNeeded() -> Bool {
-        let accessibilityGranted = AXIsProcessTrusted()
+        let accessibilityGranted = AccessibilityPermissionManager.isTrusted()
         let inputMonitoringGranted: Bool
         if #available(macOS 10.15, *) {
             inputMonitoringGranted = CGPreflightListenEventAccess()
@@ -126,8 +129,7 @@ class HotkeyManager {
         guard accessibilityGranted, inputMonitoringGranted else {
             if !accessibilityGranted, !didPromptAccessibility {
                 didPromptAccessibility = true
-                let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-                _ = AXIsProcessTrustedWithOptions(options)
+                _ = AccessibilityPermissionManager.request(prompt: true)
             }
             if !inputMonitoringGranted, !didPromptInputMonitoring {
                 didPromptInputMonitoring = true
@@ -143,7 +145,7 @@ class HotkeyManager {
     }
 
     private func permissionStatusText() -> String {
-        let accessibility = AXIsProcessTrusted() ? "on" : "off"
+        let accessibility = AccessibilityPermissionManager.isTrusted() ? "on" : "off"
         let inputMonitoring: String
         if #available(macOS 10.15, *) {
             inputMonitoring = CGPreflightListenEventAccess() ? "on" : "off"
@@ -169,13 +171,17 @@ class HotkeyManager {
         let transcriptionHotkey = HotkeyPreference.load()
         let translationHotkey = HotkeyPreference.loadTranslation()
         let rewriteHotkey = HotkeyPreference.loadRewrite()
+        let distinguishModifierSides = HotkeyPreference.loadDistinguishModifierSides()
         let triggerMode = HotkeyPreference.loadTriggerMode()
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
         let isAutoRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        let transcriptionFlags = cgFlags(from: transcriptionHotkey.modifiers)
-        let translationFlags = cgFlags(from: translationHotkey.modifiers)
-        let rewriteFlags = cgFlags(from: rewriteHotkey.modifiers)
+        if type == .flagsChanged {
+            currentSidedModifiers = SidedModifierFlags.toggled(from: currentSidedModifiers, keyCode: keyCode)
+        }
+        let transcriptionFlags = HotkeyPreference.cgFlags(from: transcriptionHotkey.modifiers)
+        let translationFlags = HotkeyPreference.cgFlags(from: translationHotkey.modifiers)
+        let rewriteFlags = HotkeyPreference.cgFlags(from: rewriteHotkey.modifiers)
         let wasTranslationKeyDown = isTranslationKeyDown
         let wasRewriteKeyDown = isRewriteKeyDown
 
@@ -196,6 +202,9 @@ class HotkeyManager {
                 type: type,
                 keyCode: keyCode,
                 flags: flags,
+                currentSidedModifiers: currentSidedModifiers,
+                translationHotkey: translationHotkey,
+                distinguishModifierSides: distinguishModifierSides,
                 triggerMode: triggerMode,
                 translationFlags: translationFlags,
                 wasTranslationKeyDown: wasTranslationKeyDown
@@ -203,7 +212,12 @@ class HotkeyManager {
                 return
             }
         } else {
-            let translationFlagsMatch = flags.contains(translationFlags)
+            let translationFlagsMatch = HotkeyPreference.hotkeyMatches(
+                translationHotkey,
+                eventFlags: flags,
+                sidedModifiers: currentSidedModifiers,
+                distinguishModifierSides: distinguishModifierSides
+            )
             switch type {
             case .keyDown:
                 if keyCode == translationHotkey.keyCode, translationFlagsMatch, !isAutoRepeat {
@@ -241,6 +255,9 @@ class HotkeyManager {
                 type: type,
                 keyCode: keyCode,
                 flags: flags,
+                currentSidedModifiers: currentSidedModifiers,
+                rewriteHotkey: rewriteHotkey,
+                distinguishModifierSides: distinguishModifierSides,
                 triggerMode: triggerMode,
                 rewriteFlags: rewriteFlags,
                 wasRewriteKeyDown: wasRewriteKeyDown
@@ -248,7 +265,12 @@ class HotkeyManager {
                 return
             }
         } else {
-            let rewriteFlagsMatch = flags.contains(rewriteFlags)
+            let rewriteFlagsMatch = HotkeyPreference.hotkeyMatches(
+                rewriteHotkey,
+                eventFlags: flags,
+                sidedModifiers: currentSidedModifiers,
+                distinguishModifierSides: distinguishModifierSides
+            )
             switch type {
             case .keyDown:
                 if keyCode == rewriteHotkey.keyCode, rewriteFlagsMatch, !isAutoRepeat {
@@ -292,6 +314,8 @@ class HotkeyManager {
                 transcriptionHotkey: transcriptionHotkey,
                 translationHotkey: translationHotkey,
                 rewriteHotkey: rewriteHotkey,
+                currentSidedModifiers: currentSidedModifiers,
+                distinguishModifierSides: distinguishModifierSides,
                 transcriptionFlags: transcriptionFlags,
                 translationFlags: translationFlags,
                 rewriteFlags: rewriteFlags
@@ -301,7 +325,12 @@ class HotkeyManager {
             return
         }
 
-        let transcriptionFlagsMatch = flags.contains(transcriptionFlags)
+        let transcriptionFlagsMatch = HotkeyPreference.hotkeyMatches(
+            transcriptionHotkey,
+            eventFlags: flags,
+            sidedModifiers: currentSidedModifiers,
+            distinguishModifierSides: distinguishModifierSides
+        )
         switch type {
         case .keyDown:
             guard keyCode == transcriptionHotkey.keyCode, transcriptionFlagsMatch, !isAutoRepeat else { return }
@@ -332,16 +361,6 @@ class HotkeyManager {
         }
     }
 
-    private func cgFlags(from modifiers: NSEvent.ModifierFlags) -> CGEventFlags {
-        var flags: CGEventFlags = []
-        if modifiers.contains(.command) { flags.insert(.maskCommand) }
-        if modifiers.contains(.option) { flags.insert(.maskAlternate) }
-        if modifiers.contains(.control) { flags.insert(.maskControl) }
-        if modifiers.contains(.shift) { flags.insert(.maskShift) }
-        if modifiers.contains(.function) { flags.insert(.maskSecondaryFn) }
-        return flags
-    }
-
     private func shouldDelayTranscriptionTap(
         transcriptionHotkey: HotkeyPreference.Hotkey,
         translationHotkey: HotkeyPreference.Hotkey,
@@ -362,16 +381,24 @@ class HotkeyManager {
         type: CGEventType,
         keyCode: UInt16,
         flags: CGEventFlags,
+        currentSidedModifiers: SidedModifierFlags,
+        translationHotkey: HotkeyPreference.Hotkey,
+        distinguishModifierSides: Bool,
         triggerMode: HotkeyPreference.TriggerMode,
         translationFlags: CGEventFlags,
         wasTranslationKeyDown: Bool
     ) -> Bool {
         guard type == .flagsChanged else { return false }
 
-        let comboIsDown = flags.contains(translationFlags)
+        let comboIsDown = HotkeyPreference.hotkeyMatches(
+            translationHotkey,
+            eventFlags: flags,
+            sidedModifiers: currentSidedModifiers,
+            distinguishModifierSides: distinguishModifierSides
+        )
         let translationTriggerDown = HotkeyModifierInterpreter.translationTriggerDown(
             keyCode: keyCode,
-            flags: flags,
+            comboIsDown: comboIsDown,
             translationFlags: translationFlags
         )
 
@@ -424,16 +451,24 @@ class HotkeyManager {
         type: CGEventType,
         keyCode: UInt16,
         flags: CGEventFlags,
+        currentSidedModifiers: SidedModifierFlags,
+        rewriteHotkey: HotkeyPreference.Hotkey,
+        distinguishModifierSides: Bool,
         triggerMode: HotkeyPreference.TriggerMode,
         rewriteFlags: CGEventFlags,
         wasRewriteKeyDown: Bool
     ) -> Bool {
         guard type == .flagsChanged else { return false }
 
-        let comboIsDown = flags.contains(rewriteFlags)
+        let comboIsDown = HotkeyPreference.hotkeyMatches(
+            rewriteHotkey,
+            eventFlags: flags,
+            sidedModifiers: currentSidedModifiers,
+            distinguishModifierSides: distinguishModifierSides
+        )
         let rewriteTriggerDown = HotkeyModifierInterpreter.translationTriggerDown(
             keyCode: keyCode,
-            flags: flags,
+            comboIsDown: comboIsDown,
             translationFlags: rewriteFlags
         )
 
@@ -483,6 +518,8 @@ class HotkeyManager {
         transcriptionHotkey: HotkeyPreference.Hotkey,
         translationHotkey: HotkeyPreference.Hotkey,
         rewriteHotkey: HotkeyPreference.Hotkey,
+        currentSidedModifiers: SidedModifierFlags,
+        distinguishModifierSides: Bool,
         transcriptionFlags: CGEventFlags,
         translationFlags: CGEventFlags,
         rewriteFlags: CGEventFlags
@@ -491,18 +528,33 @@ class HotkeyManager {
 
         // If translation or rewrite modifier combo is active, suppress transcription trigger.
         if (HotkeyModifierInterpreter.isModifierOnly(translationHotkey) &&
-            (flags.contains(translationFlags) || isTranslationKeyDown)) ||
+            (HotkeyPreference.hotkeyMatches(
+                translationHotkey,
+                eventFlags: flags,
+                sidedModifiers: currentSidedModifiers,
+                distinguishModifierSides: distinguishModifierSides
+            ) || isTranslationKeyDown)) ||
             (HotkeyModifierInterpreter.isModifierOnly(rewriteHotkey) &&
-            (flags.contains(rewriteFlags) || isRewriteKeyDown)) {
+            (HotkeyPreference.hotkeyMatches(
+                rewriteHotkey,
+                eventFlags: flags,
+                sidedModifiers: currentSidedModifiers,
+                distinguishModifierSides: distinguishModifierSides
+            ) || isRewriteKeyDown)) {
             VoxtLog.info("Hotkey suppress transcription modifier path because higher-priority combo is active.", verbose: true)
             cancelPendingTranscriptionTap(resetKeyState: true)
             return true
         }
 
-        let comboIsDown = flags.contains(transcriptionFlags)
+        let comboIsDown = HotkeyPreference.hotkeyMatches(
+            transcriptionHotkey,
+            eventFlags: flags,
+            sidedModifiers: currentSidedModifiers,
+            distinguishModifierSides: distinguishModifierSides
+        )
         let transcriptionTriggerDown = HotkeyModifierInterpreter.transcriptionTriggerDown(
             keyCode: keyCode,
-            flags: flags,
+            comboIsDown: comboIsDown,
             transcriptionFlags: transcriptionFlags
         )
 

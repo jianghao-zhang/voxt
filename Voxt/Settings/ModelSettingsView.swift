@@ -174,17 +174,26 @@ struct ModelSettingsView: View {
                     Text("Translation Prompt")
                         .font(.subheadline.weight(.medium))
                     PromptEditorView(text: $translationPrompt)
+                    PromptTemplateVariablesView(
+                        variables: [
+                            PromptTemplateVariableDescriptor(
+                                token: "{{TARGET_LANGUAGE}}",
+                                tipKey: "Template tip {{TARGET_LANGUAGE}}"
+                            ),
+                            PromptTemplateVariableDescriptor(
+                                token: "{{SOURCE_TEXT}}",
+                                tipKey: "Template tip {{SOURCE_TEXT}}"
+                            )
+                        ]
+                    )
 
                     HStack {
-                        Text("Supported variables: {{TARGET_LANGUAGE}}, {{SOURCE_TEXT}}")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
                         Button("Reset to Default") {
                             translationPrompt = AppPreferenceKey.defaultTranslationPrompt
                         }
                         .controlSize(.small)
                         .disabled(translationPrompt == AppPreferenceKey.defaultTranslationPrompt)
+                        Spacer()
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -233,17 +242,26 @@ struct ModelSettingsView: View {
                     Text("Content Rewrite Prompt")
                         .font(.subheadline.weight(.medium))
                     PromptEditorView(text: $rewritePrompt)
+                    PromptTemplateVariablesView(
+                        variables: [
+                            PromptTemplateVariableDescriptor(
+                                token: "{{DICTATED_PROMPT}}",
+                                tipKey: "Template tip {{DICTATED_PROMPT}}"
+                            ),
+                            PromptTemplateVariableDescriptor(
+                                token: "{{SOURCE_TEXT}}",
+                                tipKey: "Template tip {{SOURCE_TEXT}}"
+                            )
+                        ]
+                    )
 
                     HStack {
-                        Text("Supported variables: {{DICTATED_PROMPT}}, {{SOURCE_TEXT}}")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
                         Button("Reset to Default") {
                             rewritePrompt = AppPreferenceKey.defaultRewritePrompt
                         }
                         .controlSize(.small)
                         .disabled(rewritePrompt == AppPreferenceKey.defaultRewritePrompt)
+                        Spacer()
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -446,9 +464,14 @@ struct ModelSettingsView: View {
                 .font(.subheadline.weight(.medium))
 
             PromptEditorView(text: $systemPrompt)
-            Text("Supported variable: {{RAW_TRANSCRIPTION}}")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            PromptTemplateVariablesView(
+                variables: [
+                    PromptTemplateVariableDescriptor(
+                        token: "{{RAW_TRANSCRIPTION}}",
+                        tipKey: "Template tip {{RAW_TRANSCRIPTION}}"
+                    )
+                ]
+            )
 
             HStack {
                 Text("Customise how Apple Intelligence enhances your transcriptions.")
@@ -476,9 +499,14 @@ struct ModelSettingsView: View {
             .font(.subheadline.weight(.medium))
 
         PromptEditorView(text: $systemPrompt)
-        Text("Supported variable: {{RAW_TRANSCRIPTION}}")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        PromptTemplateVariablesView(
+            variables: [
+                PromptTemplateVariableDescriptor(
+                    token: "{{RAW_TRANSCRIPTION}}",
+                    tipKey: "Template tip {{RAW_TRANSCRIPTION}}"
+                )
+            ]
+        )
 
         customLLMModelTable
 
@@ -525,9 +553,14 @@ struct ModelSettingsView: View {
             .font(.subheadline.weight(.medium))
 
         PromptEditorView(text: $systemPrompt)
-        Text("Supported variable: {{RAW_TRANSCRIPTION}}")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        PromptTemplateVariablesView(
+            variables: [
+                PromptTemplateVariableDescriptor(
+                    token: "{{RAW_TRANSCRIPTION}}",
+                    tipKey: "Template tip {{RAW_TRANSCRIPTION}}"
+                )
+            ]
+        )
 
         HStack {
             Text("Configure a remote provider and model, then click Use.")

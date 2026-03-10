@@ -184,7 +184,7 @@ struct SettingsView: View {
     private func refreshPermissionBadge() {
         let microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         let speechGranted = SFSpeechRecognizer.authorizationStatus() == .authorized
-        let accessibilityGranted = AXIsProcessTrusted()
+        let accessibilityGranted = AccessibilityPermissionManager.isTrusted()
         let inputMonitoringGranted: Bool
         if #available(macOS 10.15, *) {
             inputMonitoringGranted = CGPreflightListenEventAccess()

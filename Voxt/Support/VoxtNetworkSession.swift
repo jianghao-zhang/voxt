@@ -1,5 +1,6 @@
 import Foundation
 import CFNetwork
+import Network
 
 enum VoxtNetworkSession {
     enum ProxyMode: String, CaseIterable, Identifiable {
@@ -84,22 +85,7 @@ enum VoxtNetworkSession {
     // Force direct outbound network requests and bypass system HTTP/HTTPS/SOCKS proxies.
     static let direct: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.connectionProxyDictionary = [
-            kCFNetworkProxiesHTTPEnable as String: false,
-            kCFNetworkProxiesHTTPSEnable as String: false,
-            kCFNetworkProxiesSOCKSEnable as String: false,
-            kCFNetworkProxiesProxyAutoConfigEnable as String: false,
-            kCFNetworkProxiesProxyAutoDiscoveryEnable as String: false,
-            kCFNetworkProxiesHTTPProxy as String: "",
-            kCFNetworkProxiesHTTPPort as String: 0,
-            kCFNetworkProxiesHTTPSProxy as String: "",
-            kCFNetworkProxiesHTTPSPort as String: 0,
-            kCFNetworkProxiesSOCKSProxy as String: "",
-            kCFNetworkProxiesSOCKSPort as String: 0,
-            kCFNetworkProxiesProxyAutoConfigURLString as String: "",
-            kCFNetworkProxiesExceptionsList as String: [],
-            kCFNetworkProxiesExcludeSimpleHostnames as String: false
-        ]
+        applyDirectProxyBypass(to: configuration)
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: configuration)
     }()
@@ -167,8 +153,29 @@ enum VoxtNetworkSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.connectionProxyDictionary = customProxyDictionary(settings: settings)
+        configuration.proxyConfigurations = customProxyConfigurations(settings: settings)
         let delegate = settings.hasCredentials ? ProxyAuthenticationDelegate(settings: settings) : nil
         return URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+    }
+
+    private static func applyDirectProxyBypass(to configuration: URLSessionConfiguration) {
+        configuration.connectionProxyDictionary = [
+            kCFNetworkProxiesHTTPEnable as String: false,
+            kCFNetworkProxiesHTTPSEnable as String: false,
+            kCFNetworkProxiesSOCKSEnable as String: false,
+            kCFNetworkProxiesProxyAutoConfigEnable as String: false,
+            kCFNetworkProxiesProxyAutoDiscoveryEnable as String: false,
+            kCFNetworkProxiesHTTPProxy as String: "",
+            kCFNetworkProxiesHTTPPort as String: 0,
+            kCFNetworkProxiesHTTPSProxy as String: "",
+            kCFNetworkProxiesHTTPSPort as String: 0,
+            kCFNetworkProxiesSOCKSProxy as String: "",
+            kCFNetworkProxiesSOCKSPort as String: 0,
+            kCFNetworkProxiesProxyAutoConfigURLString as String: "",
+            kCFNetworkProxiesExceptionsList as String: [],
+            kCFNetworkProxiesExcludeSimpleHostnames as String: false
+        ]
+        configuration.proxyConfigurations = []
     }
 
     private static func customProxyDictionary(settings: ProxySettings) -> [AnyHashable: Any] {
@@ -199,5 +206,28 @@ enum VoxtNetworkSession {
         }
 
         return dictionary
+    }
+
+    private static func customProxyConfigurations(settings: ProxySettings) -> [ProxyConfiguration] {
+        guard
+            let portValue = settings.port,
+            let port = NWEndpoint.Port(rawValue: UInt16(portValue))
+        else {
+            return []
+        }
+
+        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(settings.host), port: port)
+        var configuration: ProxyConfiguration
+        switch settings.scheme {
+        case .http, .https:
+            configuration = ProxyConfiguration(httpCONNECTProxy: endpoint)
+        case .socks5:
+            configuration = ProxyConfiguration(socksv5Proxy: endpoint)
+        }
+        configuration.allowFailover = false
+        if settings.hasCredentials {
+            configuration.applyCredential(username: settings.username, password: settings.password)
+        }
+        return [configuration]
     }
 }

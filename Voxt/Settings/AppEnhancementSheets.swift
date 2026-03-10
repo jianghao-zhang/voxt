@@ -38,6 +38,14 @@ struct GroupEditorSheet: View {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(Color.primary.opacity(0.10), lineWidth: 1)
                     )
+                PromptTemplateVariablesView(
+                    variables: [
+                        PromptTemplateVariableDescriptor(
+                            token: AppDelegate.rawTranscriptionTemplateVariable,
+                            tipKey: "Template tip {{RAW_TRANSCRIPTION}}"
+                        )
+                    ]
+                )
             }
 
             if let errorMessage, !errorMessage.isEmpty {

@@ -28,6 +28,16 @@ enum VoxtLog {
         log(message(), level: .info)
     }
 
+    static func llmPreview(_ text: String, limit: Int = 1200) -> String {
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "<empty>" }
+        guard normalized.count > limit else { return normalized }
+        let endIndex = normalized.index(normalized.startIndex, offsetBy: limit)
+        return "\(normalized[..<endIndex])…"
+    }
+
     static func warning(_ message: @autoclosure () -> String) {
         log(message(), level: .warning)
     }

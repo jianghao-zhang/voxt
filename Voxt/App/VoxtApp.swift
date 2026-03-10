@@ -378,6 +378,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return elapsed < tapStopGuardInterval
     }
 
+    private var isSessionStopInProgress: Bool {
+        isSessionActive && recordingStoppedAt != nil
+    }
+
     private func handleTranscriptionTapDown() {
         if isSessionActive {
             // In tap mode, fn is the unified "toggle stop" key.
@@ -414,7 +418,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 sessionOutputMode: sessionOutputMode,
                 hasPendingTranscriptionStart: pendingTranscriptionStartTask != nil,
                 isSelectedTextTranslationFlow: isSelectedTextTranslationFlow,
-                canStopTapSession: !shouldIgnoreTapStop()
+                canStopTapSession: !shouldIgnoreTapStop() && !isSessionStopInProgress
             )
         )
         for action in actions {
@@ -435,7 +439,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 sessionOutputMode: sessionOutputMode,
                 hasPendingTranscriptionStart: pendingTranscriptionStartTask != nil,
                 isSelectedTextTranslationFlow: isSelectedTextTranslationFlow,
-                canStopTapSession: !shouldIgnoreTapStop()
+                canStopTapSession: !shouldIgnoreTapStop() && !isSessionStopInProgress
             )
         )
         for action in actions {
@@ -455,7 +459,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 sessionOutputMode: sessionOutputMode,
                 hasPendingTranscriptionStart: pendingTranscriptionStartTask != nil,
                 isSelectedTextTranslationFlow: isSelectedTextTranslationFlow,
-                canStopTapSession: !shouldIgnoreTapStop()
+                canStopTapSession: !shouldIgnoreTapStop() && !isSessionStopInProgress
             )
         )
         for action in actions where action == .cancelPendingTranscriptionStart {
@@ -493,7 +497,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 sessionOutputMode: sessionOutputMode,
                 hasPendingTranscriptionStart: pendingTranscriptionStartTask != nil,
                 isSelectedTextTranslationFlow: isSelectedTextTranslationFlow,
-                canStopTapSession: !shouldIgnoreTapStop()
+                canStopTapSession: !shouldIgnoreTapStop() && !isSessionStopInProgress
             )
         )
         for action in actions {

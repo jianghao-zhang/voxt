@@ -192,13 +192,92 @@ class CustomLLMModelManager: ObservableObject {
         VoxtLog.llm(
             "Custom LLM enhance started. repo=\(modelRepo), inputChars=\(input.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP)"
         )
+        VoxtLog.llm(
+            """
+            Custom LLM enhance content. repo=\(modelRepo)
+            [system_prompt]
+            \(VoxtLog.llmPreview(systemPrompt))
+            [input]
+            \(VoxtLog.llmPreview(input))
+            [request_content]
+            \(VoxtLog.llmPreview(prompt))
+            """
+        )
         let response = try await session.respond(to: modelPrompt(prompt, repo: modelRepo))
         let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
         let cleaned = extractResultText(response)
         VoxtLog.llm(
             "Custom LLM enhance completed. repo=\(modelRepo), outputChars=\(cleaned.count), elapsedMs=\(elapsedMs)"
         )
+        VoxtLog.llm(
+            """
+            Custom LLM enhance output. repo=\(modelRepo)
+            [output]
+            \(VoxtLog.llmPreview(cleaned))
+            """
+        )
         return cleaned.isEmpty ? rawText : cleaned
+    }
+
+    func enhance(userPrompt: String) async throws -> String {
+        let prompt = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return "" }
+
+        guard isModelDownloaded(repo: modelRepo) else {
+            throw NSError(
+                domain: "Voxt.CustomLLM",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Custom LLM model is not installed locally."]
+            )
+        }
+
+        let container: ModelContainer
+        if let cached = inferenceContainer, inferenceModelRepo == modelRepo {
+            container = cached
+        } else {
+            guard let directory = cacheDirectory(for: modelRepo) else {
+                throw NSError(
+                    domain: "Voxt.CustomLLM",
+                    code: -10,
+                    userInfo: [NSLocalizedDescriptionKey: "Invalid local model path."]
+                )
+            }
+            container = try await loadModelContainer(directory: directory)
+            inferenceContainer = container
+            inferenceModelRepo = modelRepo
+        }
+
+        let session = ChatSession(container, instructions: "")
+        let params = generationParameters(for: .enhancement, inputLength: prompt.count)
+        session.generateParameters = params
+
+        let startedAt = Date()
+        VoxtLog.llm(
+            "Custom LLM enhance started. repo=\(modelRepo), inputChars=\(prompt.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP), mode=userMessage"
+        )
+        VoxtLog.llm(
+            """
+            Custom LLM enhance content. repo=\(modelRepo)
+            [system_prompt]
+            <empty>
+            [input]
+            \(VoxtLog.llmPreview(prompt))
+            """
+        )
+        let response = try await session.respond(to: modelPrompt(prompt, repo: modelRepo))
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+        let cleaned = extractResultText(response)
+        VoxtLog.llm(
+            "Custom LLM enhance completed. repo=\(modelRepo), outputChars=\(cleaned.count), elapsedMs=\(elapsedMs)"
+        )
+        VoxtLog.llm(
+            """
+            Custom LLM enhance output. repo=\(modelRepo)
+            [output]
+            \(VoxtLog.llmPreview(cleaned))
+            """
+        )
+        return cleaned
     }
 
     func translate(
@@ -261,11 +340,29 @@ class CustomLLMModelManager: ObservableObject {
         VoxtLog.llm(
             "Custom LLM translate started. repo=\(modelRepo), inputChars=\(text.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP)"
         )
+        VoxtLog.llm(
+            """
+            Custom LLM translate content. repo=\(modelRepo)
+            [system_prompt]
+            \(VoxtLog.llmPreview(instructions))
+            [input]
+            \(VoxtLog.llmPreview(text))
+            [request_content]
+            \(VoxtLog.llmPreview(prompt))
+            """
+        )
         let response = try await session.respond(to: modelPrompt(prompt, repo: modelRepo))
         let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
         let result = extractResultText(response)
         VoxtLog.llm(
             "Custom LLM translate completed. repo=\(modelRepo), outputChars=\(result.count), elapsedMs=\(elapsedMs)"
+        )
+        VoxtLog.llm(
+            """
+            Custom LLM translate output. repo=\(modelRepo)
+            [output]
+            \(VoxtLog.llmPreview(result))
+            """
         )
         return result
     }
@@ -303,11 +400,29 @@ class CustomLLMModelManager: ObservableObject {
         VoxtLog.llm(
             "Custom LLM rewrite started. repo=\(modelRepo), instructionChars=\(dictatedPrompt.count), sourceChars=\(sourceText.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP)"
         )
+        VoxtLog.llm(
+            """
+            Custom LLM rewrite content. repo=\(modelRepo)
+            [system_prompt]
+            \(VoxtLog.llmPreview(instructions))
+            [input]
+            \(VoxtLog.llmPreview(combinedInput))
+            [request_content]
+            \(VoxtLog.llmPreview(prompt))
+            """
+        )
         let response = try await session.respond(to: modelPrompt(prompt, repo: modelRepo))
         let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
         let result = extractResultText(response)
         VoxtLog.llm(
             "Custom LLM rewrite completed. repo=\(modelRepo), outputChars=\(result.count), elapsedMs=\(elapsedMs)"
+        )
+        VoxtLog.llm(
+            """
+            Custom LLM rewrite output. repo=\(modelRepo)
+            [output]
+            \(VoxtLog.llmPreview(result))
+            """
         )
         return result
     }

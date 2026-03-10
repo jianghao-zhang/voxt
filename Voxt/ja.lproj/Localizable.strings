@@ -403,3 +403,23 @@
 "Rewrite" = "内容改写";
 
 "Version metadata missing" = "バージョンメタデータが不足しています";
+"Supported variables" = "サポート変数";
+"Click a variable to copy it. Hover to view usage tips." = "変数をクリックするとコピーできます。ホバーすると使い方の説明を表示します。";
+"Copied %@" = "%@ をコピーしました";
+"Template tip {{RAW_TRANSCRIPTION}}" = "強化前の生の文字起こしテキストです。元の認識結果をプロンプト内で参照したいときに使います。";
+"Template tip {{TARGET_LANGUAGE}}" = "翻訳先として選択されている言語です。例: 英語、日本語。";
+"Template tip {{SOURCE_TEXT}}" = "翻訳または書き換えの対象になる元のテキストです。";
+"Template tip {{DICTATED_PROMPT}}" = "音声入力から取得した書き換え指示です。";
+"Preset" = "プリセット";
+"fn Combo" = "fn コンボ";
+"Command Combo" = "Command コンボ";
+"Custom" = "カスタム";
+"Distinguish Left/Right Modifiers" = "左右の修飾キーを区別する";
+"When enabled, Left Shift and Right Shift are treated as different shortcuts." = "有効にすると、左 Shift と右 Shift は別のショートカットとして扱われます。";
+"Enable left/right modifier distinction only if you want shortcuts such as Right Command and Right Shift to behave differently from their left-side counterparts." = "右 Command や右 Shift などを左側の同じキーと別のショートカットとして扱いたい場合のみ、有効にしてください。";
+"Left %@" = "左%@";
+"Right %@" = "右%@";
+"Shift" = "Shift";
+"Control" = "Control";
+"Option" = "Option";
+"Command" = "Command";

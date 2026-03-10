@@ -41,6 +41,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     private var openAIPreviewLastText = ""
     private var recordingFileURL: URL?
     private var transcribeTask: Task<Void, Never>?
+    private var stopRequested = false
     private var activeProvider: RemoteASRProvider?
     private let doubaoResourceID = "volc.bigasr.sauc.duration"
     private let streamingFinalWaitTimeout: TimeInterval = 20
@@ -56,6 +57,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         cleanupAliyunStreamingState()
         transcribedText = ""
         audioLevel = 0
+        stopRequested = false
         let provider = selectedProvider
         let configuration = selectedProviderConfiguration(for: provider)
         activeProvider = provider
@@ -101,7 +103,12 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     }
 
     func stopRecording() {
-        guard isRecording else { return }
+        let hasPendingRealtimeSession =
+            doubaoStreamingContext != nil ||
+            aliyunStreamingContext != nil ||
+            aliyunQwenStreamingContext != nil
+        guard isRecording || hasPendingRealtimeSession || recorder != nil else { return }
+        stopRequested = true
         if activeProvider == .doubaoASR, let context = doubaoStreamingContext {
             isRecording = false
             stopDoubaoAudioCapture()
@@ -517,7 +524,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 }
             }
         }
-        isRecording = true
     }
 
     private func receiveAliyunFunMessages(_ context: AliyunFunStreamingContext) {
@@ -565,6 +571,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
 
         if event == "task-started", !context.didStartAudioStream {
+            guard !stopRequested else {
+                VoxtLog.info("Aliyun fun task-started ignored because stop was already requested.", verbose: true)
+                return
+            }
             do {
                 try startAliyunAudioCapture(context: context)
                 context.didStartAudioStream = true
@@ -619,6 +629,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
         audioEngine.prepare()
         try audioEngine.start()
+        isRecording = true
     }
 
     private func stopAliyunAudioCapture() {
@@ -696,7 +707,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 }
             }
         }
-        isRecording = true
     }
 
     private func receiveAliyunQwenMessages(_ context: AliyunQwenStreamingContext) {
@@ -740,6 +750,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
 
         if type == "session.updated", !context.didStartAudioStream {
+            guard !stopRequested else {
+                VoxtLog.info("Aliyun qwen session.updated ignored because stop was already requested.", verbose: true)
+                return
+            }
             try startAliyunQwenAudioCapture(context: context)
             context.didStartAudioStream = true
             return
@@ -794,6 +808,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
         audioEngine.prepare()
         try audioEngine.start()
+        isRecording = true
     }
 
     private func sendAliyunQwenSessionUpdate(
@@ -1036,7 +1051,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 }
             }
         }
-        isRecording = true
     }
 
     private func sendDoubaoPacket(
@@ -1099,6 +1113,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
         audioEngine.prepare()
         try audioEngine.start()
+        isRecording = true
     }
 
     private func stopDoubaoAudioCapture() {
@@ -1128,6 +1143,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                                 VoxtLog.info("Doubao streaming server packet received. index=\(context.serverPacketCount), bytes=\(payloadData.count), hasText=\(!(parsed.text ?? "").isEmpty), isFinal=\(parsed.isFinal)")
                             }
                             if !context.didStartAudioStream {
+                                guard !self.stopRequested else {
+                                    VoxtLog.info("Doubao handshake completion ignored because stop was already requested.", verbose: true)
+                                    return
+                                }
                                 do {
                                     try self.startDoubaoAudioCapture()
                                     context.didStartAudioStream = true
@@ -2196,6 +2215,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         recorder = nil
         recordingFileURL = nil
         isRecording = false
+        stopRequested = false
         stopOpenAIPreviewLoop()
         stopMeteringTimer()
     }
