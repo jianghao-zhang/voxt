@@ -34,7 +34,7 @@ struct HotkeyPreference {
     static let defaultModifiers: NSEvent.ModifierFlags = [.function]
     static let defaultTranslationKeyCode: UInt16 = modifierOnlyKeyCode
     static let defaultTranslationModifiers: NSEvent.ModifierFlags = [.function, .shift]
-    static let defaultTriggerMode: TriggerMode = .longPress
+    static let defaultTriggerMode: TriggerMode = .tap
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [

@@ -131,7 +131,7 @@ struct HotkeySettingsView: View {
 
     private var triggerModeBinding: Binding<HotkeyPreference.TriggerMode> {
         Binding(
-            get: { HotkeyPreference.TriggerMode(rawValue: hotkeyTriggerMode) ?? .longPress },
+            get: { HotkeyPreference.TriggerMode(rawValue: hotkeyTriggerMode) ?? HotkeyPreference.defaultTriggerMode },
             set: { hotkeyTriggerMode = $0.rawValue }
         )
     }
