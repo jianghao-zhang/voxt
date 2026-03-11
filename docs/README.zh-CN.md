@@ -1,6 +1,6 @@
 <div align="center"><a name="readme-top"></a>
 
-<img src="Voxt/logo.svg" width="118" alt="Voxt Logo">
+<img src="../Voxt/logo.svg" width="118" alt="Voxt Logo">
 
 # Voxt
 
