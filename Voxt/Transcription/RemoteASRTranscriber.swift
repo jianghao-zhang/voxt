@@ -109,131 +109,52 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             aliyunQwenStreamingContext != nil
         guard isRecording || hasPendingRealtimeSession || recorder != nil else { return }
         stopRequested = true
-        if activeProvider == .doubaoASR, let context = doubaoStreamingContext {
-            isRecording = false
-            stopDoubaoAudioCapture()
-            VoxtLog.info("Doubao streaming stop requested. sentAudioPackets=\(context.audioPacketCount)")
-            // Doubao expects the terminal negative sequence to mirror the next
-            // auto-assigned sequence index, not the last sent positive one.
-            let finalSequence = context.audioPacketCount == 0 ? Int32(-1) : -context.nextAudioSequence
-            VoxtLog.info(
-                "Doubao streaming final packet. lastSequence=\(context.lastAudioSequence), nextSequence=\(context.nextAudioSequence), finalSequence=\(finalSequence)",
-                verbose: true
-            )
-            if !context.isClosed {
-                let finalPacket = buildDoubaoPacket(
-                    messageType: DoubaoProtocol.messageTypeAudioOnlyClientRequest,
-                    messageFlags: DoubaoProtocol.flagNegativeAudioPacket,
-                    serialization: DoubaoProtocol.serializationNone,
-                    compression: DoubaoProtocol.compressionNone,
-                    sequence: finalSequence,
-                    payload: Data()
-                )
-                sendDoubaoPacket(finalPacket, through: context.ws) { error, isBenign in
-                    Task { [responseState = context.responseState] in
-                        if isBenign {
-                            await responseState.markSocketClosed()
-                        } else {
-                            await responseState.markCompletedWithError(error)
-                        }
-                    }
-                }
-            } else {
-                VoxtLog.info("Doubao streaming socket already closed before final packet, skip final send.", verbose: true)
-            }
 
-            transcribeTask = Task { [weak self] in
-                guard let self else { return }
-                let finalText: String
-                do {
-                    finalText = try await context.responseState.waitForFinalResult(timeoutSeconds: streamingFinalWaitTimeout)
-                } catch {
-                    VoxtLog.warning("Doubao final result wait failed: \(error.localizedDescription)")
-                    finalText = await context.responseState.currentText()
+        if activeProvider == .doubaoASR, let context = doubaoStreamingContext {
+            stopDoubaoStreaming(context)
+            scheduleStreamingCompletion {
+                let finalText = await self.resolveStreamingResult(
+                    warningMessage: "Doubao final result wait failed"
+                ) {
+                    try await context.responseState.waitForFinalResult(timeoutSeconds: self.streamingFinalWaitTimeout)
+                } fallback: {
+                    await context.responseState.currentText()
                 }
                 let currentText = await context.responseState.currentText()
-                let stabilizedText = finalText.isEmpty ? currentText : finalText
-                await MainActor.run {
-                    self.transcribedText = stabilizedText
-                    self.finish(with: stabilizedText)
-                }
+                return finalText.isEmpty ? currentText : finalText
             }
             return
         }
 
         if activeProvider == .aliyunBailianASR, let context = aliyunStreamingContext {
-            isRecording = false
-            stopAliyunAudioCapture()
-            if !context.isClosed {
-                sendAliyunFunControl(action: "finish-task", through: context.ws, taskID: context.taskID) { error in
-                    Task { [responseState = context.responseState] in
-                        if let error {
-                            await responseState.markCompletedWithError(error)
-                        } else {
-                            await responseState.markFinishRequested()
-                        }
-                    }
-                }
-            }
-
-            transcribeTask = Task { [weak self] in
-                guard let self else { return }
-                let finalText: String
-                do {
-                    finalText = try await context.responseState.waitForFinalResult(timeoutSeconds: streamingFinalWaitTimeout)
-                } catch {
-                    VoxtLog.warning("Aliyun fun final result wait failed: \(error.localizedDescription)")
-                    finalText = await context.responseState.currentText()
-                }
-                await MainActor.run {
-                    self.transcribedText = finalText
-                    self.finish(with: finalText)
+            stopAliyunFunStreaming(context)
+            scheduleStreamingCompletion {
+                await self.resolveStreamingResult(
+                    warningMessage: "Aliyun fun final result wait failed"
+                ) {
+                    try await context.responseState.waitForFinalResult(timeoutSeconds: self.streamingFinalWaitTimeout)
+                } fallback: {
+                    await context.responseState.currentText()
                 }
             }
             return
         }
 
         if activeProvider == .aliyunBailianASR, let context = aliyunQwenStreamingContext {
-            isRecording = false
-            stopAliyunAudioCapture()
-            if !context.isClosed {
-                sendAliyunQwenEvent(
-                    type: "session.finish",
-                    through: context.ws
-                ) { error in
-                    Task { [responseState = context.responseState] in
-                        if let error {
-                            await responseState.markCompletedWithError(error)
-                        } else {
-                            await responseState.markFinishRequested()
-                        }
-                    }
-                }
-            }
-
-            transcribeTask = Task { [weak self] in
-                guard let self else { return }
-                let finalText: String
-                do {
-                    finalText = try await context.responseState.waitForFinalResult(timeoutSeconds: streamingFinalWaitTimeout)
-                } catch {
-                    VoxtLog.warning("Aliyun qwen realtime final result wait failed: \(error.localizedDescription)")
-                    finalText = await context.responseState.currentText()
-                }
-                await MainActor.run {
-                    self.transcribedText = finalText
-                    self.finish(with: finalText)
+            stopAliyunQwenStreaming(context)
+            scheduleStreamingCompletion {
+                await self.resolveStreamingResult(
+                    warningMessage: "Aliyun qwen realtime final result wait failed"
+                ) {
+                    try await context.responseState.waitForFinalResult(timeoutSeconds: self.streamingFinalWaitTimeout)
+                } fallback: {
+                    await context.responseState.currentText()
                 }
             }
             return
         }
 
-        recorder?.stop()
-        isRecording = false
-        stopMeteringTimer()
-        stopOpenAIPreviewLoop()
-
-        guard let fileURL = recordingFileURL else {
+        guard let fileURL = stopFileRecordingCapture() else {
             finish(with: transcribedText)
             return
         }
@@ -253,6 +174,101 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 }
             }
             try? FileManager.default.removeItem(at: fileURL)
+        }
+    }
+
+    private func stopDoubaoStreaming(_ context: DoubaoStreamingContext) {
+        isRecording = false
+        stopDoubaoAudioCapture()
+        VoxtLog.info("Doubao streaming stop requested. sentAudioPackets=\(context.audioPacketCount)")
+
+        let finalSequence = context.audioPacketCount == 0 ? Int32(-1) : -context.nextAudioSequence
+        VoxtLog.info(
+            "Doubao streaming final packet. lastSequence=\(context.lastAudioSequence), nextSequence=\(context.nextAudioSequence), finalSequence=\(finalSequence)",
+            verbose: true
+        )
+        guard !context.isClosed else {
+            VoxtLog.info("Doubao streaming socket already closed before final packet, skip final send.", verbose: true)
+            return
+        }
+
+        let finalPacket = buildDoubaoPacket(
+            messageType: DoubaoProtocol.messageTypeAudioOnlyClientRequest,
+            messageFlags: DoubaoProtocol.flagNegativeAudioPacket,
+            serialization: DoubaoProtocol.serializationNone,
+            compression: DoubaoProtocol.compressionNone,
+            sequence: finalSequence,
+            payload: Data()
+        )
+        sendDoubaoPacket(finalPacket, through: context.ws) { error, isBenign in
+            Task { [responseState = context.responseState] in
+                if isBenign {
+                    await responseState.markSocketClosed()
+                } else {
+                    await responseState.markCompletedWithError(error)
+                }
+            }
+        }
+    }
+
+    private func stopAliyunFunStreaming(_ context: AliyunFunStreamingContext) {
+        isRecording = false
+        stopAliyunAudioCapture()
+        guard !context.isClosed else { return }
+
+        sendAliyunFunControl(action: "finish-task", through: context.ws, taskID: context.taskID) { error in
+            Task { [responseState = context.responseState] in
+                if let error {
+                    await responseState.markCompletedWithError(error)
+                } else {
+                    await responseState.markFinishRequested()
+                }
+            }
+        }
+    }
+
+    private func stopAliyunQwenStreaming(_ context: AliyunQwenStreamingContext) {
+        isRecording = false
+        stopAliyunAudioCapture()
+        guard !context.isClosed else { return }
+
+        sendAliyunQwenEvent(
+            type: "session.finish",
+            through: context.ws
+        ) { error in
+            Task { [responseState = context.responseState] in
+                if let error {
+                    await responseState.markCompletedWithError(error)
+                } else {
+                    await responseState.markFinishRequested()
+                }
+            }
+        }
+    }
+
+    private func scheduleStreamingCompletion(
+        result: @escaping @Sendable () async -> String
+    ) {
+        transcribeTask = Task { [weak self] in
+            guard let self else { return }
+            let finalText = await result()
+            await MainActor.run {
+                self.transcribedText = finalText
+                self.finish(with: finalText)
+            }
+        }
+    }
+
+    private func resolveStreamingResult(
+        warningMessage: String,
+        waitForFinal: @escaping @Sendable () async throws -> String,
+        fallback: @escaping @Sendable () async -> String
+    ) async -> String {
+        do {
+            return try await waitForFinal()
+        } catch {
+            VoxtLog.warning("\(warningMessage): \(error.localizedDescription)")
+            return await fallback()
         }
     }
 
@@ -2218,6 +2234,17 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         stopRequested = false
         stopOpenAIPreviewLoop()
         stopMeteringTimer()
+    }
+
+    private func stopFileRecordingCapture() -> URL? {
+        let fileURL = recordingFileURL
+        recorder?.stop()
+        recorder = nil
+        recordingFileURL = nil
+        isRecording = false
+        stopOpenAIPreviewLoop()
+        stopMeteringTimer()
+        return fileURL
     }
 
     private func cleanupDoubaoStreamingState() {

@@ -402,6 +402,8 @@ struct HotkeySettingsView: View {
                 .padding(8)
             }
 
+            VoiceEndCommandSettingsSection()
+
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Tips")

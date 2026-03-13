@@ -9,10 +9,7 @@ extension AppDelegate {
         guard !isSessionActive else { return }
         guard preflightPermissionsForRecording() else { return }
 
-        pendingSessionFinishTask?.cancel()
-        pendingSessionFinishTask = nil
-        stopRecordingFallbackTask?.cancel()
-        stopRecordingFallbackTask = nil
+        cancelPendingFinishTasks()
         overlayState.isCompleting = false
         setEnhancingState(false)
         recordingStartedAt = Date()
@@ -24,6 +21,7 @@ extension AppDelegate {
         activeRecordingSessionID = UUID()
         sessionOutputMode = outputMode
         enhancementContextSnapshot = nil
+        resetVoiceEndCommandState()
 
         VoxtLog.info(
             "Recording started. output=\(sessionOutputLabel(for: outputMode)), engine=\(transcriptionEngine.rawValue)"
@@ -75,25 +73,16 @@ extension AppDelegate {
         }
         VoxtLog.info("Recording stop requested.")
 
-        silenceMonitorTask?.cancel()
-        silenceMonitorTask = nil
-        pauseLLMTask?.cancel()
-        pauseLLMTask = nil
+        cancelActiveRecordingTasks()
         stopRecordingFallbackTask?.cancel()
         stopRecordingFallbackTask = nil
         recordingStoppedAt = Date()
         if transcriptionProcessingStartedAt == nil {
             transcriptionProcessingStartedAt = recordingStoppedAt
         }
+        voiceEndCommandState.lastDetectedCommand = false
         enhancementContextSnapshot = captureEnhancementContextSnapshot()
-
-        if transcriptionEngine == .mlxAudio, isMLXReady {
-            mlxTranscriber?.stopRecording()
-        } else if transcriptionEngine == .remote {
-            remoteASRTranscriber.stopRecording()
-        } else {
-            speechTranscriber.stopRecording()
-        }
+        stopActiveRecordingTranscriber()
 
         // Safety fallback: some engine/device combinations may occasionally fail to
         // report completion. Ensure the session/UI can always recover.
@@ -121,26 +110,13 @@ extension AppDelegate {
         isSessionCancellationRequested = true
         didCommitSessionOutput = true
 
-        pendingSessionFinishTask?.cancel()
-        pendingSessionFinishTask = nil
-        stopRecordingFallbackTask?.cancel()
-        stopRecordingFallbackTask = nil
-        silenceMonitorTask?.cancel()
-        silenceMonitorTask = nil
-        pauseLLMTask?.cancel()
-        pauseLLMTask = nil
+        cancelSessionControlTasks()
         recordingStoppedAt = Date()
         overlayState.isCompleting = false
         overlayState.statusMessage = ""
         setEnhancingState(false)
-
-        if transcriptionEngine == .mlxAudio, isMLXReady {
-            mlxTranscriber?.stopRecording()
-        } else if transcriptionEngine == .remote {
-            remoteASRTranscriber.stopRecording()
-        } else {
-            speechTranscriber.stopRecording()
-        }
+        resetVoiceEndCommandState()
+        stopActiveRecordingTranscriber()
 
         VoxtLog.info("Cancelled session invalidated. sessionID=\(cancelledSessionID.uuidString)", verbose: true)
         executeSessionEndPipeline()
@@ -161,7 +137,8 @@ extension AppDelegate {
         stopRecordingFallbackTask = nil
 
         transcriptionResultReceivedAt = Date()
-        let text = normalizedTranscriptionDisplayText(rawText)
+        let displayText = normalizedTranscriptionDisplayText(rawText)
+        let text = sanitizedFinalTranscriptionText(displayText)
         guard !text.isEmpty else {
             VoxtLog.info("Transcription result is empty; finishing session.")
             setEnhancingState(false)
@@ -211,13 +188,7 @@ extension AppDelegate {
     }
 
     func finishSession(after delay: TimeInterval = 0) {
-        pendingSessionFinishTask?.cancel()
-        stopRecordingFallbackTask?.cancel()
-        stopRecordingFallbackTask = nil
-        silenceMonitorTask?.cancel()
-        silenceMonitorTask = nil
-        pauseLLMTask?.cancel()
-        pauseLLMTask = nil
+        cancelSessionControlTasks()
 
         let resolvedDelay = delay > 0 ? delay : sessionFinishDelay
         overlayState.isCompleting = resolvedDelay > 0
@@ -368,14 +339,7 @@ extension AppDelegate {
     }
 
     private func resetSessionAfterFailedStart() {
-        pendingSessionFinishTask?.cancel()
-        pendingSessionFinishTask = nil
-        stopRecordingFallbackTask?.cancel()
-        stopRecordingFallbackTask = nil
-        silenceMonitorTask?.cancel()
-        silenceMonitorTask = nil
-        pauseLLMTask?.cancel()
-        pauseLLMTask = nil
+        cancelSessionControlTasks()
         isSessionActive = false
         isSessionCancellationRequested = false
         didCommitSessionOutput = false
@@ -388,6 +352,7 @@ extension AppDelegate {
         isSelectedTextTranslationFlow = false
         enhancementContextSnapshot = nil
         lastEnhancementPromptContext = nil
+        resetVoiceEndCommandState()
         overlayState.reset()
         overlayWindow.hide()
     }
@@ -499,15 +464,9 @@ extension AppDelegate {
     }
 
     private func startSilenceMonitoringIfNeeded() {
-        silenceMonitorTask?.cancel()
-        pauseLLMTask?.cancel()
-        pauseLLMTask = nil
+        cancelActiveRecordingTasks()
 
-        guard transcriptionEngine == .mlxAudio else { return }
-
-        lastSignificantAudioAt = Date()
-        didTriggerPauseTranscription = false
-        didTriggerPauseLLM = false
+        resetSilenceMonitoringState()
 
         silenceMonitorTask = Task { [weak self] in
             guard let self else { return }
@@ -532,15 +491,24 @@ extension AppDelegate {
                 } else {
                     let silentDuration = Date().timeIntervalSince(self.lastSignificantAudioAt)
 
-                    if silentDuration >= 2.0, !self.didTriggerPauseTranscription {
+                    if self.transcriptionEngine == .mlxAudio,
+                       silentDuration >= 2.0,
+                       !self.didTriggerPauseTranscription {
                         self.didTriggerPauseTranscription = true
                         self.mlxTranscriber?.forceIntermediateTranscription()
                     }
 
-                    if silentDuration >= 4.0, !self.didTriggerPauseLLM {
+                    if self.transcriptionEngine == .mlxAudio,
+                       silentDuration >= 4.0,
+                       !self.didTriggerPauseLLM {
                         self.didTriggerPauseLLM = true
                         self.startPauseLLMIfNeeded()
                     }
+                }
+
+                if self.shouldStopRecordingForVoiceEndCommand() {
+                    self.triggerVoiceEndCommandStop()
+                    return
                 }
 
                 do {
@@ -550,5 +518,48 @@ extension AppDelegate {
                 }
             }
         }
+    }
+
+    private func stopActiveRecordingTranscriber() {
+        if transcriptionEngine == .mlxAudio, isMLXReady {
+            mlxTranscriber?.stopRecording()
+        } else if transcriptionEngine == .remote {
+            remoteASRTranscriber.stopRecording()
+        } else {
+            speechTranscriber.stopRecording()
+        }
+    }
+
+    private func resetSilenceMonitoringState() {
+        lastSignificantAudioAt = Date()
+        didTriggerPauseTranscription = false
+        didTriggerPauseLLM = false
+        voiceEndCommandState.lastDetectedCommand = false
+    }
+
+    private func triggerVoiceEndCommandStop() {
+        voiceEndCommandState.didAutoStop = true
+        voiceEndCommandState.lastDetectedCommand = false
+        VoxtLog.hotkey("Voice end command triggered stop after trailing silence.")
+        endRecording()
+    }
+
+    private func cancelPendingFinishTasks() {
+        pendingSessionFinishTask?.cancel()
+        pendingSessionFinishTask = nil
+        stopRecordingFallbackTask?.cancel()
+        stopRecordingFallbackTask = nil
+    }
+
+    private func cancelActiveRecordingTasks() {
+        silenceMonitorTask?.cancel()
+        silenceMonitorTask = nil
+        pauseLLMTask?.cancel()
+        pauseLLMTask = nil
+    }
+
+    private func cancelSessionControlTasks() {
+        cancelPendingFinishTasks()
+        cancelActiveRecordingTasks()
     }
 }

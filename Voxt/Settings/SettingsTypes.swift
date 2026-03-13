@@ -262,3 +262,38 @@ enum InteractionSoundPreset: String, CaseIterable, Identifiable {
         }
     }
 }
+
+enum VoiceEndCommandPreset: String, CaseIterable, Identifiable {
+    case over
+    case end
+    case wanBi
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .over:
+            return "over"
+        case .end:
+            return "end"
+        case .wanBi:
+            return "完毕"
+        case .custom:
+            return AppLocalization.localizedString("Custom")
+        }
+    }
+
+    var resolvedCommand: String? {
+        switch self {
+        case .over:
+            return "over"
+        case .end:
+            return "end"
+        case .wanBi:
+            return "完毕"
+        case .custom:
+            return nil
+        }
+    }
+}

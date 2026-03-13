@@ -2,6 +2,10 @@ import SwiftUI
 import AppKit
 
 extension AppDelegate {
+    private var feedbackURL: URL {
+        URL(string: "https://github.com/hehehai/voxt/issues/new/choose")!
+    }
+
     func buildMenu() {
         let menu = NSMenu()
 
@@ -21,6 +25,14 @@ extension AppDelegate {
         checkUpdatesItem.target = self
         menu.addItem(checkUpdatesItem)
 
+        let feedbackItem = NSMenuItem(
+            title: AppLocalization.localizedString("Feedback"),
+            action: #selector(openFeedbackPage),
+            keyEquivalent: ""
+        )
+        feedbackItem.target = self
+        menu.addItem(feedbackItem)
+
         if appUpdateManager.hasUpdate, let latestVersion = appUpdateManager.latestVersion {
             let updateInfoItem = NSMenuItem(
                 title: "New version: \(latestVersion)",
@@ -39,6 +51,11 @@ extension AppDelegate {
     @objc private func checkForUpdates() {
         VoxtLog.info("Manual update check triggered from menu.")
         appUpdateManager.checkForUpdates(source: .manual)
+    }
+
+    @objc private func openFeedbackPage() {
+        VoxtLog.info("Feedback page opened from menu.")
+        NSWorkspace.shared.open(feedbackURL)
     }
 
     @objc private func openSettings() {

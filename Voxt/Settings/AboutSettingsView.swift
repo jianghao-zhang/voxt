@@ -27,13 +27,15 @@ struct AboutSettingsView: View {
         return String(localized: "Version metadata missing")
     }
 
+    private let feedbackURL = URL(string: "https://github.com/hehehai/voxt/issues/new/choose")!
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Voxt")
                         .font(.headline)
-                    Text("On-device push-to-talk transcription powered by MLX Audio.")
+                    Text("Voice to Thought")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -60,6 +62,8 @@ struct AboutSettingsView: View {
                     Text("Project")
                         .font(.headline)
                     Link("github.com/hehehai/voxt", destination: URL(string: "https://github.com/hehehai/voxt")!)
+                        .font(.caption)
+                    Link(String(localized: "Feedback"), destination: feedbackURL)
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -3,35 +3,57 @@ import AppKit
 import CoreAudio
 
 extension AppDelegate {
+    private var defaults: UserDefaults {
+        .standard
+    }
+
     var selectedInputDeviceID: AudioDeviceID? {
-        let raw = UserDefaults.standard.integer(forKey: AppPreferenceKey.selectedInputDeviceID)
+        let raw = defaults.integer(forKey: AppPreferenceKey.selectedInputDeviceID)
         return raw > 0 ? AudioDeviceID(raw) : nil
     }
 
     var interactionSoundsEnabled: Bool {
-        UserDefaults.standard.bool(forKey: AppPreferenceKey.interactionSoundsEnabled)
+        defaults.bool(forKey: AppPreferenceKey.interactionSoundsEnabled)
     }
 
     var overlayPosition: OverlayPosition {
-        let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.overlayPosition)
-        return OverlayPosition(rawValue: raw ?? "") ?? .bottom
+        enumValue(forKey: AppPreferenceKey.overlayPosition, default: .bottom)
     }
 
     var autoCopyWhenNoFocusedInput: Bool {
-        UserDefaults.standard.bool(forKey: AppPreferenceKey.autoCopyWhenNoFocusedInput)
+        defaults.bool(forKey: AppPreferenceKey.autoCopyWhenNoFocusedInput)
     }
 
     var translationTargetLanguage: TranslationTargetLanguage {
-        let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.translationTargetLanguage)
-        return TranslationTargetLanguage(rawValue: raw ?? "") ?? .english
+        enumValue(forKey: AppPreferenceKey.translationTargetLanguage, default: .english)
     }
 
     var translateSelectedTextOnTranslationHotkey: Bool {
-        UserDefaults.standard.bool(forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
+        defaults.bool(forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
+    }
+
+    var voiceEndCommandEnabled: Bool {
+        defaults.bool(forKey: AppPreferenceKey.voiceEndCommandEnabled)
+    }
+
+    var voiceEndCommandPreset: VoiceEndCommandPreset {
+        if let preset = enumValue(forKey: AppPreferenceKey.voiceEndCommandPreset, default: Optional<VoiceEndCommandPreset>.none) {
+            return preset
+        }
+
+        let legacyCustomValue = trimmedStringValue(forKey: AppPreferenceKey.voiceEndCommandText)
+        return legacyCustomValue.isEmpty ? .over : .custom
+    }
+
+    var voiceEndCommandText: String {
+        if let presetCommand = voiceEndCommandPreset.resolvedCommand {
+            return presetCommand
+        }
+        return trimmedStringValue(forKey: AppPreferenceKey.voiceEndCommandText)
     }
 
     var translationSystemPrompt: String {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.translationSystemPrompt)
+        let value = defaults.string(forKey: AppPreferenceKey.translationSystemPrompt)
         if let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return value
         }
@@ -39,36 +61,32 @@ extension AppDelegate {
     }
 
     var translationCustomLLMRepo: String {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.translationCustomLLMModelRepo)
+        let value = defaults.string(forKey: AppPreferenceKey.translationCustomLLMModelRepo)
         if let value, !value.isEmpty {
             return value
         }
-        return UserDefaults.standard.string(forKey: AppPreferenceKey.customLLMModelRepo)
+        return defaults.string(forKey: AppPreferenceKey.customLLMModelRepo)
             ?? CustomLLMModelManager.defaultModelRepo
     }
 
     var translationModelProvider: TranslationModelProvider {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.translationModelProvider) ?? ""
-        return TranslationModelProvider(rawValue: value) ?? .customLLM
+        enumValue(forKey: AppPreferenceKey.translationModelProvider, default: .customLLM)
     }
 
     var remoteASRSelectedProvider: RemoteASRProvider {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.remoteASRSelectedProvider)
-        return RemoteASRProvider(rawValue: value ?? "") ?? .openAIWhisper
+        enumValue(forKey: AppPreferenceKey.remoteASRSelectedProvider, default: .openAIWhisper)
     }
 
     var remoteLLMSelectedProvider: RemoteLLMProvider {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.remoteLLMSelectedProvider)
-        return RemoteLLMProvider(rawValue: value ?? "") ?? .openAI
+        enumValue(forKey: AppPreferenceKey.remoteLLMSelectedProvider, default: .openAI)
     }
 
     var translationRemoteLLMProvider: RemoteLLMProvider? {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.translationRemoteLLMProvider) ?? ""
-        return RemoteLLMProvider(rawValue: value)
+        enumValue(forKey: AppPreferenceKey.translationRemoteLLMProvider, default: Optional<RemoteLLMProvider>.none)
     }
 
     var rewriteSystemPrompt: String {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.rewriteSystemPrompt)
+        let value = defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt)
         if let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return value
         }
@@ -76,44 +94,40 @@ extension AppDelegate {
     }
 
     var rewriteCustomLLMRepo: String {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.rewriteCustomLLMModelRepo)
+        let value = defaults.string(forKey: AppPreferenceKey.rewriteCustomLLMModelRepo)
         if let value, !value.isEmpty {
             return value
         }
-        return UserDefaults.standard.string(forKey: AppPreferenceKey.customLLMModelRepo)
+        return defaults.string(forKey: AppPreferenceKey.customLLMModelRepo)
             ?? CustomLLMModelManager.defaultModelRepo
     }
 
     var rewriteModelProvider: RewriteModelProvider {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.rewriteModelProvider) ?? ""
-        return RewriteModelProvider(rawValue: value) ?? .customLLM
+        enumValue(forKey: AppPreferenceKey.rewriteModelProvider, default: .customLLM)
     }
 
     var rewriteRemoteLLMProvider: RemoteLLMProvider? {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.rewriteRemoteLLMProvider) ?? ""
-        return RemoteLLMProvider(rawValue: value)
+        enumValue(forKey: AppPreferenceKey.rewriteRemoteLLMProvider, default: Optional<RemoteLLMProvider>.none)
     }
 
     var remoteASRConfigurations: [String: RemoteProviderConfiguration] {
-        let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.remoteASRProviderConfigurations) ?? ""
-        return RemoteModelConfigurationStore.loadConfigurations(from: raw)
+        remoteConfigurations(forKey: AppPreferenceKey.remoteASRProviderConfigurations)
     }
 
     var remoteLLMConfigurations: [String: RemoteProviderConfiguration] {
-        let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? ""
-        return RemoteModelConfigurationStore.loadConfigurations(from: raw)
+        remoteConfigurations(forKey: AppPreferenceKey.remoteLLMProviderConfigurations)
     }
 
     var showInDock: Bool {
-        UserDefaults.standard.bool(forKey: AppPreferenceKey.showInDock)
+        defaults.bool(forKey: AppPreferenceKey.showInDock)
     }
 
     var historyEnabled: Bool {
-        UserDefaults.standard.bool(forKey: AppPreferenceKey.historyEnabled)
+        defaults.bool(forKey: AppPreferenceKey.historyEnabled)
     }
 
     var autoCheckForUpdates: Bool {
-        UserDefaults.standard.bool(forKey: AppPreferenceKey.autoCheckForUpdates)
+        defaults.bool(forKey: AppPreferenceKey.autoCheckForUpdates)
     }
 
     func appendHistoryIfNeeded(text: String, llmDurationSeconds: TimeInterval?) {
@@ -250,5 +264,25 @@ extension AppDelegate {
             return item
         }
         return components.string ?? trimmed
+    }
+
+    private func trimmedStringValue(forKey key: String) -> String {
+        stringValue(forKey: key).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func stringValue(forKey key: String) -> String {
+        defaults.string(forKey: key) ?? ""
+    }
+
+    private func remoteConfigurations(forKey key: String) -> [String: RemoteProviderConfiguration] {
+        RemoteModelConfigurationStore.loadConfigurations(from: stringValue(forKey: key))
+    }
+
+    private func enumValue<T: RawRepresentable>(forKey key: String, default defaultValue: T) -> T where T.RawValue == String {
+        T(rawValue: stringValue(forKey: key)) ?? defaultValue
+    }
+
+    private func enumValue<T: RawRepresentable>(forKey key: String, default defaultValue: T?) -> T? where T.RawValue == String {
+        T(rawValue: stringValue(forKey: key)) ?? defaultValue
     }
 }

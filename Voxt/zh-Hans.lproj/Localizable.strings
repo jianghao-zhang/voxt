@@ -50,6 +50,11 @@
 "Record Transcription Shortcut" = "录制转录快捷键";
 "Record Translation Shortcut" = "录制翻译快捷键";
 "Type your shortcut now. Press Esc to cancel recording." = "请按下快捷键进行录制，按 Esc 取消。";
+"Voice End Command" = "语音结束指令";
+"Enable Voice End Command" = "启用语音结束指令";
+"When enabled, Voxt treats the configured spoken command as a stop action. If that command appears at the end of the transcript and there is about 1 second of silence after it, the session ends automatically." = "开启后，Voxt 会把配置的语音指令视为结束操作。如果该指令出现在转录尾部，且其后约 1 秒没有明显声音输入，会自动结束当前会话。";
+"Command" = "指令";
+"Available presets are over, end, and 完毕. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？" = "可用预设为 over、end 和 完毕。指令匹配会忽略前后空格和标点，包括中文标点如 ， 。 ！ ？";
 "Trigger" = "触发方式";
 "Long Press (Release to End)" = "长按（松开结束）";
 "Tap (Press to Toggle)" = "点按（按一次开始/结束）";
@@ -66,10 +71,12 @@
 "Apple Intelligence" = "Apple 智能";
 "Custom LLM" = "自定义 LLM";
 "On-device push-to-talk transcription powered by MLX Audio." = "基于 MLX Audio 的本地按键说话转录。";
+"Voice to Thought" = "思想之声";
 "Version" = "版本";
 "License" = "许可证";
 "Apache License 2.0" = "Apache 2.0 许可证";
 "Project" = "项目";
+"Feedback" = "问题反馈";
 "Author" = "作者";
 "Thanks" = "感谢";
 "Logs" = "日志";

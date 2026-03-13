@@ -6,6 +6,13 @@ import AVFoundation
 import Speech
 import Carbon
 
+struct VoiceEndCommandState {
+    var lastDetectedCommand = false
+    var didAutoStop = false
+    var pendingStrippedText: String?
+    let silenceDuration: TimeInterval = 1.0
+}
+
 @main
 struct VoxtApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -125,6 +132,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var lastSignificantAudioAt = Date()
     var didTriggerPauseTranscription = false
     var didTriggerPauseLLM = false
+    var voiceEndCommandState = VoiceEndCommandState()
     let silenceAudioLevelThreshold: Float = 0.06
     let sessionFinishDelay: TimeInterval = 1.2
     var recordingStartedAt: Date?
@@ -160,6 +168,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.translationModelProvider: TranslationModelProvider.customLLM.rawValue,
             AppPreferenceKey.rewriteModelProvider: RewriteModelProvider.customLLM.rawValue,
             AppPreferenceKey.translateSelectedTextOnTranslationHotkey: true,
+            AppPreferenceKey.voiceEndCommandEnabled: false,
+            AppPreferenceKey.voiceEndCommandPreset: VoiceEndCommandPreset.over.rawValue,
+            AppPreferenceKey.voiceEndCommandText: "",
             AppPreferenceKey.autoCopyWhenNoFocusedInput: false,
             AppPreferenceKey.appEnhancementEnabled: false,
             AppPreferenceKey.translationSystemPrompt: AppPreferenceKey.defaultTranslationPrompt,

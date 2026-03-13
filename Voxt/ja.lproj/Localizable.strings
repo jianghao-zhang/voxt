@@ -50,6 +50,11 @@
 "Record Transcription Shortcut" = "文字起こしショートカットを記録";
 "Record Translation Shortcut" = "翻訳ショートカットを記録";
 "Type your shortcut now. Press Esc to cancel recording." = "ショートカットを入力してください。Esc でキャンセルします。";
+"Voice End Command" = "音声終了コマンド";
+"Enable Voice End Command" = "音声終了コマンドを有効にする";
+"When enabled, Voxt treats the configured spoken command as a stop action. If that command appears at the end of the transcript and there is about 1 second of silence after it, the session ends automatically." = "有効にすると、設定した音声コマンドを停止操作として扱います。そのコマンドが文字起こしの末尾に現れ、その後およそ 1 秒の無音が続いた場合、セッションを自動終了します。";
+"Command" = "コマンド";
+"Available presets are over, end, and 完毕. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？" = "利用できるプリセットは over、end、完毕 です。コマンド判定では前後の空白や句読点を無視し、 ， 。 ！ ？ のようなアジア言語の記号にも対応します。";
 "Trigger" = "トリガー";
 "Long Press (Release to End)" = "長押し（離すと終了）";
 "Tap (Press to Toggle)" = "タップ（押して開始/終了）";
@@ -401,6 +406,7 @@
 "Enable LLM debug logs" = "LLM デバッグログを有効にする";
 "When enabled, Voxt writes detailed local and remote LLM request logs. Disabled by default." = "有効にすると、Voxt はローカルおよびリモート LLM の詳細なリクエストログを書き出します。初期状態では無効です。";
 "Rewrite" = "内容改写";
+"Voice to Thought" = "Voice to Thought";
 
 "Version metadata missing" = "バージョンメタデータが不足しています";
 "Supported variables" = "サポート変数";
@@ -435,3 +441,4 @@
 "Needs Setup" = "要設定";
 "Model needs to be installed." = "モデルをインストールする必要があります。";
 "Configuration required." = "設定の補完が必要です。";
+"Feedback" = "フィードバック";
