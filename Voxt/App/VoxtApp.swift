@@ -21,9 +21,14 @@ struct VoxtApp: App {
     var body: some Scene {
         Settings {
             SettingsView(
+                onIngestDictionarySuggestionsFromHistory: {
+                    appDelegate.startDictionaryHistorySuggestionScan()
+                },
                 mlxModelManager: appDelegate.mlxModelManager,
                 customLLMManager: appDelegate.customLLMManager,
                 historyStore: appDelegate.historyStore,
+                dictionaryStore: appDelegate.dictionaryStore,
+                dictionarySuggestionStore: appDelegate.dictionarySuggestionStore,
                 appUpdateManager: appDelegate.appUpdateManager
             )
                 .frame(width: 760, height: 560)
@@ -90,6 +95,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     struct EnhancementPromptContext {
         let focusedAppName: String?
+        let matchedGroupID: UUID?
         let matchedAppGroupName: String?
         let matchedURLGroupName: String?
     }
@@ -106,6 +112,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let mlxModelManager: MLXModelManager
     let customLLMManager: CustomLLMModelManager
     let historyStore = TranscriptionHistoryStore()
+    let dictionaryStore = DictionaryStore()
+    let dictionarySuggestionStore = DictionarySuggestionStore()
     let appUpdateManager = AppUpdateManager()
     let interactionSoundPlayer = InteractionSoundPlayer()
 
@@ -186,6 +194,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.showInDock: false,
             AppPreferenceKey.historyEnabled: false,
             AppPreferenceKey.historyRetentionPeriod: HistoryRetentionPeriod.thirtyDays.rawValue,
+            AppPreferenceKey.dictionaryRecognitionEnabled: true,
+            AppPreferenceKey.dictionaryAutoLearningEnabled: true,
+            AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled: true,
             AppPreferenceKey.autoCheckForUpdates: true,
             AppPreferenceKey.hotkeyDebugLoggingEnabled: false,
             AppPreferenceKey.llmDebugLoggingEnabled: false,

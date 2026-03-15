@@ -80,9 +80,14 @@ extension AppDelegate {
         }
 
         let contentView = SettingsView(
+            onIngestDictionarySuggestionsFromHistory: {
+                self.startDictionaryHistorySuggestionScan()
+            },
             mlxModelManager: mlxModelManager,
             customLLMManager: customLLMManager,
             historyStore: historyStore,
+            dictionaryStore: dictionaryStore,
+            dictionarySuggestionStore: dictionarySuggestionStore,
             appUpdateManager: appUpdateManager,
             initialTab: selectTab ?? .general
         )
