@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-03-16
+
+### Added
+- Added a dictionary workflow with scoped terms, history-based candidate suggestions, one-click ingestion, and prompt-time dictionary guidance.
+- Added user main language selection plus engine hint settings for MLX and remote ASR providers, including provider-specific language handling for OpenAI, GLM, Doubao, and Aliyun.
+- Added menu bar microphone switching and a General setting that can mute other apps' media audio during recording after system audio capture permission is granted.
+
+### Changed
+- Expanded configuration export/import so it now covers dictionary data, voice end command settings, user main language, ASR hint settings, and the latest General settings additions.
+- Improved settings organization and localization for the new dictionary, language, and ASR hint workflows across English, Simplified Chinese, and Japanese.
+
+### Fixed
+- Fixed custom hotkey recording so modifier-heavy shortcuts are captured more reliably and no longer leak into active global hotkey handling while recording.
+
 ## [1.5.1] - 2026-03-14
 
 ### Fixed
