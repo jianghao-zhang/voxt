@@ -64,10 +64,8 @@ struct DictionarySettingsView: View {
                 AppLocalization.format(
                     "%d new history records will be parsed in batches with the configured LLM to extract candidate dictionary terms.",
                     pendingHistoryScanCount
-                )
+                ) + " This runs as a separate task and may take some time depending on the model and history size."
             )
-            + Text(" ")
-            + Text("This runs as a separate task and may take some time depending on the model and history size.")
         }
         .onAppear(perform: reloadContent)
         .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in

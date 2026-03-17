@@ -52,6 +52,7 @@ enum ConfigurationTransferManager {
         var voiceEndCommandPreset: String
         var voiceEndCommandText: String
         var autoCopyWhenNoFocusedInput: Bool
+        var alwaysShowRewriteAnswerCard: Bool
         var launchAtLogin: Bool
         var showInDock: Bool
         var historyEnabled: Bool
@@ -81,6 +82,7 @@ enum ConfigurationTransferManager {
             case voiceEndCommandPreset
             case voiceEndCommandText
             case autoCopyWhenNoFocusedInput
+            case alwaysShowRewriteAnswerCard
             case launchAtLogin
             case showInDock
             case historyEnabled
@@ -111,6 +113,7 @@ enum ConfigurationTransferManager {
             voiceEndCommandPreset: String,
             voiceEndCommandText: String,
             autoCopyWhenNoFocusedInput: Bool,
+            alwaysShowRewriteAnswerCard: Bool,
             launchAtLogin: Bool,
             showInDock: Bool,
             historyEnabled: Bool,
@@ -139,6 +142,7 @@ enum ConfigurationTransferManager {
             self.voiceEndCommandPreset = voiceEndCommandPreset
             self.voiceEndCommandText = voiceEndCommandText
             self.autoCopyWhenNoFocusedInput = autoCopyWhenNoFocusedInput
+            self.alwaysShowRewriteAnswerCard = alwaysShowRewriteAnswerCard
             self.launchAtLogin = launchAtLogin
             self.showInDock = showInDock
             self.historyEnabled = historyEnabled
@@ -173,6 +177,7 @@ enum ConfigurationTransferManager {
             voiceEndCommandPreset = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue
             voiceEndCommandText = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandText) ?? ""
             autoCopyWhenNoFocusedInput = try container.decode(Bool.self, forKey: .autoCopyWhenNoFocusedInput)
+            alwaysShowRewriteAnswerCard = try container.decodeIfPresent(Bool.self, forKey: .alwaysShowRewriteAnswerCard) ?? false
             launchAtLogin = try container.decode(Bool.self, forKey: .launchAtLogin)
             showInDock = try container.decode(Bool.self, forKey: .showInDock)
             historyEnabled = try container.decode(Bool.self, forKey: .historyEnabled)
@@ -553,6 +558,7 @@ enum ConfigurationTransferManager {
             voiceEndCommandPreset: defaults.string(forKey: AppPreferenceKey.voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue,
             voiceEndCommandText: defaults.string(forKey: AppPreferenceKey.voiceEndCommandText) ?? "",
             autoCopyWhenNoFocusedInput: defaults.bool(forKey: AppPreferenceKey.autoCopyWhenNoFocusedInput),
+            alwaysShowRewriteAnswerCard: defaults.bool(forKey: AppPreferenceKey.alwaysShowRewriteAnswerCard),
             launchAtLogin: defaults.bool(forKey: AppPreferenceKey.launchAtLogin),
             showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock),
             historyEnabled: defaults.object(forKey: AppPreferenceKey.historyEnabled) as? Bool ?? true,
@@ -570,7 +576,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 5,
+            version: 6,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -649,6 +655,7 @@ enum ConfigurationTransferManager {
         defaults.set(general.voiceEndCommandPreset, forKey: AppPreferenceKey.voiceEndCommandPreset)
         defaults.set(general.voiceEndCommandText, forKey: AppPreferenceKey.voiceEndCommandText)
         defaults.set(general.autoCopyWhenNoFocusedInput, forKey: AppPreferenceKey.autoCopyWhenNoFocusedInput)
+        defaults.set(general.alwaysShowRewriteAnswerCard, forKey: AppPreferenceKey.alwaysShowRewriteAnswerCard)
         defaults.set(general.launchAtLogin, forKey: AppPreferenceKey.launchAtLogin)
         defaults.set(general.showInDock, forKey: AppPreferenceKey.showInDock)
         defaults.set(general.historyEnabled, forKey: AppPreferenceKey.historyEnabled)

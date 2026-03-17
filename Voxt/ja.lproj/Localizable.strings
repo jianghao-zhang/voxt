@@ -43,6 +43,7 @@
 "Output" = "出力";
 "Copy to clipboard when no focused input" = "入力フォーカスがない場合はクリップボードへコピー";
 "Always copy result to clipboard" = "結果を常にクリップボードへコピー";
+"AI Answer" = "AI 回答";
 "Also copy result to clipboard" = "結果を同時にクリップボードへコピー";
 "App Behavior" = "アプリ動作";
 "Launch at Login" = "ログイン時に起動";

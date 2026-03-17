@@ -46,6 +46,7 @@ enum AppPreferenceKey {
     static let voiceEndCommandPreset = "voiceEndCommandPreset"
     static let voiceEndCommandText = "voiceEndCommandText"
     static let autoCopyWhenNoFocusedInput = "autoCopyWhenNoFocusedInput"
+    static let alwaysShowRewriteAnswerCard = "alwaysShowRewriteAnswerCard"
     static let appEnhancementEnabled = "appEnhancementEnabled"
     static let appBranchGroups = "appBranchGroups"
     static let appBranchURLs = "appBranchURLs"
