@@ -199,6 +199,7 @@ extension AppDelegate {
         settingsWindowController = controller
         controller.showWindow(nil)
         bringWindowToFront(window)
+        scheduleTrafficLightButtonPositionUpdate(for: window)
     }
 
     private func bringWindowToFront(_ window: NSWindow) {
@@ -206,6 +207,7 @@ extension AppDelegate {
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
         positionWindowTrafficLightButtons(window)
+        scheduleTrafficLightButtonPositionUpdate(for: window)
     }
 
     private func performAfterStatusMenuDismissal(_ action: @escaping @MainActor () -> Void) {
@@ -242,6 +244,13 @@ extension AppDelegate {
         closeButton.setFrameOrigin(CGPoint(x: closeX, y: y))
         miniaturizeButton.setFrameOrigin(CGPoint(x: miniaturizeX, y: y))
         zoomButton.setFrameOrigin(CGPoint(x: zoomX, y: y))
+    }
+
+    private func scheduleTrafficLightButtonPositionUpdate(for window: NSWindow) {
+        DispatchQueue.main.async { [weak self, weak window] in
+            guard let self, let window else { return }
+            self.positionWindowTrafficLightButtons(window)
+        }
     }
 
     @objc private func quit() {
