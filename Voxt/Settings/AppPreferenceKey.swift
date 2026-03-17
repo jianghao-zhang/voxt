@@ -61,6 +61,7 @@ enum AppPreferenceKey {
     static let dictionaryHighConfidenceCorrectionEnabled = "dictionaryHighConfidenceCorrectionEnabled"
     static let dictionarySuggestionHistoryScanCheckpoint = "dictionarySuggestionHistoryScanCheckpoint"
     static let dictionarySuggestionFilterSettings = "dictionarySuggestionFilterSettings"
+    static let dictionarySuggestionIngestModelOptionID = "dictionarySuggestionIngestModelOptionID"
     static let autoCheckForUpdates = "autoCheckForUpdates"
     static let hotkeyDebugLoggingEnabled = "hotkeyDebugLoggingEnabled"
     static let llmDebugLoggingEnabled = "llmDebugLoggingEnabled"

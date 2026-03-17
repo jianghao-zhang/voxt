@@ -316,6 +316,7 @@ enum ConfigurationTransferManager {
         var autoLearningEnabled: Bool
         var highConfidenceCorrectionEnabled: Bool
         var suggestionFilterSettings: DictionarySuggestionFilterSettings
+        var suggestionIngestModelOptionID: String
         var historyScanCheckpoint: DictionaryHistoryScanCheckpoint?
         var entries: [DictionaryEntry]
         var suggestions: [DictionarySuggestion]
@@ -325,6 +326,7 @@ enum ConfigurationTransferManager {
             case autoLearningEnabled
             case highConfidenceCorrectionEnabled
             case suggestionFilterSettings
+            case suggestionIngestModelOptionID
             case historyScanCheckpoint
             case entries
             case suggestions
@@ -335,6 +337,7 @@ enum ConfigurationTransferManager {
             autoLearningEnabled: Bool,
             highConfidenceCorrectionEnabled: Bool,
             suggestionFilterSettings: DictionarySuggestionFilterSettings,
+            suggestionIngestModelOptionID: String,
             historyScanCheckpoint: DictionaryHistoryScanCheckpoint?,
             entries: [DictionaryEntry],
             suggestions: [DictionarySuggestion]
@@ -343,6 +346,7 @@ enum ConfigurationTransferManager {
             self.autoLearningEnabled = autoLearningEnabled
             self.highConfidenceCorrectionEnabled = highConfidenceCorrectionEnabled
             self.suggestionFilterSettings = suggestionFilterSettings
+            self.suggestionIngestModelOptionID = suggestionIngestModelOptionID
             self.historyScanCheckpoint = historyScanCheckpoint
             self.entries = entries
             self.suggestions = suggestions
@@ -357,6 +361,10 @@ enum ConfigurationTransferManager {
                 DictionarySuggestionFilterSettings.self,
                 forKey: .suggestionFilterSettings
             ) ?? .defaultValue
+            suggestionIngestModelOptionID = try container.decodeIfPresent(
+                String.self,
+                forKey: .suggestionIngestModelOptionID
+            ) ?? ""
             historyScanCheckpoint = try container.decodeIfPresent(
                 DictionaryHistoryScanCheckpoint.self,
                 forKey: .historyScanCheckpoint
@@ -576,7 +584,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 6,
+            version: 7,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -605,6 +613,7 @@ enum ConfigurationTransferManager {
                 autoLearningEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryAutoLearningEnabled) as? Bool ?? true,
                 highConfidenceCorrectionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) as? Bool ?? true,
                 suggestionFilterSettings: loadDictionarySuggestionFilterSettings(defaults: defaults),
+                suggestionIngestModelOptionID: defaults.string(forKey: AppPreferenceKey.dictionarySuggestionIngestModelOptionID) ?? "",
                 historyScanCheckpoint: loadDictionaryHistoryScanCheckpoint(defaults: defaults),
                 entries: loadDictionaryEntries(),
                 suggestions: loadDictionarySuggestions()
@@ -695,6 +704,7 @@ enum ConfigurationTransferManager {
             defaults.set(dictionary.recognitionEnabled, forKey: AppPreferenceKey.dictionaryRecognitionEnabled)
             defaults.set(dictionary.autoLearningEnabled, forKey: AppPreferenceKey.dictionaryAutoLearningEnabled)
             defaults.set(dictionary.highConfidenceCorrectionEnabled, forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled)
+            defaults.set(dictionary.suggestionIngestModelOptionID, forKey: AppPreferenceKey.dictionarySuggestionIngestModelOptionID)
             if let suggestionFilterData = try? JSONEncoder().encode(dictionary.suggestionFilterSettings.sanitized()) {
                 defaults.set(suggestionFilterData, forKey: AppPreferenceKey.dictionarySuggestionFilterSettings)
             }

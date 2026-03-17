@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct DictionarySettingsView: View {
     @AppStorage(AppPreferenceKey.dictionaryRecognitionEnabled) private var dictionaryRecognitionEnabled = true
     @AppStorage(AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) private var dictionaryHighConfidenceCorrectionEnabled = true
+    @AppStorage(AppPreferenceKey.dictionarySuggestionIngestModelOptionID) private var preferredHistoryScanModelID = ""
 
     @ObservedObject var historyStore: TranscriptionHistoryStore
     @ObservedObject var dictionaryStore: DictionaryStore
@@ -579,6 +580,7 @@ struct DictionarySettingsView: View {
     private func runSuggestionIngest(persistSettings: Bool) {
         guard !selectedHistoryScanModelID.isEmpty else { return }
         suggestionActionMessage = nil
+        preferredHistoryScanModelID = selectedHistoryScanModelID
         onIngestSuggestionsFromHistory(
             DictionaryHistoryScanRequest(
                 modelOptionID: selectedHistoryScanModelID,
@@ -590,6 +592,9 @@ struct DictionarySettingsView: View {
     }
 
     private func resolvedDefaultHistoryScanModelID(from options: [DictionaryHistoryScanModelOption]) -> String {
+        if options.contains(where: { $0.id == preferredHistoryScanModelID }) {
+            return preferredHistoryScanModelID
+        }
         if options.contains(where: { $0.id == selectedHistoryScanModelID }) {
             return selectedHistoryScanModelID
         }
