@@ -100,11 +100,11 @@ struct AnswerHeaderActionButton<Label: View>: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(accessibilityLabel))
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) {
                 isHovered = hovering
             }
         }
-        .help(accessibilityLabel)
     }
 }
