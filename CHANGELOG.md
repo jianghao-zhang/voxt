@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-03-19
+
+### Changed
+- Simplified rewrite output behavior so rewrite always shows the answer card, while keeping the General settings UI aligned with the new fixed behavior.
+- Improved dictionary ingest and history surfaces by reducing candidate-only UI noise and surfacing direct dictionary hits more clearly.
+
+### Fixed
+- Fixed rewrite answer card actions and loading feedback, including the inject action, loading spinner sizing, and icon alignment in the recording overlay.
+- Fixed rewrite answer injection availability by improving focused input detection and adding a safer fallback for apps that do not expose standard accessibility focused elements.
+- Fixed modifier-only hotkey handling so `fn` no longer steals unrelated combos such as `fn+1`, while preserving dedicated `fn+shift` and `fn+control` shortcuts.
+- Fixed overlay session startup so stale transcription text is cleared before a new recording card appears.
+
 ## [1.6.1] - 2026-03-17
 
 ### Added
