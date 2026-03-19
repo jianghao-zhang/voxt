@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-03-19
+
+### Added
+- Added built-in Doubao ASR 2.0 and 1.0 model options, with 2.0 now used as the default selection for new setups.
+
+### Fixed
+- Fixed Doubao ASR realtime routing so 2.0 now connects through the supported streaming endpoint, while file and connectivity-test flows keep using the compatible endpoint and payload format.
+- Reduced extra Doubao diagnostic log noise during normal recording and settings connectivity tests.
+
 ## [1.6.4] - 2026-03-19
 
 ### Fixed
