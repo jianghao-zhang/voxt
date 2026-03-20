@@ -3,6 +3,9 @@ import Foundation
 import AppKit
 
 struct WaveformView: View {
+    @AppStorage(AppPreferenceKey.overlayCardOpacity) private var overlayCardOpacity = 82
+    @AppStorage(AppPreferenceKey.overlayCardCornerRadius) private var overlayCardCornerRadius = 24
+
     var displayMode: OverlayDisplayMode
     var sessionIconMode: OverlaySessionIconMode
     var audioLevel: Float
@@ -43,7 +46,8 @@ struct WaveformView: View {
     private var hasText: Bool { !displayText.isEmpty }
     private var isAnswerMode: Bool { displayMode == .answer }
     private var isCompact: Bool { !hasText && !isAnswerMode }
-    private var cornerRadius: CGFloat { isAnswerMode ? 28 : (isCompact ? 24 : 20) }
+    private var cornerRadius: CGFloat { CGFloat(min(max(overlayCardCornerRadius, 0), 40)) }
+    private var cardOpacity: Double { Double(min(max(overlayCardOpacity, 0), 100)) / 100.0 }
     private var textOverflows: Bool { displayText.count > 38 }
     private var showsLoadingSpinner: Bool { isEnhancing || isRequesting }
 
@@ -174,7 +178,7 @@ struct WaveformView: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.black.opacity(0.82))
+            .fill(.black.opacity(cardOpacity))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(.white.opacity(0.12), lineWidth: 1)

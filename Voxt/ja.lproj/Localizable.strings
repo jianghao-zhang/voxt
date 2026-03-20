@@ -27,6 +27,9 @@
 "Position" = "位置";
 "Bottom" = "下";
 "Top" = "上";
+"Opacity" = "不透明度";
+"Corner Radius" = "角丸";
+"Edge Distance" = "端からの距離";
 "Interface Language" = "表示言語";
 "Language" = "言語";
 "System Default" = "システム設定";
@@ -97,7 +100,6 @@
 "Export failed: %@" = "エクスポートに失敗しました: %@";
 "Exports the most recent 2000 log entries as a .log file." = "最新 2000 件のログを .log ファイルとして書き出します。";
 "Play a short start chime when recording begins and an end chime when transcription completes." = "録音開始時に短い開始音、文字起こし完了時に終了音を再生します。";
-"Controls where the floating transcription overlay appears on screen." = "フローティング文字起こしオーバーレイの表示位置を設定します。";
 "Used by the dedicated translation shortcut (fn + Left Shift)." = "専用翻訳ショートカット（fn + 左 Shift）で使用されます。";
 "When enabled, if no writable text input is focused, Voxt writes the result to clipboard instead of trying to paste." = "有効時、入力可能なフォーカスがない場合は貼り付けの代わりに結果をクリップボードへ保存します。";
 "When enabled, Voxt always writes transcription results to clipboard and does not auto-paste." = "有効時、Voxt は常に文字起こし結果をクリップボードに保存し、自動貼り付けは行いません。";

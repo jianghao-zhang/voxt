@@ -45,6 +45,9 @@ enum ConfigurationTransferManager {
         var interactionSoundPreset: String
         var muteSystemAudioWhileRecording: Bool
         var overlayPosition: String
+        var overlayCardOpacity: Int
+        var overlayCardCornerRadius: Int
+        var overlayScreenEdgeInset: Int
         var translationTargetLanguage: String
         var userMainLanguageCodes: [String]
         var translateSelectedTextOnTranslationHotkey: Bool
@@ -75,6 +78,9 @@ enum ConfigurationTransferManager {
             case interactionSoundPreset
             case muteSystemAudioWhileRecording
             case overlayPosition
+            case overlayCardOpacity
+            case overlayCardCornerRadius
+            case overlayScreenEdgeInset
             case translationTargetLanguage
             case userMainLanguageCodes
             case translateSelectedTextOnTranslationHotkey
@@ -106,6 +112,9 @@ enum ConfigurationTransferManager {
             interactionSoundPreset: String,
             muteSystemAudioWhileRecording: Bool,
             overlayPosition: String,
+            overlayCardOpacity: Int,
+            overlayCardCornerRadius: Int,
+            overlayScreenEdgeInset: Int,
             translationTargetLanguage: String,
             userMainLanguageCodes: [String],
             translateSelectedTextOnTranslationHotkey: Bool,
@@ -135,6 +144,9 @@ enum ConfigurationTransferManager {
             self.interactionSoundPreset = interactionSoundPreset
             self.muteSystemAudioWhileRecording = muteSystemAudioWhileRecording
             self.overlayPosition = overlayPosition
+            self.overlayCardOpacity = overlayCardOpacity
+            self.overlayCardCornerRadius = overlayCardCornerRadius
+            self.overlayScreenEdgeInset = overlayScreenEdgeInset
             self.translationTargetLanguage = translationTargetLanguage
             self.userMainLanguageCodes = UserMainLanguageOption.sanitizedSelection(userMainLanguageCodes)
             self.translateSelectedTextOnTranslationHotkey = translateSelectedTextOnTranslationHotkey
@@ -167,6 +179,9 @@ enum ConfigurationTransferManager {
             interactionSoundPreset = try container.decode(String.self, forKey: .interactionSoundPreset)
             muteSystemAudioWhileRecording = try container.decodeIfPresent(Bool.self, forKey: .muteSystemAudioWhileRecording) ?? false
             overlayPosition = try container.decode(String.self, forKey: .overlayPosition)
+            overlayCardOpacity = try container.decodeIfPresent(Int.self, forKey: .overlayCardOpacity) ?? 82
+            overlayCardCornerRadius = try container.decodeIfPresent(Int.self, forKey: .overlayCardCornerRadius) ?? 24
+            overlayScreenEdgeInset = try container.decodeIfPresent(Int.self, forKey: .overlayScreenEdgeInset) ?? 30
             translationTargetLanguage = try container.decode(String.self, forKey: .translationTargetLanguage)
             userMainLanguageCodes = UserMainLanguageOption.sanitizedSelection(
                 try container.decodeIfPresent([String].self, forKey: .userMainLanguageCodes)
@@ -624,6 +639,9 @@ enum ConfigurationTransferManager {
             interactionSoundPreset: defaults.string(forKey: AppPreferenceKey.interactionSoundPreset) ?? "",
             muteSystemAudioWhileRecording: defaults.bool(forKey: AppPreferenceKey.muteSystemAudioWhileRecording),
             overlayPosition: defaults.string(forKey: AppPreferenceKey.overlayPosition) ?? OverlayPosition.bottom.rawValue,
+            overlayCardOpacity: defaults.object(forKey: AppPreferenceKey.overlayCardOpacity) as? Int ?? 82,
+            overlayCardCornerRadius: defaults.object(forKey: AppPreferenceKey.overlayCardCornerRadius) as? Int ?? 24,
+            overlayScreenEdgeInset: defaults.object(forKey: AppPreferenceKey.overlayScreenEdgeInset) as? Int ?? 30,
             translationTargetLanguage: defaults.string(forKey: AppPreferenceKey.translationTargetLanguage) ?? TranslationTargetLanguage.english.rawValue,
             userMainLanguageCodes: UserMainLanguageOption.storedSelection(
                 from: defaults.string(forKey: AppPreferenceKey.userMainLanguageCodes)
@@ -651,7 +669,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 8,
+            version: 9,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -722,6 +740,9 @@ enum ConfigurationTransferManager {
         defaults.set(general.interactionSoundPreset, forKey: AppPreferenceKey.interactionSoundPreset)
         defaults.set(general.muteSystemAudioWhileRecording, forKey: AppPreferenceKey.muteSystemAudioWhileRecording)
         defaults.set(general.overlayPosition, forKey: AppPreferenceKey.overlayPosition)
+        defaults.set(general.overlayCardOpacity, forKey: AppPreferenceKey.overlayCardOpacity)
+        defaults.set(general.overlayCardCornerRadius, forKey: AppPreferenceKey.overlayCardCornerRadius)
+        defaults.set(general.overlayScreenEdgeInset, forKey: AppPreferenceKey.overlayScreenEdgeInset)
         defaults.set(general.translationTargetLanguage, forKey: AppPreferenceKey.translationTargetLanguage)
         defaults.set(
             UserMainLanguageOption.storageValue(for: general.userMainLanguageCodes),

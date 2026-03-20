@@ -27,6 +27,9 @@
 "Position" = "Position";
 "Bottom" = "Bottom";
 "Top" = "Top";
+"Opacity" = "Opacity";
+"Corner Radius" = "Corner Radius";
+"Edge Distance" = "Edge Distance";
 "Interface Language" = "Interface Language";
 "Language" = "Language";
 "System Default" = "System Default";
@@ -99,7 +102,6 @@
 "Export failed: %@" = "Export failed: %@";
 "Exports the most recent 2000 log entries as a .log file." = "Exports the most recent 2000 log entries as a .log file.";
 "Play a short start chime when recording begins and an end chime when transcription completes." = "Play a short start chime when recording begins and an end chime when transcription completes.";
-"Controls where the floating transcription overlay appears on screen." = "Controls where the floating transcription overlay appears on screen.";
 "Used by the dedicated translation shortcut (fn + Left Shift)." = "Used by the dedicated translation shortcut (fn + Left Shift).";
 "When enabled, if no writable text input is focused, Voxt writes the result to clipboard instead of trying to paste." = "When enabled, if no writable text input is focused, Voxt writes the result to clipboard instead of trying to paste.";
 "When enabled, Voxt always writes transcription results to clipboard and does not auto-paste." = "When enabled, Voxt always writes transcription results to clipboard and does not auto-paste.";

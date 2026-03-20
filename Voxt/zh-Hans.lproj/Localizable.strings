@@ -27,6 +27,9 @@
 "Position" = "位置";
 "Bottom" = "底部";
 "Top" = "顶部";
+"Opacity" = "透明度";
+"Corner Radius" = "圆角";
+"Edge Distance" = "边缘间距";
 "Interface Language" = "界面语言";
 "Language" = "语言";
 "System Default" = "跟随系统";
@@ -99,7 +102,6 @@
 "Export failed: %@" = "导出失败：%@";
 "Exports the most recent 2000 log entries as a .log file." = "导出最近 2000 条日志，保存为 .log 文件。";
 "Play a short start chime when recording begins and an end chime when transcription completes." = "录制开始时播放短提示音，转录完成时播放结束提示音。";
-"Controls where the floating transcription overlay appears on screen." = "控制悬浮转录面板在屏幕中的显示位置。";
 "Used by the dedicated translation shortcut (fn + Left Shift)." = "用于专用翻译快捷键（fn + 左 Shift）。";
 "When enabled, if no writable text input is focused, Voxt writes the result to clipboard instead of trying to paste." = "开启后，当没有可输入的焦点时，Voxt 会将结果写入剪贴板，而不是尝试粘贴。";
 "When enabled, Voxt always writes transcription results to clipboard and does not auto-paste." = "开启后，Voxt 会始终将转录结果写入剪贴板，不再自动粘贴。";

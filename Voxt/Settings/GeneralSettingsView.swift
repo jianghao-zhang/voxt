@@ -10,6 +10,9 @@ struct GeneralSettingsView: View {
     @AppStorage(AppPreferenceKey.interactionSoundPreset) private var interactionSoundPresetRaw = InteractionSoundPreset.soft.rawValue
     @AppStorage(AppPreferenceKey.muteSystemAudioWhileRecording) private var muteSystemAudioWhileRecording = false
     @AppStorage(AppPreferenceKey.overlayPosition) private var overlayPositionRaw = OverlayPosition.bottom.rawValue
+    @AppStorage(AppPreferenceKey.overlayCardOpacity) private var overlayCardOpacity = 82
+    @AppStorage(AppPreferenceKey.overlayCardCornerRadius) private var overlayCardCornerRadius = 24
+    @AppStorage(AppPreferenceKey.overlayScreenEdgeInset) private var overlayScreenEdgeInset = 30
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @AppStorage(AppPreferenceKey.translationTargetLanguage) private var translationTargetLanguageRaw = TranslationTargetLanguage.english.rawValue
     @AppStorage(AppPreferenceKey.userMainLanguageCodes) private var userMainLanguageCodesRaw = UserMainLanguageOption.defaultStoredSelectionValue
@@ -123,7 +126,12 @@ struct GeneralSettingsView: View {
                 onTrySound: { interactionSoundPlayer.playPreview(preset: interactionSoundPreset) }
             )
 
-            GeneralTranscriptionUICard(overlayPosition: overlayPosition)
+            GeneralTranscriptionUICard(
+                overlayPosition: overlayPosition,
+                overlayCardOpacity: $overlayCardOpacity,
+                overlayCardCornerRadius: $overlayCardCornerRadius,
+                overlayScreenEdgeInset: $overlayScreenEdgeInset
+            )
 
             GeneralLanguagesCard(
                 interfaceLanguage: interfaceLanguageSelection,
@@ -232,6 +240,21 @@ struct GeneralSettingsView: View {
         .onChange(of: interfaceLanguageRaw) { _, _ in
             NotificationCenter.default.post(name: .voxtInterfaceLanguageDidChange, object: nil)
         }
+        .onChange(of: overlayPositionRaw) { _, _ in
+            postOverlayAppearanceDidChange()
+        }
+        .onChange(of: overlayCardOpacity) { _, newValue in
+            overlayCardOpacity = min(max(newValue, 0), 100)
+            postOverlayAppearanceDidChange()
+        }
+        .onChange(of: overlayCardCornerRadius) { _, newValue in
+            overlayCardCornerRadius = min(max(newValue, 0), 40)
+            postOverlayAppearanceDidChange()
+        }
+        .onChange(of: overlayScreenEdgeInset) { _, newValue in
+            overlayScreenEdgeInset = min(max(newValue, 0), 120)
+            postOverlayAppearanceDidChange()
+        }
         .onChange(of: selectedInputDeviceIDRaw) { _, _ in
             NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
         }
@@ -339,11 +362,16 @@ struct GeneralSettingsView: View {
             NotificationCenter.default.post(name: .voxtConfigurationDidImport, object: nil)
             NotificationCenter.default.post(name: .voxtInterfaceLanguageDidChange, object: nil)
             NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+            NotificationCenter.default.post(name: .voxtOverlayAppearanceDidChange, object: nil)
             refreshInputDevices()
             refreshModelStorageDisplayPath()
             configurationTransferMessage = String(localized: "Configuration imported successfully. Included dictionary data was restored, and sensitive fields need to be filled in again if required.")
         } catch {
             configurationTransferMessage = String(format: NSLocalizedString("Configuration import failed: %@", comment: ""), error.localizedDescription)
         }
+    }
+
+    private func postOverlayAppearanceDidChange() {
+        NotificationCenter.default.post(name: .voxtOverlayAppearanceDidChange, object: nil)
     }
 }

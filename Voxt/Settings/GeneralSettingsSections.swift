@@ -89,6 +89,9 @@ struct GeneralAudioCard: View {
 
 struct GeneralTranscriptionUICard: View {
     @Binding var overlayPosition: OverlayPosition
+    @Binding var overlayCardOpacity: Int
+    @Binding var overlayCardCornerRadius: Int
+    @Binding var overlayScreenEdgeInset: Int
 
     var body: some View {
         GeneralSettingsCard(title: "Transcription UI") {
@@ -106,10 +109,113 @@ struct GeneralTranscriptionUICard: View {
                 .frame(width: 180, alignment: .trailing)
             }
 
-            Text("Controls where the floating transcription overlay appears on screen.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            overlayNumberField(
+                title: "Opacity",
+                value: $overlayCardOpacity,
+                range: 0...100,
+                width: 90,
+                unit: "%"
+            )
+
+            overlayNumberField(
+                title: "Corner Radius",
+                value: $overlayCardCornerRadius,
+                range: 0...40,
+                width: 90,
+                unit: "pt"
+            )
+
+            overlayNumberField(
+                title: "Edge Distance",
+                value: $overlayScreenEdgeInset,
+                range: 0...120,
+                width: 90,
+                unit: "pt"
+            )
         }
+    }
+
+    private func overlayNumberField(
+        title: LocalizedStringKey,
+        value: Binding<Int>,
+        range: ClosedRange<Int>,
+        width: CGFloat,
+        unit: String
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Spacer()
+            HStack(spacing: 6) {
+                ClampedIntegerTextField(
+                    value: value,
+                    range: range,
+                    width: width
+                )
+
+                Text(unit)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct ClampedIntegerTextField: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    let width: CGFloat
+
+    @State private var text: String
+
+    init(value: Binding<Int>, range: ClosedRange<Int>, width: CGFloat) {
+        _value = value
+        self.range = range
+        self.width = width
+        _text = State(initialValue: String(min(max(value.wrappedValue, range.lowerBound), range.upperBound)))
+    }
+
+    var body: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .frame(width: width)
+            .multilineTextAlignment(.trailing)
+            .onChange(of: text) { _, newValue in
+                let digits = newValue.filter(\.isNumber)
+                guard !digits.isEmpty else {
+                    return
+                }
+
+                let parsed = Int(digits) ?? range.lowerBound
+                let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+                value = clamped
+
+                let clampedText = String(clamped)
+                if text != clampedText {
+                    text = clampedText
+                }
+            }
+            .onSubmit {
+                syncTextToValue()
+            }
+            .onChange(of: value) { _, newValue in
+                let clamped = min(max(newValue, range.lowerBound), range.upperBound)
+                let normalized = String(clamped)
+                if text != normalized {
+                    text = normalized
+                }
+            }
+            .onAppear {
+                syncTextToValue()
+            }
+    }
+
+    private func syncTextToValue() {
+        let digits = text.filter(\.isNumber)
+        let parsed = Int(digits) ?? value
+        let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+        value = clamped
+        text = String(clamped)
     }
 }
 

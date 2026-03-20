@@ -188,6 +188,7 @@ class RecordingOverlayWindow: NSPanel {
     private var hostingView: NSHostingView<OverlayContent>?
     private var visibilityToken: UInt64 = 0
     private var displayModeCancellable: AnyCancellable?
+    private var overlayAppearanceCancellable: AnyCancellable?
     private weak var observedState: OverlayState?
     private var currentPosition: OverlayPosition = .bottom
     var onRequestClose: (() -> Void)?
@@ -208,6 +209,15 @@ class RecordingOverlayWindow: NSPanel {
         isMovableByWindowBackground = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         ignoresMouseEvents = true
+
+        overlayAppearanceCancellable = NotificationCenter.default.publisher(for: .voxtOverlayAppearanceDidChange)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let state = self.observedState else { return }
+                let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.overlayPosition) ?? OverlayPosition.bottom.rawValue
+                self.currentPosition = OverlayPosition(rawValue: raw) ?? .bottom
+                self.updateAppearance(for: state, animated: self.isVisible)
+            }
     }
 
     override var canBecomeKey: Bool { true }
@@ -300,7 +310,7 @@ class RecordingOverlayWindow: NSPanel {
     }
 
     private func frame(for size: CGSize, position: OverlayPosition) -> CGRect {
-        let fixedEdgeDistance: CGFloat = 30
+        let fixedEdgeDistance = overlayScreenEdgeInset
         let visibleFrame = NSScreen.main?.visibleFrame ?? .zero
         guard !visibleFrame.isEmpty else {
             return CGRect(origin: frame.origin, size: size)
@@ -315,6 +325,11 @@ class RecordingOverlayWindow: NSPanel {
             y = visibleFrame.maxY - size.height - fixedEdgeDistance
         }
         return CGRect(origin: CGPoint(x: x, y: y), size: size)
+    }
+
+    private var overlayScreenEdgeInset: CGFloat {
+        let storedValue = UserDefaults.standard.object(forKey: AppPreferenceKey.overlayScreenEdgeInset) as? Int ?? 30
+        return CGFloat(min(max(storedValue, 0), 120))
     }
 }
 

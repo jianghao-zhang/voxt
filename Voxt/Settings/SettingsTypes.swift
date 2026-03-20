@@ -6,6 +6,7 @@ extension Notification.Name {
     static let voxtConfigurationDidImport = Notification.Name("voxt.configuration.didImport")
     static let voxtSelectedInputDeviceDidChange = Notification.Name("voxt.selectedInputDevice.didChange")
     static let voxtAudioInputDevicesDidChange = Notification.Name("voxt.audioInputDevices.didChange")
+    static let voxtOverlayAppearanceDidChange = Notification.Name("voxt.overlayAppearance.didChange")
 }
 
 enum SettingsTab: String, CaseIterable, Identifiable {
