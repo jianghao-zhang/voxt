@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.6.6] - 2026-03-20
+
+### Added
+- Added a General setting to cancel the active overlay with `Esc`, plus optional overlay appearance controls for opacity, corner radius, and screen edge distance.
+- Added manual dictionary replacement match terms so custom aliases can map directly to a standard term.
+
+### Changed
+- Refined the recording waveform so the voice bars now feel like audio waves moving from left to right.
+
+### Fixed
+- Reduced idle memory after local MLX transcription or LLM use by unloading on-device models after they sit unused.
+- Fixed General configuration export/import so the latest `Esc` cancel and overlay appearance settings are preserved.
+- Fixed the permissions page so Speech Recognition only appears when the selected transcription engine actually needs system dictation.
+
 ## [1.6.5] - 2026-03-19
 
 ### Added
