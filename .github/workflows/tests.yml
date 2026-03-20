@@ -9,7 +9,7 @@ on:
 
 jobs:
   macos-tests:
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - uses: actions/checkout@v4
@@ -19,4 +19,3 @@ jobs:
 
       - name: Run tests
         run: xcodebuild test -project Voxt.xcodeproj -scheme Voxt -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
-
