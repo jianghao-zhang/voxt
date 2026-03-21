@@ -290,10 +290,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.bool(forKey: AppPreferenceKey.appEnhancementEnabled)
     }
 
+    private var isRunningUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         VoxtLog.info("Voxt launching.")
-        AppBehaviorController.applyDockVisibility(showInDock: showInDock)
         migrateLegacyPreferences()
+
+        if isRunningUnitTests {
+            VoxtLog.info("Voxt launch running under XCTest; skipping app startup services.")
+            return
+        }
+
+        AppBehaviorController.applyDockVisibility(showInDock: showInDock)
 
         if #available(macOS 26.0, *), TextEnhancer.isAvailable {
             enhancer = TextEnhancer()
