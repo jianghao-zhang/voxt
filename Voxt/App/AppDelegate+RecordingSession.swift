@@ -105,6 +105,13 @@ extension AppDelegate {
         }
         VoxtLog.info("Recording stop requested.")
 
+        if pendingWhisperStartupTask != nil, whisperTranscriber?.isRecording != true {
+            pendingWhisperStartupTask?.cancel()
+            pendingWhisperStartupTask = nil
+            resetSessionAfterFailedStart()
+            return
+        }
+
         cancelActiveRecordingTasks()
         pendingSystemAudioMuteTask?.cancel()
         pendingSystemAudioMuteTask = nil
@@ -139,6 +146,13 @@ extension AppDelegate {
     func cancelActiveRecordingSession() {
         guard isSessionActive else { return }
         VoxtLog.info("Recording cancelled by Escape key.")
+
+        if pendingWhisperStartupTask != nil, whisperTranscriber?.isRecording != true {
+            pendingWhisperStartupTask?.cancel()
+            pendingWhisperStartupTask = nil
+            resetSessionAfterFailedStart()
+            return
+        }
 
         let cancelledSessionID = activeRecordingSessionID
         activeRecordingSessionID = UUID()
@@ -404,11 +418,36 @@ extension AppDelegate {
     private func startWhisperRecordingSession() {
         let whisper = whisperTranscriber ?? WhisperKitTranscriber(modelManager: whisperModelManager)
         whisperTranscriber = whisper
+        let sessionID = activeRecordingSessionID
 
-        Task { [weak self] in
+        overlayState.statusMessage = ""
+        whisper.transcribedText = ""
+        whisper.setPreferredInputDevice(selectedInputDeviceID)
+        whisper.onPartialTranscription = { [weak self] text in
+            guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
+            self.overlayState.transcribedText = text
+        }
+        whisper.onTranscriptionFinished = { [weak self] text in
+            self?.processTranscription(text, sessionID: sessionID)
+        }
+        overlayState.bind(to: whisper)
+        overlayWindow.show(
+            state: overlayState,
+            position: overlayPosition
+        )
+
+        pendingWhisperStartupTask?.cancel()
+        pendingWhisperStartupTask = Task { [weak self] in
             guard let self else { return }
-            let sessionID = self.activeRecordingSessionID
+            defer {
+                if self.pendingWhisperStartupTask?.isCancelled != false {
+                    self.pendingWhisperStartupTask = nil
+                } else if !self.shouldHandleCallbacks(for: sessionID) || !self.isSessionActive {
+                    self.pendingWhisperStartupTask = nil
+                }
+            }
             let granted = await whisper.requestPermissions()
+            guard self.shouldContinueWhisperStartup(for: sessionID) else { return }
             guard granted else {
                 self.showOverlayReminder(
                     String(localized: "Please enable required permissions in Settings > Permissions.")
@@ -422,32 +461,24 @@ extension AppDelegate {
                 outputMode: self.sessionOutputMode,
                 useBuiltInTranslationTask: useWhisperDirectTranslation
             )
+            guard self.shouldContinueWhisperStartup(for: sessionID) else { return }
             if let failureMessage {
                 self.showOverlayReminder(failureMessage)
                 self.resetSessionAfterFailedStart()
                 return
             }
 
-            self.overlayState.statusMessage = ""
-            whisper.transcribedText = ""
-            whisper.setPreferredInputDevice(self.selectedInputDeviceID)
-            whisper.onPartialTranscription = { [weak self] text in
-                guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
-                self.overlayState.transcribedText = text
-            }
-            whisper.onTranscriptionFinished = { [weak self] text in
-                self?.processTranscription(text, sessionID: sessionID)
-            }
-            self.overlayState.bind(to: whisper)
-            self.overlayWindow.show(
-                state: self.overlayState,
-                position: self.overlayPosition
-            )
             self.sessionUsesWhisperDirectTranslation = useWhisperDirectTranslation
             if let startFailureMessage = await whisper.startRecordingSession() {
+                guard self.shouldContinueWhisperStartup(for: sessionID) else { return }
                 VoxtLog.warning("Whisper recording session did not enter recording state. reason=\(startFailureMessage)")
                 self.showOverlayReminder(startFailureMessage)
                 self.resetSessionAfterFailedStart()
+                return
+            }
+            self.pendingWhisperStartupTask = nil
+            guard self.shouldContinueWhisperStartup(for: sessionID) else {
+                whisper.stopRecording()
                 return
             }
         }
@@ -740,10 +771,19 @@ extension AppDelegate {
         silenceMonitorTask = nil
         pauseLLMTask?.cancel()
         pauseLLMTask = nil
+        pendingWhisperStartupTask?.cancel()
+        pendingWhisperStartupTask = nil
     }
 
     private func cancelSessionControlTasks() {
         cancelPendingFinishTasks()
         cancelActiveRecordingTasks()
+    }
+
+    private func shouldContinueWhisperStartup(for sessionID: UUID) -> Bool {
+        shouldHandleCallbacks(for: sessionID)
+            && isSessionActive
+            && !isSessionCancellationRequested
+            && recordingStoppedAt == nil
     }
 }

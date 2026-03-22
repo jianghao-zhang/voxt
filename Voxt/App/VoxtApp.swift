@@ -177,6 +177,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var stopRecordingFallbackTask: Task<Void, Never>?
     var silenceMonitorTask: Task<Void, Never>?
     var pauseLLMTask: Task<Void, Never>?
+    var pendingWhisperStartupTask: Task<Void, Never>?
+    var pendingMeetingStartupTask: Task<Void, Never>?
+    var whisperWarmupTask: Task<Void, Never>?
     var overlayReminderTask: Task<Void, Never>?
     var overlayStatusClearTask: Task<Void, Never>?
     var pendingSystemAudioMuteTask: Task<Void, Never>?
@@ -207,6 +210,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var pendingMeetingSessionCompletionDisposition: MeetingSessionCompletionDisposition = .save
     let tapStopGuardInterval: TimeInterval = 0.35
     let transcriptionStartDebounceInterval: TimeInterval = 0.08
+    let whisperWarmupDelay: Duration = .seconds(1)
     var settingsWindowPresentationState = SettingsWindowPresentationState()
 
     override init() {
@@ -453,6 +457,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        scheduleWhisperIdleWarmupIfNeeded()
         VoxtLog.info("Voxt launch completed. engine=\(transcriptionEngine.rawValue), enhancement=\(enhancementMode.rawValue)")
     }
 
@@ -460,6 +465,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if meetingSessionCoordinator.isActive {
             meetingSessionCoordinator.stop()
         }
+        pendingMeetingStartupTask?.cancel()
         meetingDetailWindowManager.closeLiveWindow()
         systemAudioMuteController.restoreSystemAudioIfNeeded()
     }
@@ -494,6 +500,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSEvent.removeMonitor(localEscapeKeyMonitor)
         }
         inputDevicesRefreshTask?.cancel()
+        pendingMeetingStartupTask?.cancel()
+        whisperWarmupTask?.cancel()
+    }
+
+    func scheduleWhisperIdleWarmupIfNeeded() {
+        whisperWarmupTask?.cancel()
+        guard transcriptionEngine == .whisperKit || meetingNotesBetaEnabled else { return }
+        guard isWhisperReady else { return }
+
+        whisperWarmupTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            do {
+                try await Task.sleep(for: self.whisperWarmupDelay)
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else { return }
+            guard self.transcriptionEngine == .whisperKit || self.meetingNotesBetaEnabled else { return }
+            guard self.isWhisperReady else { return }
+            guard !self.isSessionActive else { return }
+            guard !self.meetingSessionCoordinator.isActive else { return }
+
+            self.whisperModelManager.beginActiveUse()
+            defer {
+                self.whisperModelManager.endActiveUse()
+                self.whisperWarmupTask = nil
+            }
+
+            do {
+                _ = try await self.whisperModelManager.loadWhisper()
+                VoxtLog.info("Whisper idle warmup completed.", verbose: true)
+            } catch {
+                VoxtLog.warning("Whisper idle warmup failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func migrateLegacyPreferences() {
@@ -642,6 +685,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleTranscriptionTapDown() {
+        if meetingSessionCoordinator.isActive {
+            if meetingSessionCoordinator.overlayState.isCloseConfirmationPresented {
+                dismissMeetingSessionCloseConfirmation()
+            } else {
+                requestMeetingSessionCloseConfirmation()
+            }
+            return
+        }
         if isSessionActive {
             // In tap mode, fn is the unified "toggle stop" key.
             // This intentionally allows ending active translation sessions with fn.
@@ -666,6 +717,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleTranscriptionHotkeyDown() {
+        if meetingSessionCoordinator.isActive {
+            if meetingSessionCoordinator.overlayState.isCloseConfirmationPresented {
+                dismissMeetingSessionCloseConfirmation()
+            } else {
+                requestMeetingSessionCloseConfirmation()
+            }
+            return
+        }
         let triggerMode = HotkeyPreference.loadTriggerMode()
         VoxtLog.hotkey(
             "Hotkey callback transcriptionDown. mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",

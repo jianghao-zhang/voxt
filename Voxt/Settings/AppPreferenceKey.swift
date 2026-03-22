@@ -111,6 +111,7 @@ enum AppPreferenceKey {
         2. Do not add, remove, or rephrase any content with actual semantic meaning in the final valid content.
         3. Do not add commentary, explanations, or additional notes.
         4. If there is mixed language, retain the original language type and semantics—do not translate any part.
+        5. If the cleaned result has no meaningful content, return an empty string. Do not output placeholders, cleanup notices, or meta statements such as "（无有效语义内容，已按规则清理）".
 
         ### Output Requirement:
         Return only the cleaned-up transcription text (no extra content, tags, or explanations).

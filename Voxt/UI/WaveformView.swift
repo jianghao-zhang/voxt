@@ -329,9 +329,9 @@ struct WaveformView: View {
             let audioEnvelope = pow(level, 0.84)
             let travelEnvelope = recordingTravelEnvelope(for: index)
             let ambientEnvelope = CGFloat(sine * 0.65 + 0.35)
-            let baseFloor = 0.10 + min(0.08, level * 0.12)
-            let travelStrength = 0.18 + audioEnvelope * 0.82
-            let ambientStrength = 0.08 + audioEnvelope * 0.24
+            let baseFloor = 0.012 + min(0.025, level * 0.03)
+            let travelStrength = 0.005 + audioEnvelope * 0.95
+            let ambientStrength = 0.004 + audioEnvelope * 0.05
             let mixedEnvelope = min(1.0, baseFloor + travelEnvelope * travelStrength + ambientEnvelope * ambientStrength)
             let driven = minH + (maxH - minH) * mixedEnvelope
             return max(minH, driven)
@@ -349,13 +349,13 @@ struct WaveformView: View {
         let level = Double(normalizedAudioLevel(audioLevel))
         let travelEnvelope = Double(recordingTravelEnvelope(for: index))
         let ambientPulse = (sin(phases[index] * 1.15) + 1) / 2
-        let glow = 0.07 + ambientPulse * 0.05 + travelEnvelope * 0.12 + level * (0.04 + travelEnvelope * 0.1)
-        return min(0.32, glow)
+        let glow = 0.02 + ambientPulse * 0.01 + travelEnvelope * 0.05 + level * (0.025 + travelEnvelope * 0.07)
+        return min(0.2, glow)
     }
 
     private func normalizedAudioLevel(_ raw: Float) -> CGFloat {
         let clamped = max(0, min(raw, 1))
-        let gained = min(1.0, pow(Double(clamped), 0.82) * 1.05)
+        let gained = min(1.0, pow(Double(clamped), 1.08) * 0.56)
         return CGFloat(gained)
     }
 

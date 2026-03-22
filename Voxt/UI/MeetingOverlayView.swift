@@ -112,16 +112,24 @@ private struct MeetingOverlayCard: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.72))
 
-                    Toggle(
-                        "",
-                        isOn: Binding(
-                            get: { state.realtimeTranslateEnabled },
-                            set: { onRealtimeTranslateToggle($0) }
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 999, style: .continuous)
+                            .fill(.white.opacity(0.10))
+                            .frame(width: 42, height: 24)
+
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { state.realtimeTranslateEnabled },
+                                set: { onRealtimeTranslateToggle($0) }
+                            )
                         )
-                    )
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .scaleEffect(0.82)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(.accentColor)
+                        .scaleEffect(0.82)
+                    }
+                    .frame(width: 42, height: 24)
                 }
 
                 Rectangle()
@@ -204,22 +212,54 @@ private struct MeetingOverlayCard: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
 
-            Picker(
-                "",
-                selection: $state.realtimeTranslationDraftLanguageRaw
-            ) {
+            VStack(spacing: 6) {
                 ForEach(TranslationTargetLanguage.allCases) { language in
-                    Text(language.title).tag(language.rawValue)
+                    Button {
+                        state.realtimeTranslationDraftLanguageRaw = language.rawValue
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(language.title)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.92))
+
+                            Spacer(minLength: 8)
+
+                            if state.realtimeTranslationDraftLanguageRaw == language.rawValue {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.accentColor.opacity(0.95))
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(
+                                    state.realtimeTranslationDraftLanguageRaw == language.rawValue
+                                        ? Color.accentColor.opacity(0.20)
+                                        : .white.opacity(0.05)
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(
+                                    state.realtimeTranslationDraftLanguageRaw == language.rawValue
+                                        ? Color.accentColor.opacity(0.36)
+                                        : .white.opacity(0.08),
+                                    lineWidth: 1
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
 
             HStack(spacing: 10) {
                 Button(String(localized: "取消")) {
                     onCancelRealtimeTranslationLanguage()
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.94))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
@@ -235,6 +275,7 @@ private struct MeetingOverlayCard: View {
                     onConfirmRealtimeTranslationLanguage()
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.94))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
@@ -276,6 +317,7 @@ private struct MeetingOverlayCard: View {
                     onConfirmCancelMeeting()
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.94))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
@@ -291,6 +333,7 @@ private struct MeetingOverlayCard: View {
                     onConfirmFinishMeeting()
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.94))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(

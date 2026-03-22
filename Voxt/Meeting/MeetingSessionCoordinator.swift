@@ -21,6 +21,7 @@ final class MeetingSessionCoordinator {
     private var accumulatedRecordingDuration: TimeInterval = 0
     private var preferredInputDeviceIDProvider: () -> AudioDeviceID?
     private var pendingTasks: [Task<Void, Never>] = []
+    private var pendingChunks: [BufferedMeetingChunk] = []
     private var translationTasks: [UUID: Task<Void, Never>] = [:]
     private var micLevel: Float = 0
     private var systemLevel: Float = 0
@@ -30,6 +31,7 @@ final class MeetingSessionCoordinator {
     private let audioArchive = MeetingAudioArchive()
     private let realtimeTranslationTargetLanguageProvider: @MainActor () -> TranslationTargetLanguage?
     private let realtimeTranslationHandler: @MainActor (String, TranslationTargetLanguage) async throws -> String
+    private var isStarting = false
 
     init(
         whisperModelManager: WhisperKitModelManager,
@@ -44,22 +46,48 @@ final class MeetingSessionCoordinator {
     }
 
     var isActive: Bool {
-        overlayState.isPresented || overlayState.isRecording || overlayState.isPaused || activeUseHeld || isStopping
+        isStarting || overlayState.isPresented || overlayState.isRecording || overlayState.isPaused || activeUseHeld || isStopping
     }
 
-    func start() async -> String? {
-        guard !overlayState.isPresented else { return nil }
+    var isStartingUp: Bool {
+        isStarting
+    }
 
+    func prepareForStart() {
+        guard !isActive else { return }
         cleanupSessionState(shouldLogCaptureStop: false)
         overlayState.reset()
         overlayState.isPresented = true
         overlayState.isCollapsed = UserDefaults.standard.object(forKey: AppPreferenceKey.meetingOverlayCollapsed) as? Bool ?? false
         overlayState.realtimeTranslateEnabled = UserDefaults.standard.object(forKey: AppPreferenceKey.meetingRealtimeTranslateEnabled) as? Bool ?? false
+        overlayState.audioLevel = 0
+        overlayState.waveformState.reset()
+        overlayState.waveformState.setActive(true)
+        overlayState.isRecording = true
+        isStarting = true
+    }
+
+    func cancelPendingStart() {
+        guard isStarting else { return }
+        cleanupSessionState(shouldLogCaptureStop: false)
+        overlayState.reset()
+    }
+
+    func start() async -> String? {
+        if !isStarting {
+            guard !overlayState.isPresented else { return nil }
+            prepareForStart()
+        }
 
         do {
+            try Task.checkCancellation()
+            try startCaptures()
+            try Task.checkCancellation()
+            recordingStartedAt = Date()
             whisperModelManager.beginActiveUse()
             activeUseHeld = true
             let whisper = try await whisperModelManager.loadWhisper()
+            try Task.checkCancellation()
             self.whisper = whisper
             let hintSettings = ASRHintSettingsStore.resolvedSettings(
                 for: .whisperKit,
@@ -72,17 +100,21 @@ final class MeetingSessionCoordinator {
                 temperature: Float(UserDefaults.standard.double(forKey: AppPreferenceKey.whisperTemperature)),
                 hintPayload: hintPayload
             )
-            try startCaptures()
+            await drainPendingChunksIfNeeded()
+            try Task.checkCancellation()
+        } catch is CancellationError {
+            cleanupSessionState(shouldLogCaptureStop: false)
+            overlayState.reset()
+            return nil
         } catch {
             cleanupSessionState()
             overlayState.reset()
             return error.localizedDescription
         }
 
-        recordingStartedAt = Date()
+        isStarting = false
         overlayState.isRecording = true
         overlayState.isPaused = false
-        overlayState.waveformState.reset()
         overlayState.waveformState.setActive(true)
         return nil
     }
@@ -191,7 +223,7 @@ final class MeetingSessionCoordinator {
     }
 
     private func handleBuffer(_ buffer: AVAudioPCMBuffer, level: Float, speaker: MeetingSpeaker) {
-        guard overlayState.isRecording else { return }
+        guard overlayState.isRecording || isStarting else { return }
         if speaker == .me {
             micLevel = level
         } else {
@@ -249,7 +281,10 @@ final class MeetingSessionCoordinator {
     }
 
     private func enqueue(chunk: BufferedMeetingChunk) async {
-        guard let transcriber else { return }
+        guard let transcriber else {
+            pendingChunks.append(chunk)
+            return
+        }
         if let segment = await transcriber.transcribe(chunk: chunk) {
             await MainActor.run { [weak self] in
                 guard let self, self.overlayState.isPresented else { return }
@@ -271,6 +306,20 @@ final class MeetingSessionCoordinator {
         }
     }
 
+    private func drainPendingChunksIfNeeded() async {
+        guard transcriber != nil, !pendingChunks.isEmpty else { return }
+        let chunks = pendingChunks.sorted(by: { lhs, rhs in
+            if lhs.startSeconds == rhs.startSeconds {
+                return lhs.speaker.rawValue < rhs.speaker.rawValue
+            }
+            return lhs.startSeconds < rhs.startSeconds
+        })
+        pendingChunks.removeAll()
+        for chunk in chunks {
+            await enqueue(chunk: chunk)
+        }
+    }
+
     private func pruneCompletedTasks() {
         pendingTasks.removeAll { $0.isCancelled }
     }
@@ -285,6 +334,8 @@ final class MeetingSessionCoordinator {
         loggedSampleExtractionFailureSpeakers.removeAll()
         recordingStartedAt = nil
         accumulatedRecordingDuration = 0
+        pendingChunks.removeAll()
+        isStarting = false
         isStopping = false
         if activeUseHeld {
             whisperModelManager.endActiveUse()

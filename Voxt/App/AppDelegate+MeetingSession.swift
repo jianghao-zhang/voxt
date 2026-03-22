@@ -16,7 +16,11 @@ extension AppDelegate {
         cancelPendingTranscriptionStart()
 
         if meetingSessionCoordinator.isActive {
-            stopMeetingSession()
+            if meetingSessionCoordinator.overlayState.isCloseConfirmationPresented {
+                dismissMeetingSessionCloseConfirmation()
+            } else {
+                requestMeetingSessionCloseConfirmation()
+            }
             return
         }
 
@@ -37,6 +41,24 @@ extension AppDelegate {
         closeOverlayImmediately: Bool = true,
         closeLiveDetailImmediately: Bool = true
     ) {
+        pendingMeetingStartupTask?.cancel()
+        pendingMeetingStartupTask = nil
+
+        if meetingSessionCoordinator.isStartingUp &&
+            !meetingSessionCoordinator.overlayState.isRecording &&
+            !meetingSessionCoordinator.overlayState.isPaused {
+            meetingSessionCoordinator.overlayState.isCloseConfirmationPresented = false
+            meetingSessionCoordinator.overlayState.isRealtimeTranslationLanguagePickerPresented = false
+            if closeLiveDetailImmediately {
+                meetingDetailWindowManager.closeLiveWindow()
+            }
+            meetingSessionCoordinator.cancelPendingStart()
+            if closeOverlayImmediately {
+                meetingOverlayWindow.hide()
+            }
+            return
+        }
+
         guard meetingSessionCoordinator.isActive else {
             if closeOverlayImmediately {
                 meetingOverlayWindow.hide()
@@ -164,6 +186,8 @@ extension AppDelegate {
     private func startMeetingSession() async {
         guard preflightPermissionsForMeeting() else { return }
         pendingMeetingSessionCompletionDisposition = .save
+        whisperWarmupTask?.cancel()
+        whisperWarmupTask = nil
 
         meetingSessionCoordinator.onSessionFinished = { [weak self] result in
             Task { @MainActor [weak self] in
@@ -171,16 +195,32 @@ extension AppDelegate {
             }
         }
 
-        if let failureMessage = await meetingSessionCoordinator.start() {
-            VoxtLog.warning("Meeting start failed: \(failureMessage)")
-            showOverlayReminder(failureMessage)
-            return
-        }
-
+        meetingSessionCoordinator.prepareForStart()
         meetingOverlayWindow.show(
             state: meetingSessionCoordinator.overlayState,
             position: overlayPosition
         )
+
+        pendingMeetingStartupTask?.cancel()
+        pendingMeetingStartupTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if self.pendingMeetingStartupTask?.isCancelled != false {
+                    self.pendingMeetingStartupTask = nil
+                }
+            }
+            let failureMessage = await self.meetingSessionCoordinator.start()
+            guard !Task.isCancelled else {
+                self.pendingMeetingStartupTask = nil
+                return
+            }
+            self.pendingMeetingStartupTask = nil
+            if let failureMessage {
+                VoxtLog.warning("Meeting start failed: \(failureMessage)")
+                self.meetingOverlayWindow.hide()
+                self.showOverlayReminder(failureMessage)
+            }
+        }
     }
 
     private func preflightPermissionsForMeeting() -> Bool {
