@@ -451,21 +451,23 @@ struct WaveformView: View {
         stopAnimating(resetPhases: false)
         currentAnimationInterval = interval
         animTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-            let speed = animationSpeed
-            guard speed > 0 else { return }
-            if displayMode == .recording && isRecording {
-                travelPhase.formTruncatingRemainder(dividingBy: Double(barCount))
-                travelPhase += 0.62
-                if travelPhase >= Double(barCount) {
-                    travelPhase -= Double(barCount)
-                }
+            Task { @MainActor in
+                let speed = animationSpeed
+                guard speed > 0 else { return }
+                if displayMode == .recording && isRecording {
+                    travelPhase.formTruncatingRemainder(dividingBy: Double(barCount))
+                    travelPhase += 0.62
+                    if travelPhase >= Double(barCount) {
+                        travelPhase -= Double(barCount)
+                    }
 
-                for i in 0..<barCount {
-                    phases[i] += 0.11 + Double(i) * 0.004
-                }
-            } else {
-                for i in 0..<barCount {
-                    phases[i] += speed + Double(i) * 0.006
+                    for i in 0..<barCount {
+                        phases[i] += 0.11 + Double(i) * 0.004
+                    }
+                } else {
+                    for i in 0..<barCount {
+                        phases[i] += speed + Double(i) * 0.006
+                    }
                 }
             }
         }

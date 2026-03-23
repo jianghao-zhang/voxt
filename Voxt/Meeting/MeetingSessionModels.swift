@@ -2,6 +2,8 @@ import Foundation
 import Combine
 
 struct MeetingSessionResult {
+    let transcriptionEngine: TranscriptionEngine
+    let transcriptionModelDescription: String
     let segments: [MeetingTranscriptSegment]
     let visibleSnapshotSegments: [MeetingTranscriptSegment]
     let audioDurationSeconds: TimeInterval

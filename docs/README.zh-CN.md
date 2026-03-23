@@ -6,7 +6,7 @@
 
 macOS 菜单栏语音输入与翻译工具。按住说话，松开即贴，AI转写，不同 APP、URL 不同规则。
 
-[English](./README.md) · **简体中文** · [反馈问题][github-issues-link] · [提示词](./Prompt.zh-CN.md)
+[English](./README.md) · **简体中文** · [反馈问题][github-issues-link] · [提示词](./Prompt.zh-CN.md) · [会议文档](./Meeting.zh-CN.md) · [转写文档](./Rewrite.zh-CN.md)
 
 [![][github-release-shield]][github-release-link]
 [![][macos-version-shield]][macos-version-link]
@@ -43,11 +43,15 @@ macOS 菜单栏语音输入与翻译工具。按住说话，松开即贴，AI转
 
 **会议记录（Beta）** `fn+option`
 
-- 独立的悬浮会议卡片，适合长时间会议、通话、访谈场景。
+- 独立的悬浮会议卡片，适合长时间会议、通话、访谈场景 (支持实时翻译)。
 - 当前 Beta 使用双音源：
   - 麦克风标记为 `我`
   - 系统音频标记为 `them`
-- 会议模式当前固定走 Whisper，并有独立的时间线、详情窗口和历史记录类型。
+- 会议模式会跟随当前全局 ASR 引擎：
+  - `Whisper`
+  - `MLX Audio`
+  - `Remote ASR`
+- 实时性跟随当前引擎 / 模型 / provider 配置能力。
 - live 会议卡片已在窗口级别标记为不可共享，正常屏幕共享 / 窗口共享时不应把它带出去。
 
 [![][back-to-top]](#readme-top)
@@ -199,13 +203,21 @@ https://raw.githubusercontent.com/hehehai/voxt/refs/heads/main/docs/RemoteModel.
 | 服务商 | 项目内置模型选项 | 支持语言 | 实时支持 | 速度 | 推荐度 | 当前接入方式 |
 | --- | --- | --- | --- | --- | --- | --- |
 | OpenAI Whisper / Transcribe | `whisper-1`、`gpt-4o-mini-transcribe`、`gpt-4o-transcribe` | 多语言 | 部分支持，Voxt 当前是文件转写；可开启分片伪实时预览 | 中 | 高 | `v1/audio/transcriptions` |
-| Doubao ASR | `volc.seedasr.sauc.duration`、`volc.bigasr.sauc.duration` | 中文优先，适合中英混说 / 实时场景 | 是 | 快 | 高 | WebSocket 流式识别 |
+| Doubao ASR | `volc.seedasr.sauc.duration`、`volc.bigasr.sauc.duration`，会议：`volc.bigasr.auc_turbo` | 中文优先，适合中英混说 | 普通转录支持实时，会议走分段 / 文件模式 | 快 | 高 | 普通转录走 WebSocket，会议走 HTTP flash/file ASR |
 | GLM ASR | `glm-asr-2512`、`glm-asr-1` | 官方定位覆盖多场景、多口音；Voxt 当前按普通转写接入 | 否（当前实现为上传转写） | 中 | 中高 | HTTP transcription endpoint |
-| Aliyun Bailian ASR | `qwen3-asr-flash-realtime`、`fun-asr-realtime`、`paraformer-realtime-*` | 取决于模型：Qwen3 ASR 为多语言，Fun/Paraformer 覆盖中英或多语 | 是 | 快 | 高 | WebSocket 实时识别，Qwen / Fun / Paraformer 走不同端点 |
+| Aliyun Bailian ASR | `qwen3-asr-flash-realtime`、`fun-asr-realtime`、`paraformer-realtime-*`，会议：`qwen3-asr-flash-filetrans`、`fun-asr`、`paraformer-v2` | 取决于模型：Qwen3 ASR 为多语言，Fun/Paraformer 覆盖中英或多语 | 普通转录支持实时，会议走分段 / 文件模式 | 快 | 高 | 普通转录走 WebSocket，会议走异步 / 文件 ASR |
+
+对 `Doubao ASR` 和 `Aliyun Bailian ASR`，会议模式有独立的 `Meeting ASR` 模型配置：
+
+- 只有在开启 `Meeting Notes (Beta)` 后，`设置 > 模型 > Remote ASR > [服务商]` 中才会显示这一段
+- 会议不会复用普通实时 ASR 模型，而是只使用单独配置的会议模型
+- 如果会议模型没配好，Voxt 会阻止启动会议，并在 provider 列表里显示配置提示
+- 可以先点 `Test Meeting ASR` 验证会议专用请求链路是否可达
 
 远程 ASR 常见报错 / 状态：
 
 - `Needs Setup`
+- `未配置会议 ASR`
 - OpenAI / GLM / Aliyun 缺少 API Key
 - Doubao 缺少 `Access Token` 或 `App ID`
 - `Invalid ASR endpoint URL`
@@ -308,6 +320,8 @@ https://raw.githubusercontent.com/hehehai/voxt/refs/heads/main/docs/RemoteModel.
 
 `会议记录（Beta）` 是一条独立于普通转录 / 翻译 / 转写的新流程，适合长时间会议、远程通话、播客录制等场景。它不会把文本自动注入当前输入框，也不复用普通转录悬浮层。
 
+完整说明见：[Meeting.zh-CN.md](./Meeting.zh-CN.md)。
+
 ### 如何开启
 
 - 默认关闭。
@@ -319,11 +333,19 @@ https://raw.githubusercontent.com/hehehai/voxt/refs/heads/main/docs/RemoteModel.
 
 ### 当前 Beta 的实现方式
 
-- ASR 引擎：固定为 `Whisper`
+- ASR 引擎：跟随当前全局转录引擎
+  - `Whisper`
+  - `MLX Audio`
+  - `Remote ASR`
+- `Direct Dictation` 当前不支持会议模式
 - 音频来源：
   - 麦克风 -> `我`
   - 系统音频 -> `them`
 - 当前 Beta v1 是按音源区分说话方，不是真正的 diarization。
+- 实时行为跟随当前引擎 / 模型 / provider 能力：
+  - `Whisper`：跟随全局 `Realtime` 开关
+  - `MLX Audio`：实时型模型走更低延迟更新
+  - `Remote ASR`：`Doubao` 和 `Aliyun` 在会议里使用独立的会议分段 / 文件模型，`OpenAI` 和 `GLM` 继续走现有的分段会议链路
 - 两路音频分段最后会合并成一个统一的会议时间线，并保存到 `会议` 历史记录中。
 
 ### 会议悬浮卡片

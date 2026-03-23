@@ -105,16 +105,20 @@ extension AppDelegate {
     }
 
     func translateMeetingRealtimeText(_ text: String, targetLanguage: TranslationTargetLanguage) async throws -> String {
-        let modelProvider = translationModelProvider == .whisperKit
-            ? translationFallbackModelProvider
-            : translationModelProvider
+        let resolution = MeetingTranslationSupport.resolvedProvider(
+            selectedProvider: translationModelProvider,
+            fallbackProvider: translationFallbackModelProvider,
+            transcriptionEngine: transcriptionEngine,
+            targetLanguage: targetLanguage,
+            whisperModelState: whisperModelManager.state
+        )
         let resolvedPrompt = resolvedTranslationPrompt(
             targetLanguage: targetLanguage,
             sourceText: text,
             strict: false
         )
 
-        switch modelProvider {
+        switch resolution.provider {
         case .customLLM:
             let repo = translationCustomLLMRepo
             guard customLLMManager.isModelDownloaded(repo: repo) else {
@@ -146,7 +150,11 @@ extension AppDelegate {
                 configuration: context.configuration
             )
         case .whisperKit:
-            return text
+            throw NSError(
+                domain: "Voxt.MeetingTranslation",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: AppLocalization.localizedString("Meeting realtime translation requires a text-capable translation provider.")]
+            )
         }
     }
 

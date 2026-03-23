@@ -239,10 +239,22 @@ extension AppDelegate {
             return false
         }
 
-        guard isWhisperReady else {
-            showOverlayReminder(
-                String(localized: "Whisper model is required for Meeting Notes. Install a Whisper model first.")
-            )
+        let remoteConfiguration = RemoteModelConfigurationStore.resolvedASRConfiguration(
+            provider: remoteASRSelectedProvider,
+            stored: remoteASRConfigurations
+        )
+        let startDecision = MeetingStartPlanner.resolve(
+            selectedEngine: transcriptionEngine,
+            mlxModelState: mlxModelManager.state,
+            whisperModelState: whisperModelManager.state,
+            remoteASRProvider: remoteASRSelectedProvider,
+            remoteASRConfiguration: remoteConfiguration
+        )
+        guard case .start = startDecision else {
+            if case .blocked(let reason) = startDecision {
+                VoxtLog.warning("Meeting start blocked: \(reason.logDescription)")
+                showOverlayReminder(reason.userMessage)
+            }
             return false
         }
 

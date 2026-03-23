@@ -74,8 +74,6 @@ extension AppDelegate {
             return nil
         }
 
-        let modelID = whisperModelManager.currentModelID
-        let transcriptionModel = "\(whisperModelManager.displayTitle(for: modelID)) (\(modelID))"
         let meetingAudioRelativePath: String?
         if let archivedAudioURL = result.archivedAudioURL {
             meetingAudioRelativePath = try? historyStore.importMeetingAudioArchive(from: archivedAudioURL)
@@ -85,8 +83,8 @@ extension AppDelegate {
 
         guard let entryID = historyStore.append(
             text: persistedText,
-            transcriptionEngine: AppLocalization.localizedString("Whisper"),
-            transcriptionModel: transcriptionModel,
+            transcriptionEngine: result.transcriptionEngine.title,
+            transcriptionModel: result.transcriptionModelDescription,
             enhancementMode: EnhancementMode.off.title,
             enhancementModel: "None",
             kind: .meeting,

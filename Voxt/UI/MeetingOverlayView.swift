@@ -97,101 +97,104 @@ private struct MeetingOverlayCard: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            HStack(alignment: .center, spacing: 10) {
-                Group {
-                    if state.isModelInitializing {
-                        ModelInitializingIconView()
-                    } else {
-                        TranscriptionModeIconView()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                HStack(alignment: .center, spacing: 10) {
+                    Group {
+                        if state.isModelInitializing {
+                            ModelInitializingIconView()
+                        } else {
+                            TranscriptionModeIconView()
+                        }
+                    }
+                    .frame(width: 18, height: 18)
+
+                    MeetingMiniWaveform(
+                        waveformState: state.waveformState,
+                        isSubdued: state.isModelInitializing
+                    )
+                        .frame(width: state.isCollapsed ? 96 : 116, height: 28)
+                }
+
+                Spacer(minLength: 12)
+
+                if !state.isCollapsed {
+                    HStack(spacing: 8) {
+                        Text(String(localized: "Realtime Translation"))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.72))
+
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { state.realtimeTranslateEnabled },
+                                set: { onRealtimeTranslateToggle($0) }
+                            )
+                        )
+                        .labelsHidden()
+                        .toggleStyle(MeetingInlineSwitchStyle())
+                    }
+
+                    Rectangle()
+                        .fill(.white.opacity(0.08))
+                        .frame(width: 1, height: 18)
+
+                    AnswerHeaderActionButton(
+                        accessibilityLabel: state.isPaused ? String(localized: "Resume") : String(localized: "Pause"),
+                        action: onTogglePause
+                    ) {
+                        Image(systemName: state.isPaused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+
+                    AnswerHeaderActionButton(
+                        accessibilityLabel: String(localized: "Detail"),
+                        action: onShowDetail
+                    ) {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+
+                    AnswerHeaderActionButton(
+                        accessibilityLabel: String(localized: "Collapse"),
+                        action: onToggleCollapse
+                    ) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+                } else {
+                    AnswerHeaderActionButton(
+                        accessibilityLabel: state.isPaused ? String(localized: "Resume") : String(localized: "Pause"),
+                        action: onTogglePause
+                    ) {
+                        Image(systemName: state.isPaused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+
+                    AnswerHeaderActionButton(
+                        accessibilityLabel: String(localized: "Expand"),
+                        action: onToggleCollapse
+                    ) {
+                        Image(systemName: "arrow.down.left.and.arrow.up.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
                     }
                 }
-                .frame(width: 18, height: 18)
-
-                MeetingMiniWaveform(
-                    waveformState: state.waveformState,
-                    isSubdued: state.isModelInitializing
-                )
-                    .frame(width: state.isCollapsed ? 96 : 116, height: 28)
-            }
-
-            Spacer(minLength: 12)
-
-            if !state.isCollapsed {
-                HStack(spacing: 8) {
-                    Text(String(localized: "Realtime Translation"))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.72))
-
-                    Toggle(
-                        "",
-                        isOn: Binding(
-                            get: { state.realtimeTranslateEnabled },
-                            set: { onRealtimeTranslateToggle($0) }
-                        )
-                    )
-                    .labelsHidden()
-                    .toggleStyle(MeetingInlineSwitchStyle())
-                }
-
-                Rectangle()
-                    .fill(.white.opacity(0.08))
-                    .frame(width: 1, height: 18)
 
                 AnswerHeaderActionButton(
-                    accessibilityLabel: state.isPaused ? String(localized: "Resume") : String(localized: "Pause"),
-                    action: onTogglePause
+                    accessibilityLabel: String(localized: "Close"),
+                    action: onClose
                 ) {
-                    Image(systemName: state.isPaused ? "play.fill" : "pause.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-
-                AnswerHeaderActionButton(
-                    accessibilityLabel: String(localized: "Detail"),
-                    action: onShowDetail
-                ) {
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-
-                AnswerHeaderActionButton(
-                    accessibilityLabel: String(localized: "Collapse"),
-                    action: onToggleCollapse
-                ) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-            } else {
-                AnswerHeaderActionButton(
-                    accessibilityLabel: state.isPaused ? String(localized: "Resume") : String(localized: "Pause"),
-                    action: onTogglePause
-                ) {
-                    Image(systemName: state.isPaused ? "play.fill" : "pause.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-
-                AnswerHeaderActionButton(
-                    accessibilityLabel: String(localized: "Expand"),
-                    action: onToggleCollapse
-                ) {
-                    Image(systemName: "arrow.down.left.and.arrow.up.right")
+                    Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.9))
                 }
             }
 
-            AnswerHeaderActionButton(
-                accessibilityLabel: String(localized: "Close"),
-                action: onClose
-            ) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
         }
     }
 

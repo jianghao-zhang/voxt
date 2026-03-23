@@ -7,9 +7,9 @@ enum MeetingSpeaker: String, Codable, Hashable, Sendable {
     nonisolated var displayTitle: String {
         switch self {
         case .me:
-            return String(localized: "Me")
+            return "Me"
         case .them:
-            return String(localized: "Them")
+            return "Them"
         }
     }
 }
@@ -95,8 +95,6 @@ struct MeetingTranscriptSegment: Identifiable, Codable, Hashable, Sendable {
 }
 
 enum MeetingTranscriptFormatter {
-    nonisolated private static let adjacentMergeGapThreshold: TimeInterval = 2.0
-
     nonisolated static func meaningfulSegments(for segments: [MeetingTranscriptSegment]) -> [MeetingTranscriptSegment] {
         segments.filter { segment in
             let hasOriginalText = isMeaningfulText(segment.text)
@@ -149,7 +147,7 @@ enum MeetingTranscriptFormatter {
 
     nonisolated static func joinedText(for segments: [MeetingTranscriptSegment]) -> String {
         segments
-            .map(exportString(for:))
+            .map { exportString(for: $0) }
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -171,7 +169,7 @@ enum MeetingTranscriptFormatter {
         guard previous.speaker == next.speaker else { return nil }
         guard next.startSeconds >= previous.startSeconds else { return nil }
         let previousEnd = previous.endSeconds ?? previous.startSeconds
-        guard next.startSeconds - previousEnd <= Self.adjacentMergeGapThreshold else { return nil }
+        guard next.startSeconds - previousEnd <= 2.0 else { return nil }
 
         return MeetingTranscriptSegment(
             id: previous.id,

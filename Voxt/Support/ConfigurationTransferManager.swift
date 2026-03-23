@@ -559,11 +559,55 @@ enum ConfigurationTransferManager {
     struct SanitizedRemoteProviderConfiguration: Codable {
         var providerID: String
         var model: String
+        var meetingModel: String
         var endpoint: String
         var apiKey: String
         var appID: String
         var accessToken: String
         var openAIChunkPseudoRealtimeEnabled: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case providerID
+            case model
+            case meetingModel
+            case endpoint
+            case apiKey
+            case appID
+            case accessToken
+            case openAIChunkPseudoRealtimeEnabled
+        }
+
+        init(
+            providerID: String,
+            model: String,
+            meetingModel: String,
+            endpoint: String,
+            apiKey: String,
+            appID: String,
+            accessToken: String,
+            openAIChunkPseudoRealtimeEnabled: Bool
+        ) {
+            self.providerID = providerID
+            self.model = model
+            self.meetingModel = meetingModel
+            self.endpoint = endpoint
+            self.apiKey = apiKey
+            self.appID = appID
+            self.accessToken = accessToken
+            self.openAIChunkPseudoRealtimeEnabled = openAIChunkPseudoRealtimeEnabled
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            providerID = try container.decode(String.self, forKey: .providerID)
+            model = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
+            meetingModel = try container.decodeIfPresent(String.self, forKey: .meetingModel) ?? ""
+            endpoint = try container.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
+            apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
+            appID = try container.decodeIfPresent(String.self, forKey: .appID) ?? ""
+            accessToken = try container.decodeIfPresent(String.self, forKey: .accessToken) ?? ""
+            openAIChunkPseudoRealtimeEnabled = try container.decodeIfPresent(Bool.self, forKey: .openAIChunkPseudoRealtimeEnabled) ?? false
+        }
     }
 
     struct ExportedAppBranchGroup: Codable {
@@ -677,6 +721,10 @@ enum ConfigurationTransferManager {
             let config = RemoteModelConfigurationStore.resolvedASRConfiguration(provider: selectedRemoteASR, stored: remoteASR)
             if !config.isConfigured {
                 issues.append(.init(scope: .remoteASRProvider(selectedRemoteASR), message: AppLocalization.localizedString("Configuration required.")))
+            } else if defaults.bool(forKey: AppPreferenceKey.meetingNotesBetaEnabled),
+                      RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(selectedRemoteASR),
+                      !RemoteASRMeetingConfiguration.hasValidMeetingModel(provider: selectedRemoteASR, configuration: config) {
+                issues.append(.init(scope: .remoteASRProvider(selectedRemoteASR), message: AppLocalization.localizedString("Meeting ASR configuration required.")))
             }
         }
 
@@ -807,7 +855,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 14,
+            version: 15,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -1016,6 +1064,7 @@ enum ConfigurationTransferManager {
             SanitizedRemoteProviderConfiguration(
                 providerID: $0.providerID,
                 model: $0.model,
+                meetingModel: $0.meetingModel,
                 endpoint: $0.endpoint,
                 apiKey: sanitizeSensitive($0.apiKey),
                 appID: sanitizeSensitive($0.appID),
@@ -1032,6 +1081,7 @@ enum ConfigurationTransferManager {
                 RemoteProviderConfiguration(
                     providerID: item.providerID,
                     model: item.model,
+                    meetingModel: item.meetingModel,
                     endpoint: item.endpoint,
                     apiKey: resolveImportedSensitive(item.apiKey),
                     appID: resolveImportedSensitive(item.appID),

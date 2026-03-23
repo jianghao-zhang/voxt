@@ -144,6 +144,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let overlayState = OverlayState()
     lazy var meetingSessionCoordinator = MeetingSessionCoordinator(
         whisperModelManager: whisperModelManager,
+        mlxModelManager: mlxModelManager,
         preferredInputDeviceIDProvider: { [weak self] in
             self?.selectedInputDeviceID
         },
@@ -597,7 +598,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.scheduleHotkeyTransientStateReset(reason: "workspaceWillSleep")
+            Task { @MainActor [weak self] in
+                self?.scheduleHotkeyTransientStateReset(reason: "workspaceWillSleep")
+            }
         }
 
         workspaceDidWakeObserver = workspaceNotificationCenter.addObserver(
@@ -605,7 +608,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.scheduleHotkeyTransientStateReset(reason: "workspaceDidWake")
+            Task { @MainActor [weak self] in
+                self?.scheduleHotkeyTransientStateReset(reason: "workspaceDidWake")
+            }
         }
 
         workspaceSessionDidBecomeActiveObserver = workspaceNotificationCenter.addObserver(
@@ -613,7 +618,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.scheduleHotkeyTransientStateReset(reason: "workspaceSessionDidBecomeActive")
+            Task { @MainActor [weak self] in
+                self?.scheduleHotkeyTransientStateReset(reason: "workspaceSessionDidBecomeActive")
+            }
         }
 
         workspaceSessionDidResignActiveObserver = workspaceNotificationCenter.addObserver(
@@ -621,7 +628,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.scheduleHotkeyTransientStateReset(reason: "workspaceSessionDidResignActive")
+            Task { @MainActor [weak self] in
+                self?.scheduleHotkeyTransientStateReset(reason: "workspaceSessionDidResignActive")
+            }
         }
     }
 

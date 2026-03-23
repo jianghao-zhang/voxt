@@ -31,6 +31,7 @@ struct ModelSettingsView: View {
     @AppStorage(AppPreferenceKey.translationRemoteLLMProvider) var translationRemoteLLMProviderRaw = ""
     @AppStorage(AppPreferenceKey.rewriteRemoteLLMProvider) var rewriteRemoteLLMProviderRaw = ""
     @AppStorage(AppPreferenceKey.useHfMirror) var useHfMirror = false
+    @AppStorage(AppPreferenceKey.meetingNotesBetaEnabled) var meetingNotesBetaEnabled = false
     @AppStorage(AppPreferenceKey.interfaceLanguage) var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
 
     @ObservedObject var mlxModelManager: MLXModelManager

@@ -254,8 +254,8 @@ final class MeetingSystemAudioCapture: @unchecked Sendable {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var uid: CFString = "" as CFString
-        var dataSize = UInt32(MemoryLayout<CFString>.size)
+        var uid: Unmanaged<CFString>?
+        var dataSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         let status = AudioObjectGetPropertyData(
             deviceID,
             &propertyAddress,
@@ -267,7 +267,10 @@ final class MeetingSystemAudioCapture: @unchecked Sendable {
         guard status == noErr else {
             throw CaptureError.outputDeviceUnavailable(status)
         }
-        return uid as String
+        guard let uid else {
+            throw CaptureError.outputDeviceUnavailable(kAudioHardwareUnspecifiedError)
+        }
+        return uid.takeUnretainedValue() as String
     }
 
     private static func currentProcessObjectID() -> AudioObjectID? {

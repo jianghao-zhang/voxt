@@ -6,7 +6,7 @@
 
 A macOS menu bar voice input and translation app. Hold to speak, release to paste. <br>AI transcription with different rules for different apps and URLs.
 
-**English** · [简体中文](./docs/README.zh-CN.md) · [Report Issues][github-issues-link] · [Prompt](./docs/Prompt.md)
+**English** · [简体中文](./docs/README.zh-CN.md) · [Report Issues][github-issues-link] · [Prompt](./docs/Prompt.md) · [Meeting](./docs/Meeting.md) · [Rewrite](./docs/Rewrite.md)
 
 [![][github-release-shield]][github-release-link]
 [![][macos-version-shield]][macos-version-link]
@@ -47,7 +47,11 @@ A macOS menu bar voice input and translation app. Hold to speak, release to past
 - Current beta uses dual-source capture:
   - microphone is labeled as `Me`
   - system audio is labeled as `Them`
-- Meeting mode is currently Whisper-only and keeps its own timeline, detail window, and history type.
+- Meeting mode follows the current ASR engine:
+  - `Whisper`
+  - `MLX Audio`
+  - `Remote ASR`
+- Realtime behavior follows the current engine/model/provider configuration when available.
 - The live meeting card is configured as non-shareable at the window level so it should stay out of normal screen sharing / window sharing output.
 
 [![][back-to-top]](#readme-top)
@@ -196,13 +200,21 @@ For fuller provider notes, signup links, endpoints, and configuration examples, 
 | Provider | Built-in Model Options | Language Support | Realtime Support | Speed | Recommendation | Current Integration |
 | --- | --- | --- | --- | --- | --- | --- |
 | OpenAI Whisper / Transcribe | `whisper-1`, `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Multilingual | Partial. Voxt currently uses file-based transcription, with optional chunked pseudo-realtime preview | Medium | High | `v1/audio/transcriptions` |
-| Doubao ASR | `volc.seedasr.sauc.duration`, `volc.bigasr.sauc.duration` | Chinese-first, well suited to mixed Chinese/English realtime usage | Yes | Fast | High | Streaming WebSocket ASR |
+| Doubao ASR | `volc.seedasr.sauc.duration`, `volc.bigasr.sauc.duration`, meeting: `volc.bigasr.auc_turbo` | Chinese-first, well suited to mixed Chinese/English usage | Yes for normal transcription, meeting uses chunk/file mode | Fast | High | WebSocket ASR for normal transcription, HTTP flash/file ASR for meetings |
 | GLM ASR | `glm-asr-2512`, `glm-asr-1` | Officially positioned for broad scenarios and accents; Voxt currently integrates it as standard upload-based transcription | No (current implementation is upload transcription) | Medium | Medium-high | HTTP transcription endpoint |
-| Aliyun Bailian ASR | `qwen3-asr-flash-realtime`, `fun-asr-realtime`, `paraformer-realtime-*` | Depends on model family: Qwen3 ASR is multilingual, Fun/Paraformer cover Chinese-English or broader multilingual use | Yes | Fast | High | Realtime WebSocket ASR, with separate endpoints for Qwen / Fun / Paraformer families |
+| Aliyun Bailian ASR | `qwen3-asr-flash-realtime`, `fun-asr-realtime`, `paraformer-realtime-*`, meeting: `qwen3-asr-flash-filetrans`, `fun-asr`, `paraformer-v2` | Depends on model family: Qwen3 ASR is multilingual, Fun/Paraformer cover Chinese-English or broader multilingual use | Yes for normal transcription, meeting uses chunk/file mode | Fast | High | Realtime WebSocket ASR plus meeting-specific async/file ASR |
+
+Meeting Notes has a separate `Meeting ASR` model slot for `Doubao ASR` and `Aliyun Bailian ASR`.
+
+- The section appears in `Settings > Model > Remote ASR > [Provider]` only when `Meeting Notes (Beta)` is enabled.
+- Meetings do not reuse the provider's normal realtime model. They use the dedicated meeting model instead.
+- If the meeting model is missing, Voxt blocks meeting start and shows setup guidance in the provider list.
+- Use `Test Meeting ASR` to verify the meeting-specific request path before starting a meeting.
 
 Common remote ASR errors / states:
 
 - `Needs Setup`
+- `Meeting ASR not configured`
 - Missing API key for OpenAI / GLM / Aliyun
 - Missing `Access Token` or `App ID` for Doubao
 - `Invalid ASR endpoint URL`
@@ -304,6 +316,8 @@ Interaction details:
 
 `Meeting Notes (Beta)` is a separate module for meetings, calls, and long conversation capture. It does not inject text into the focused input and does not reuse the normal recording overlay.
 
+For a full walkthrough, see [docs/Meeting.md](./docs/Meeting.md).
+
 ### How To Enable It
 
 - Disabled by default.
@@ -315,11 +329,19 @@ Interaction details:
 
 ### Current Beta Architecture
 
-- ASR engine: `Whisper` only
+- ASR engine: follows the current transcription engine
+  - `Whisper`
+  - `MLX Audio`
+  - `Remote ASR`
+- `Direct Dictation` is currently not available for meetings.
 - Audio sources:
   - microphone -> `Me`
   - system audio -> `Them`
 - Speaker separation in beta v1 is source-based, not true diarization.
+- Realtime behavior currently follows engine/model/provider capability:
+  - `Whisper`: follows the global `Realtime` toggle
+  - `MLX Audio`: realtime-capable models use lower-latency meeting updates
+  - `Remote ASR`: `Doubao` and `Aliyun` use dedicated meeting chunk/file transcription models; `OpenAI` and `GLM` keep their existing chunk-based meeting path
 - Live segments are merged into one timeline and saved into History as `Meeting`.
 
 ### Meeting Overlay

@@ -495,6 +495,30 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         return (streamedText, finalOutput)
     }
 
+    func transcribeMeetingChunk(samples: [Float], sampleRate: Double) async -> String? {
+        guard !samples.isEmpty else { return nil }
+
+        do {
+            modelManager.beginActiveUse()
+            defer { modelManager.endActiveUse() }
+            let model = try await modelManager.loadModel()
+            isModelInitializing = false
+            let audioSamples = try prepareInputSamples(samples, sampleRate: sampleRate)
+            let parameters = generationParameters(for: .postStopFinal)
+            let (streamedText, finalOutput) = try await runStreamingInference(
+                model: model,
+                audioSamples: audioSamples,
+                generationParameters: parameters
+            )
+            let candidate = normalizeText(finalOutput?.text ?? streamedText)
+            return candidate.isEmpty ? nil : candidate
+        } catch {
+            isModelInitializing = false
+            VoxtLog.error("MLX meeting transcription failed: \(error)")
+            return nil
+        }
+    }
+
     private func applyPreferredInputDeviceIfNeeded(inputNode: AVAudioInputNode) {
         guard let preferredInputDeviceID else { return }
         guard let audioUnit = inputNode.audioUnit else { return }

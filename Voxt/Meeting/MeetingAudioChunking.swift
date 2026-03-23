@@ -23,24 +23,6 @@ enum MeetingChunkingProfile: Equatable, Sendable {
         let partialEmitIntervalSeconds: TimeInterval?
     }
 
-    nonisolated var configuration: Configuration {
-        switch self {
-        case .quality:
-            return Configuration(
-                silenceFlushSeconds: 0.45,
-                minSpeechSeconds: 0.35,
-                maxChunkSeconds: 2.6,
-                partialEmitIntervalSeconds: nil
-            )
-        case .realtime:
-            return Configuration(
-                silenceFlushSeconds: 0.18,
-                minSpeechSeconds: 0.18,
-                maxChunkSeconds: 1.0,
-                partialEmitIntervalSeconds: 0.55
-            )
-        }
-    }
 }
 
 actor MeetingChunkAccumulator {
@@ -59,7 +41,22 @@ actor MeetingChunkAccumulator {
     init(speaker: MeetingSpeaker, speechThreshold: Float, profile: MeetingChunkingProfile) {
         self.speaker = speaker
         self.speechThreshold = speechThreshold
-        self.config = profile.configuration
+        switch profile {
+        case .quality:
+            self.config = .init(
+                silenceFlushSeconds: 0.45,
+                minSpeechSeconds: 0.35,
+                maxChunkSeconds: 2.6,
+                partialEmitIntervalSeconds: nil
+            )
+        case .realtime:
+            self.config = .init(
+                silenceFlushSeconds: 0.18,
+                minSpeechSeconds: 0.18,
+                maxChunkSeconds: 1.0,
+                partialEmitIntervalSeconds: 0.55
+            )
+        }
     }
 
     func append(samples: [Float], sampleRate: Double, level: Float) -> BufferedMeetingChunk? {

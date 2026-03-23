@@ -288,9 +288,6 @@ class RecordingOverlayWindow: NSPanel {
         updateAppearance(for: state, animated: isVisible)
         hostingView?.needsLayout = true
         contentView?.needsLayout = true
-        hostingView?.displayIfNeeded()
-        contentView?.displayIfNeeded()
-        displayIfNeeded()
 
         if !isVisible {
             alphaValue = 1
