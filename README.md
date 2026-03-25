@@ -316,7 +316,7 @@ Interaction details:
 
 `Meeting Notes (Beta)` is a separate module for meetings, calls, and long conversation capture. It does not inject text into the focused input and does not reuse the normal recording overlay.
 
-<video src="https://github.com/user-attachments/assets/89e4fcb2-8730-40b4-9244-3a02d0072fb5" controls preload="none" width="100%"></video>
+<video src="https://github.com/user-attachments/assets/1ede04a2-1348-483e-b487-22561ad02a77" controls preload="none" width="100%"></video>
 
 For a full walkthrough, see [docs/Meeting.md](./docs/Meeting.md).
 

@@ -320,7 +320,7 @@ https://raw.githubusercontent.com/hehehai/voxt/refs/heads/main/docs/RemoteModel.
 
 `会议记录（Beta）` 是一条独立于普通转录 / 翻译 / 转写的新流程，适合长时间会议、远程通话、播客录制等场景。它不会把文本自动注入当前输入框，也不复用普通转录悬浮层。
 
-<video src="https://github.com/user-attachments/assets/89e4fcb2-8730-40b4-9244-3a02d0072fb5" controls preload="none" width="100%"></video>
+<video src="https://github.com/user-attachments/assets/1ede04a2-1348-483e-b487-22561ad02a77" controls preload="none" width="100%"></video>
 
 完整说明见：[Meeting.zh-CN.md](./Meeting.zh-CN.md)。
 
