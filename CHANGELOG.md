@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-03-25
+
+### Changed
+- Lowered the minimum supported macOS version to 15.0 so Voxt can run on more Macs.
+
+### Fixed
+- Improved compatibility on macOS 15 by gracefully falling back when Apple Intelligence features or newer system audio APIs are unavailable.
+- Added clearer diagnostics around microphone connect and disconnect handling, device priority evaluation, and automatic microphone switching.
+
 ## [1.8.0] - 2026-03-24
 
 ### Added
