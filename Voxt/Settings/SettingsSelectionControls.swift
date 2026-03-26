@@ -102,6 +102,26 @@ struct SettingsDialogActionRow<Leading: View, Trailing: View>: View {
     }
 }
 
+enum SettingsMenuInteraction {
+    @discardableResult
+    static func performSelection(for menuItem: NSMenuItem?) -> Bool {
+        guard
+            let menuItem,
+            let menu = menuItem.menu
+        else {
+            return false
+        }
+
+        let index = menu.index(of: menuItem)
+        guard index >= 0 else {
+            return false
+        }
+
+        menu.performActionForItem(at: index)
+        return true
+    }
+}
+
 private struct SettingsNativeMenuPicker<Value: Hashable>: NSViewRepresentable {
     @Binding var selection: Value
     let options: [SettingsMenuOption<Value>]
@@ -356,6 +376,13 @@ private final class SettingsPopupMenuItemView: NSView {
         invalidateIntrinsicContentSize()
         titleField.stringValue = title
         needsDisplay = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard SettingsMenuInteraction.performSelection(for: enclosingMenuItem) else {
+            super.mouseDown(with: event)
+            return
+        }
     }
 
     private func applyAppearance(isHighlighted: Bool) {
