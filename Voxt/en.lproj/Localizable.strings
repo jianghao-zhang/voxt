@@ -960,6 +960,7 @@
 "Add custom summary instructions, tone constraints, or output emphasis here." = "Add custom summary instructions, tone constraints, or output emphasis here.";
 "Follow-up" = "Follow-up";
 "Thinking…" = "Thinking…";
+"New Message" = "New Message";
 "Ask a follow-up about this meeting" = "Ask a follow-up about this meeting";
 "Follow-up is available after the meeting is saved." = "Follow-up is available after the meeting is saved.";
 "Generate a meeting summary first, then you can ask follow-up questions." = "Generate a meeting summary first, then you can ask follow-up questions.";

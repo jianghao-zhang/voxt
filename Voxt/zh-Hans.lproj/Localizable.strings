@@ -960,6 +960,7 @@
 "Add custom summary instructions, tone constraints, or output emphasis here." = "可以在这里补充摘要要求、语气约束或重点关注项。";
 "Follow-up" = "追问";
 "Thinking…" = "正在思考…";
+"New Message" = "新消息";
 "Ask a follow-up about this meeting" = "就这场会议继续追问";
 "Follow-up is available after the meeting is saved." = "会议保存后才可以进行追问。";
 "Generate a meeting summary first, then you can ask follow-up questions." = "请先生成会议摘要，然后再继续追问。";

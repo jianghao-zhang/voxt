@@ -825,6 +825,14 @@ private struct MeetingDetailWindowView: View {
     }
 
     private func updateActiveSegment(for currentTime: TimeInterval) {
+        guard viewModel.mode == .history else {
+            activeSegmentID = nil
+            return
+        }
+        guard currentTime > 0.01 || playbackController.isPlaying || isScrubbing else {
+            activeSegmentID = nil
+            return
+        }
         let newActiveSegment = viewModel.segments.last(where: { $0.startSeconds <= currentTime }) ?? viewModel.segments.first
         activeSegmentID = newActiveSegment?.id
     }
@@ -882,21 +890,27 @@ private struct MeetingDetailSegmentRow: View {
 
     private var backgroundColor: Color {
         if isActive {
-            return Color.accentColor.opacity(0.12)
+            return speakerAccentColor.opacity(0.16)
         }
         if isSearchMatch {
             return Color.orange.opacity(0.12)
         }
-        return MeetingDetailUIStyle.mutedFillColor
+        return speakerAccentColor.opacity(0.06)
     }
 
     private var borderColor: Color {
         if isActive {
-            return Color.accentColor.opacity(0.38)
+            return speakerAccentColor.opacity(0.32)
         }
         if isSearchMatch {
             return Color.orange.opacity(0.28)
         }
-        return MeetingDetailUIStyle.softBorderColor
+        return speakerAccentColor.opacity(0.16)
+    }
+
+    private var speakerAccentColor: Color {
+        segment.speaker == .me
+            ? Color(red: 0.16, green: 0.47, blue: 0.88)
+            : Color(red: 0.12, green: 0.58, blue: 0.32)
     }
 }

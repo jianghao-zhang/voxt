@@ -293,9 +293,17 @@ final class MeetingSessionCoordinator {
             return
         }
 
+        let bufferDuration = Double(samples.count) / sampleRate
+        let bufferStartSeconds = max(bufferEndSeconds - bufferDuration, 0)
+
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.audioArchive.append(samples: samples, sampleRate: sampleRate, speaker: speaker)
+            await self.audioArchive.append(
+                samples: samples,
+                sampleRate: sampleRate,
+                speaker: speaker,
+                startSeconds: bufferStartSeconds
+            )
             if await MainActor.run(body: { self.usesLiveSessionPath }) {
                 await MainActor.run {
                     self.liveAudioPrebuffers[speaker, default: MeetingLiveAudioPrebuffer(maxDuration: 1.0)]
@@ -306,9 +314,7 @@ final class MeetingSessionCoordinator {
                    let liveSession = await MainActor.run(body: { self.liveSessions[speaker] }) {
                     await liveSession.append(samples: samples, sampleRate: sampleRate)
                 } else if await MainActor.run(body: { self.shouldReconnectLiveSession(for: speaker, level: level) }),
-                          let liveSession = await self.ensureLiveSession(for: speaker) {
-                    await self.flushLivePrebuffer(to: liveSession, for: speaker)
-                }
+                          let _ = await self.ensureLiveSession(for: speaker) {}
                 return
             }
             if let liveSession = await MainActor.run(body: { self.liveSessions[speaker] }) {
@@ -874,12 +880,15 @@ final class MeetingSessionCoordinator {
         }
 
         do {
-            let timelineOffsetSeconds = currentTimelineOffsetSeconds()
+            let prebufferFrames = liveAudioPrebuffers[speaker]?.snapshot() ?? []
+            let prebufferDuration = prebufferFrames.reduce(0) { $0 + $1.duration }
+            let timelineOffsetSeconds = max(currentTimelineOffsetSeconds() - prebufferDuration, 0)
             let session = try liveSessionFactory.makeSession(for: speaker, timelineOffsetSeconds: timelineOffsetSeconds)
             liveSessions[speaker] = session
             try await session.start(timelineOffsetSeconds: timelineOffsetSeconds) { [weak self] event in
                 self?.applyTranscriptEvent(event)
             }
+            await flushLivePrebuffer(prebufferFrames, to: session)
             return session
         } catch {
             liveSessions[speaker] = nil
@@ -889,10 +898,9 @@ final class MeetingSessionCoordinator {
     }
 
     private func flushLivePrebuffer(
-        to session: any MeetingLiveTranscribingSession,
-        for speaker: MeetingSpeaker
+        _ frames: [MeetingLiveAudioPrebuffer.Frame],
+        to session: any MeetingLiveTranscribingSession
     ) async {
-        let frames = liveAudioPrebuffers[speaker]?.snapshot() ?? []
         for frame in frames {
             await session.append(samples: frame.samples, sampleRate: frame.sampleRate)
         }

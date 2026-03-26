@@ -92,7 +92,7 @@ enum MeetingSummarySupport {
 
     static func defaultPromptTemplate() -> String {
         """
-        Your task is to generate a clear, credible, and quickly readable meeting summary based on the provided meeting minutes and return it in JSON structure. Please strictly follow the requirements below:
+        Your task is to generate a clear, credible, and concise meeting summary based on the provided meeting minutes and return it in JSON structure. Please strictly follow the requirements below:
 
         User's main language:
         {{USER_MAIN_LANGUAGE}}
@@ -102,7 +102,7 @@ enum MeetingSummarySupport {
 
         When generating the summary, please adhere to the following specifications:
         1. Regardless of the language used in the meeting minutes, the final summary must be output in the user's main language.
-        2. The main body of the summary should be within 1200 words; if it is a non-Chinese language, maintain equivalent conciseness.
+        2. The main body of the summary should be within 1200 characters (for Chinese) or maintain equivalent conciseness (for non-Chinese languages), prioritizing efficiency over mere character count.
         3. Prioritize extracting the following content:
            - Meeting background: Reasons, purpose, and participants of the meeting
            - Key discussion points: Main topics discussed in the meeting and opinions from various parties

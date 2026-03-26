@@ -1,7 +1,19 @@
 import SwiftUI
 
+private struct MeetingSummaryBottomVisibilityPreferenceKey: PreferenceKey {
+    static var defaultValue = true
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = nextValue()
+    }
+}
+
 struct MeetingDetailSummarySidebar: View {
     @ObservedObject var viewModel: MeetingDetailViewModel
+    @State private var isScrolledToSummaryBottom = true
+    @State private var hasUnreadSummaryMessages = false
+
+    private let summaryBottomAnchorID = "meeting-summary-bottom-anchor"
 
     var body: some View {
         VStack(spacing: 12) {
@@ -39,118 +51,189 @@ struct MeetingDetailSummarySidebar: View {
     }
 
     private var summaryBodyPane: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if let summary = viewModel.summary {
-                    if viewModel.summaryState == .loading {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                                .controlSize(.small)
+        GeometryReader { outerProxy in
+            ScrollViewReader { proxy in
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            if let summary = viewModel.summary {
+                                if viewModel.summaryState == .loading {
+                                    HStack(spacing: 10) {
+                                        ProgressView()
+                                            .controlSize(.small)
 
-                            Text(String(localized: "Generating meeting summary…"))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.primary)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.08))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.accentColor.opacity(0.16), lineWidth: 1)
-                        )
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(summary.title)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.primary)
-
-                        Text(summary.generatedAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if !summary.body.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(String(localized: "Summary"))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.secondary)
-
-                            ForEach(MeetingDetailFormatting.summaryParagraphs(summary.body), id: \.self) { paragraph in
-                                Text(paragraph)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(.primary.opacity(0.92))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                    }
-
-                    if !summary.todoItems.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(String(localized: "TODO"))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.secondary)
-
-                            ForEach(Array(summary.todoItems.enumerated()), id: \.offset) { index, item in
-                                HStack(alignment: .top, spacing: 10) {
-                                    Text(String(index + 1))
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 18, height: 18)
-                                        .background(
-                                            Circle()
-                                                .fill(MeetingDetailUIStyle.mutedFillColor)
-                                        )
-
-                                    Text(item)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(.primary.opacity(0.92))
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        Text(String(localized: "Generating meeting summary…"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.primary)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(Color.accentColor.opacity(0.08))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .strokeBorder(Color.accentColor.opacity(0.16), lineWidth: 1)
+                                    )
                                 }
-                            }
-                        }
-                    }
 
-                    if !viewModel.summaryChatMessages.isEmpty || viewModel.isSummaryChatLoading || viewModel.summaryChatErrorMessage != nil {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(String(localized: "Follow-up"))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(summary.title)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(.primary)
 
-                            ForEach(viewModel.summaryChatMessages) { message in
-                                SummaryChatMessageRow(message: message)
-                            }
-
-                            if viewModel.isSummaryChatLoading {
-                                HStack(spacing: 10) {
-                                    ProgressView()
-                                        .controlSize(.small)
-
-                                    Text(String(localized: "Thinking…"))
-                                        .font(.system(size: 12, weight: .medium))
+                                    Text(summary.generatedAt.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.system(size: 11, weight: .medium))
                                         .foregroundStyle(.secondary)
                                 }
+
+                                if !summary.body.isEmpty {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(String(localized: "Summary"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+
+                                        ForEach(MeetingDetailFormatting.summaryParagraphs(summary.body), id: \.self) { paragraph in
+                                            Text(paragraph)
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundStyle(.primary.opacity(0.92))
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                    }
+                                }
+
+                                if !summary.todoItems.isEmpty {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(String(localized: "TODO"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+
+                                        ForEach(Array(summary.todoItems.enumerated()), id: \.offset) { index, item in
+                                            HStack(alignment: .top, spacing: 10) {
+                                                Text(String(index + 1))
+                                                    .font(.system(size: 11, weight: .bold))
+                                                    .foregroundStyle(.secondary)
+                                                    .frame(width: 18, height: 18)
+                                                    .background(
+                                                        Circle()
+                                                            .fill(MeetingDetailUIStyle.mutedFillColor)
+                                                    )
+
+                                                Text(item)
+                                                    .font(.system(size: 13, weight: .medium))
+                                                    .foregroundStyle(.primary.opacity(0.92))
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if !viewModel.summaryChatMessages.isEmpty || viewModel.isSummaryChatLoading || viewModel.summaryChatErrorMessage != nil {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text(String(localized: "Follow-up"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+
+                                        ForEach(viewModel.summaryChatMessages) { message in
+                                            SummaryChatMessageRow(message: message)
+                                        }
+
+                                        if viewModel.isSummaryChatLoading {
+                                            HStack(spacing: 10) {
+                                                ProgressView()
+                                                    .controlSize(.small)
+
+                                                Text(String(localized: "Thinking…"))
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+
+                                        if let errorMessage = viewModel.summaryChatErrorMessage,
+                                           !errorMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            Text(errorMessage)
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundStyle(.red.opacity(0.9))
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                    }
+                                }
+                            } else {
+                                summaryStateView
                             }
 
-                            if let errorMessage = viewModel.summaryChatErrorMessage,
-                               !errorMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Text(errorMessage)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(.red.opacity(0.9))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            GeometryReader { geo in
+                                Color.clear
+                                    .preference(
+                                        key: MeetingSummaryBottomVisibilityPreferenceKey.self,
+                                        value: abs(geo.frame(in: .named("MeetingSummaryScroll")).maxY - outerProxy.size.height) < 36
+                                    )
                             }
+                            .frame(height: 1)
+                            .id(summaryBottomAnchorID)
+                        }
+                        .padding(16)
+                    }
+                    .coordinateSpace(name: "MeetingSummaryScroll")
+                    .onPreferenceChange(MeetingSummaryBottomVisibilityPreferenceKey.self) { isVisible in
+                        isScrolledToSummaryBottom = isVisible
+                        if isVisible {
+                            hasUnreadSummaryMessages = false
                         }
                     }
-                } else {
-                    summaryStateView
+                    .onChange(of: viewModel.summaryChatMessages.count) { oldValue, newValue in
+                        guard newValue > oldValue else { return }
+                        handleSummaryMessagesUpdate(using: proxy)
+                    }
+
+                    if hasUnreadSummaryMessages {
+                        Button {
+                            hasUnreadSummaryMessages = false
+                            scrollSummaryToBottom(using: proxy)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text(String(localized: "New Message"))
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundStyle(.white.opacity(0.92))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(.black.opacity(0.78))
+                            )
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 8)
+                        .padding(.bottom, 8)
+                    }
                 }
             }
-            .padding(16)
         }
         .meetingDetailPanelSurface(cornerRadius: 14)
+    }
+
+    private func handleSummaryMessagesUpdate(using proxy: ScrollViewProxy) {
+        if isScrolledToSummaryBottom {
+            scrollSummaryToBottom(using: proxy)
+        } else {
+            hasUnreadSummaryMessages = true
+        }
+    }
+
+    private func scrollSummaryToBottom(using proxy: ScrollViewProxy) {
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.18)) {
+                proxy.scrollTo(summaryBottomAnchorID, anchor: .bottom)
+            }
+        }
     }
 
     @ViewBuilder

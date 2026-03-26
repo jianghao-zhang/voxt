@@ -6,16 +6,22 @@ actor MeetingAudioArchive {
     private var meSamples: [Float] = []
     private var themSamples: [Float] = []
 
-    func append(samples: [Float], sampleRate: Double, speaker: MeetingSpeaker) {
+    func append(
+        samples: [Float],
+        sampleRate: Double,
+        speaker: MeetingSpeaker,
+        startSeconds: TimeInterval
+    ) {
         guard !samples.isEmpty else { return }
         let preparedSamples = Self.resample(samples: samples, from: sampleRate, to: targetSampleRate)
         guard !preparedSamples.isEmpty else { return }
 
+        let startIndex = max(Int((startSeconds * targetSampleRate).rounded()), 0)
         switch speaker {
         case .me:
-            meSamples.append(contentsOf: preparedSamples)
+            Self.write(preparedSamples, at: startIndex, to: &meSamples)
         case .them:
-            themSamples.append(contentsOf: preparedSamples)
+            Self.write(preparedSamples, at: startIndex, to: &themSamples)
         }
     }
 
@@ -85,6 +91,19 @@ actor MeetingAudioArchive {
     private static func bytes<T>(of value: T) -> Data {
         var mutableValue = value
         return withUnsafeBytes(of: &mutableValue) { Data($0) }
+    }
+
+    private static func write(_ samples: [Float], at startIndex: Int, to track: inout [Float]) {
+        guard !samples.isEmpty else { return }
+
+        let endIndex = startIndex + samples.count
+        if track.count < endIndex {
+            track.append(contentsOf: repeatElement(0, count: endIndex - track.count))
+        }
+
+        for (offset, sample) in samples.enumerated() {
+            track[startIndex + offset] = sample
+        }
     }
 
     private static func resample(samples: [Float], from inputRate: Double, to outputRate: Double) -> [Float] {

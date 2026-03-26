@@ -883,6 +883,7 @@
 "Detail" = "詳細";
 "Start Translation" = "翻訳を開始";
 "Latest" = "最新";
+"New Message" = "新着メッセージ";
 "The transcript timeline for Me / Them will appear here once the meeting starts." = "会議が始まると、ここに Me / Them のタイムラインが表示されます。";
 "Automatic scrolling pauses when you scroll away from the bottom." = "下端から離れると自動スクロールは一時停止します。";
 "Meeting Transcript UI Shareable" = "会議文字起こし UI を共有可能にする";
