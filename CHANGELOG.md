@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.8.4] - 2026-04-06
+
+### Added
+- Added a new Chinese voice end command preset for saying `好了`.
+
+### Changed
+- Expanded the built-in local MLX speech model list with more Qwen3 ASR, Voxtral, Parakeet, Granite, FireRed, and SenseVoice options.
+
+### Fixed
+- Fixed remote provider credentials so API keys and tokens are stored in the macOS keychain instead of exported preferences.
+- Fixed sided modifier shortcut recording so left and right modifier keys are captured more reliably.
+
 ## [1.8.3] - 2026-03-27
 
 ### Fixed
