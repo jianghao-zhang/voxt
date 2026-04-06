@@ -110,7 +110,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
     private var preferredInputDeviceID: AudioDeviceID?
     private var inputSampleRate: Double = 16000
     private var preparedWhisper: WhisperKit?
-    private var preparedOutputMode: AppDelegate.SessionOutputMode = .transcription
+    private var preparedOutputMode: SessionOutputMode = .transcription
     private var preparedUseBuiltInTranslationTask = false
     private var sessionRevision = 0
     private var partialLoopTask: Task<Void, Never>?
@@ -138,7 +138,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
     }
 
     func prepareSession(
-        outputMode: AppDelegate.SessionOutputMode,
+        outputMode: SessionOutputMode,
         useBuiltInTranslationTask: Bool = false
     ) async -> String? {
         cancelActiveTasks()

@@ -74,7 +74,7 @@
 "Enable Voice End Command" = "启用语音结束指令";
 "When enabled, Voxt treats the configured spoken command as a stop action. If that command appears at the end of the transcript and there is about 1 second of silence after it, the session ends automatically." = "开启后，Voxt 会把配置的语音指令视为结束操作。如果该指令出现在转录尾部，且其后约 1 秒没有明显声音输入，会自动结束当前会话。";
 "Command" = "指令";
-"Available presets are over, end, and 完毕. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？" = "可用预设为 over、end 和 完毕。指令匹配会忽略前后空格和标点，包括中文标点如 ， 。 ！ ？";
+"Available presets are over, end, 完毕, and 好了. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？" = "可用预设为 over、end、完毕 和 好了。指令匹配会忽略前后空格和标点，包括中文标点如 ， 。 ！ ？";
 "Trigger" = "触发方式";
 "Cancel Shortcut" = "取消快捷键";
 "Use Esc to Cancel" = "使用 Esc 取消";

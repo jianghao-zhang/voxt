@@ -17,6 +17,12 @@ struct MainWindowPresentationState {
     var shouldRestoreAfterUpdate = false
 }
 
+enum SessionOutputMode {
+    case transcription
+    case translation
+    case rewrite
+}
+
 @main
 struct VoxtApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -254,12 +260,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let matchedGroupID: UUID?
         let matchedAppGroupName: String?
         let matchedURLGroupName: String?
-    }
-
-    enum SessionOutputMode {
-        case transcription
-        case translation
-        case rewrite
     }
 
     enum MeetingSessionCompletionDisposition {

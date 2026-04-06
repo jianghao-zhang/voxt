@@ -13,7 +13,7 @@ struct HotkeyActionResolver {
     struct State {
         let triggerMode: HotkeyPreference.TriggerMode
         let isSessionActive: Bool
-        let sessionOutputMode: AppDelegate.SessionOutputMode
+        let sessionOutputMode: SessionOutputMode
         let hasPendingTranscriptionStart: Bool
         let isSelectedTextTranslationFlow: Bool
         let canStopTapSession: Bool

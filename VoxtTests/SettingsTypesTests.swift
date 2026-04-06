@@ -75,4 +75,20 @@ final class SettingsTypesTests: XCTestCase {
         XCTAssertFalse(SettingsTab.visibleTabs(appEnhancementEnabled: false).contains(.appEnhancement))
         XCTAssertTrue(SettingsTab.visibleTabs(appEnhancementEnabled: true).contains(.appEnhancement))
     }
+
+    func testVoiceEndCommandPresetResolvesBuiltInCommands() {
+        XCTAssertEqual(VoiceEndCommandPreset.over.title, "over")
+        XCTAssertEqual(VoiceEndCommandPreset.over.resolvedCommand, "over")
+
+        XCTAssertEqual(VoiceEndCommandPreset.end.title, "end")
+        XCTAssertEqual(VoiceEndCommandPreset.end.resolvedCommand, "end")
+
+        XCTAssertEqual(VoiceEndCommandPreset.wanBi.title, "完毕")
+        XCTAssertEqual(VoiceEndCommandPreset.wanBi.resolvedCommand, "完毕")
+
+        XCTAssertEqual(VoiceEndCommandPreset.haoLe.title, "好了")
+        XCTAssertEqual(VoiceEndCommandPreset.haoLe.resolvedCommand, "好了")
+
+        XCTAssertNil(VoiceEndCommandPreset.custom.resolvedCommand)
+    }
 }

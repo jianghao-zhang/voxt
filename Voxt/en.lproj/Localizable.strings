@@ -74,7 +74,7 @@
 "Enable Voice End Command" = "Enable Voice End Command";
 "When enabled, Voxt treats the configured spoken command as a stop action. If that command appears at the end of the transcript and there is about 1 second of silence after it, the session ends automatically." = "When enabled, Voxt treats the configured spoken command as a stop action. If that command appears at the end of the transcript and there is about 1 second of silence after it, the session ends automatically.";
 "Command" = "Command";
-"Available presets are over, end, and 完毕. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？" = "Available presets are over, end, and 完毕. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？";
+"Available presets are over, end, 完毕, and 好了. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？" = "Available presets are over, end, 完毕, and 好了. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？";
 "Trigger" = "Trigger";
 "Cancel Shortcut" = "Cancel Shortcut";
 "Use Esc to Cancel" = "Use Esc to Cancel";

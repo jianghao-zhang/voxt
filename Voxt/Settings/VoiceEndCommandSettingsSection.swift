@@ -57,7 +57,7 @@ struct VoiceEndCommandSettingsSection: View {
                 }
                 .disabled(!voiceEndCommandEnabled || voiceEndCommandPreset.wrappedValue != .custom)
 
-                Text("Available presets are over, end, and 完毕. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？")
+                Text("Available presets are over, end, 完毕, and 好了. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

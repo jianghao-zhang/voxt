@@ -1,7 +1,7 @@
 import Foundation
 
 enum HistoryValueResolver {
-    static func resolvedKind(for sessionOutputMode: AppDelegate.SessionOutputMode) -> TranscriptionHistoryKind {
+    static func resolvedKind(for sessionOutputMode: SessionOutputMode) -> TranscriptionHistoryKind {
         switch sessionOutputMode {
         case .transcription:
             return .normal

@@ -4,7 +4,7 @@ enum WhisperTextPostProcessor {
     static func normalize(
         _ text: String,
         preferredMainLanguage: UserMainLanguageOption,
-        outputMode: AppDelegate.SessionOutputMode,
+        outputMode: SessionOutputMode,
         usesBuiltInTranslationTask: Bool
     ) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -74,7 +74,7 @@
 "Enable Voice End Command" = "音声終了コマンドを有効にする";
 "When enabled, Voxt treats the configured spoken command as a stop action. If that command appears at the end of the transcript and there is about 1 second of silence after it, the session ends automatically." = "有効にすると、設定した音声コマンドを停止操作として扱います。そのコマンドが文字起こしの末尾に現れ、その後およそ 1 秒の無音が続いた場合、セッションを自動終了します。";
 "Command" = "コマンド";
-"Available presets are over, end, and 完毕. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？" = "利用できるプリセットは over、end、完毕 です。コマンド判定では前後の空白や句読点を無視し、 ， 。 ！ ？ のようなアジア言語の記号にも対応します。";
+"Available presets are over, end, 完毕, and 好了. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？" = "利用できるプリセットは over、end、完毕、好了 です。コマンド判定では前後の空白や句読点を無視し、 ， 。 ！ ？ のようなアジア言語の記号にも対応します。";
 "Trigger" = "トリガー";
 "Cancel Shortcut" = "キャンセルショートカット";
 "Use Esc to Cancel" = "Esc でキャンセル";

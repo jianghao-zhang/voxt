@@ -477,7 +477,7 @@ This section controls how Voxt returns output and whether context-aware enhancem
 ### Voice End Command
 
 - Enable a spoken stop command for hands-free recording end
-- Choose from built-in presets such as `over`, `end`, and `完毕`
+- Choose from built-in presets such as `over`, `end`, `完毕`, and `好了`
 - Provide a custom command when preset mode is switched to custom
 
 When enabled, Voxt watches the transcript tail for the configured command and ends the current session automatically after about 1 second of following silence.

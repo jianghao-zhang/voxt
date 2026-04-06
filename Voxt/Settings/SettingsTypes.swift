@@ -891,6 +891,7 @@ enum VoiceEndCommandPreset: String, CaseIterable, Identifiable {
     case over
     case end
     case wanBi
+    case haoLe
     case custom
 
     var id: String { rawValue }
@@ -903,6 +904,8 @@ enum VoiceEndCommandPreset: String, CaseIterable, Identifiable {
             return "end"
         case .wanBi:
             return "完毕"
+        case .haoLe:
+            return "好了"
         case .custom:
             return AppLocalization.localizedString("Custom")
         }
@@ -916,6 +919,8 @@ enum VoiceEndCommandPreset: String, CaseIterable, Identifiable {
             return "end"
         case .wanBi:
             return "完毕"
+        case .haoLe:
+            return "好了"
         case .custom:
             return nil
         }
