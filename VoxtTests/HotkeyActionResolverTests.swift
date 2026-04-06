@@ -2,6 +2,12 @@ import XCTest
 @testable import Voxt
 
 final class HotkeyActionResolverTests: XCTestCase {
+    private enum TestSessionOutputMode {
+        case transcription
+        case translation
+        case rewrite
+    }
+
     func testTapTranscriptionDownStartsWhenIdle() {
         let actions = HotkeyActionResolver.resolveTranscriptionDown(
             state: makeState(triggerMode: .tap, isSessionActive: false)
@@ -78,7 +84,7 @@ final class HotkeyActionResolverTests: XCTestCase {
     private func makeState(
         triggerMode: HotkeyPreference.TriggerMode,
         isSessionActive: Bool,
-        sessionOutputMode: AppDelegate.SessionOutputMode = .transcription,
+        sessionOutputMode: TestSessionOutputMode = .transcription,
         hasPendingTranscriptionStart: Bool = false,
         isSelectedTextTranslationFlow: Bool = false,
         canStopTapSession: Bool = false
@@ -86,7 +92,16 @@ final class HotkeyActionResolverTests: XCTestCase {
         HotkeyActionResolver.State(
             triggerMode: triggerMode,
             isSessionActive: isSessionActive,
-            sessionOutputMode: sessionOutputMode,
+            sessionOutputMode: {
+                switch sessionOutputMode {
+                case .transcription:
+                    .transcription
+                case .translation:
+                    .translation
+                case .rewrite:
+                    .rewrite
+                }
+            }(),
             hasPendingTranscriptionStart: hasPendingTranscriptionStart,
             isSelectedTextTranslationFlow: isSelectedTextTranslationFlow,
             canStopTapSession: canStopTapSession

@@ -111,7 +111,7 @@ final class KeyCaptureView: NSView {
     override func flagsChanged(with event: NSEvent) {
         guard isRecording else { return }
 
-        currentSidedModifiers = SidedModifierFlags.toggled(from: currentSidedModifiers, keyCode: event.keyCode)
+        updateSidedModifiers(for: event.keyCode)
         let modifiers = updateModifierFlags(
             keyCode: event.keyCode,
             rawModifiers: event.modifierFlags.intersection(.hotkeyRelevant)
@@ -130,6 +130,9 @@ final class KeyCaptureView: NSView {
         startEventTap()
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
             guard let self, self.isRecording else { return event }
+            if self.eventTap != nil {
+                return nil
+            }
             switch event.type {
             case .keyDown:
                 self.keyDown(with: event)
@@ -275,7 +278,7 @@ final class KeyCaptureView: NSView {
                 sidedModifiers: currentSidedModifiers
             )
         case .flagsChanged:
-            currentSidedModifiers = SidedModifierFlags.toggled(from: currentSidedModifiers, keyCode: keyCode)
+            updateSidedModifiers(for: keyCode)
             let modifiers = updateModifierFlags(
                 keyCode: keyCode,
                 rawModifiers: modifierFlags(from: event.flags).intersection(.hotkeyRelevant)
@@ -295,6 +298,15 @@ final class KeyCaptureView: NSView {
         if cgFlags.contains(.maskShift) { flags.insert(.shift) }
         if cgFlags.contains(.maskSecondaryFn) { flags.insert(.function) }
         return flags
+    }
+
+    private func updateSidedModifiers(for keyCode: UInt16) {
+        guard SidedModifierFlags.sidedFlag(for: keyCode) != nil else { return }
+        currentSidedModifiers = SidedModifierFlags.updating(
+            from: currentSidedModifiers,
+            keyCode: keyCode,
+            isPressed: CGEventSource.keyState(.hidSystemState, key: CGKeyCode(keyCode))
+        )
     }
 
     private func captureKeyDown(
