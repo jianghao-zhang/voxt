@@ -78,7 +78,7 @@ final class HotkeyActionResolverTests: XCTestCase {
     private func makeState(
         triggerMode: HotkeyPreference.TriggerMode,
         isSessionActive: Bool,
-        sessionOutputMode: AppDelegate.SessionOutputMode = .transcription,
+        sessionOutputMode: SessionOutputMode = .transcription,
         hasPendingTranscriptionStart: Bool = false,
         isSelectedTextTranslationFlow: Bool = false,
         canStopTapSession: Bool = false

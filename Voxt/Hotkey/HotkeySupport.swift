@@ -27,6 +27,14 @@ struct SidedModifierFlags: OptionSet, Equatable {
         return current.union(flag)
     }
 
+    static func updating(from current: SidedModifierFlags, keyCode: UInt16, isPressed: Bool) -> SidedModifierFlags {
+        guard let flag = sidedFlag(for: keyCode) else { return current }
+        if isPressed {
+            return current.union(flag)
+        }
+        return current.subtracting(flag)
+    }
+
     func filtered(by modifiers: NSEvent.ModifierFlags) -> SidedModifierFlags {
         var filtered: SidedModifierFlags = []
         if modifiers.contains(.shift) {
