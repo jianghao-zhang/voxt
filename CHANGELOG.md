@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.8.5] - 2026-04-07
+
+### Added
+- Added dedicated Direct Dictation settings for locale selection, contextual phrases, on-device recognition, punctuation, and partial-result preferences.
+- Added live download progress, cancel actions, and clearer status details for MLX, Whisper, and custom local model downloads in Settings and onboarding.
+
+### Changed
+- Improved onboarding and model settings so download states stay visible, demo previews handle loading more gracefully, and model lists fit the available space more reliably.
+
+### Fixed
+- Fixed Doubao remote ASR live sessions so transcription and meeting captures keep streaming updates and final transcript segments more reliably.
+- Fixed Doubao remote ASR retries and transcript assembly so trailing text is less likely to be dropped after interrupted uploads.
+- Fixed remote ASR failure handling so network, timeout, authentication, quota, and availability problems now show clearer user-facing guidance.
+
 ## [1.8.4] - 2026-04-06
 
 ### Added
