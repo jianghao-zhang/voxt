@@ -38,17 +38,6 @@ key: `$OPENAI_API_KEY`
 
 <img width="939" height="683" alt="image" src="https://github.com/user-attachments/assets/18c4032e-b3e8-4ab5-92fe-9f6f0117ecd1" />
 
-### Doubao ASR Free
-
-- 默认推荐：`doubao-ime-free-realtime`
-- 内置模型：`doubao-ime-free-realtime`
-- 简介：免配置的实时转写入口，底层走豆包输入法实时服务链路。适合想直接使用远程实时识别、不想手动申请 `App ID` / `Access Token` 的用户。
-- 使用说明：
-  - 选中后即可直接 `Use`
-  - 普通转写和 Meeting Notes 都支持实时模式
-  - 不需要单独填写 `Meeting ASR`
-  - 该链路不是火山引擎公开控制台配置流，稳定性取决于上游服务变化
-
 ### GLM ASR
 
 - 默认推荐：`glm-asr-1`

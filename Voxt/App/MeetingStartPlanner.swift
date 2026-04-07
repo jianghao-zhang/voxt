@@ -72,7 +72,7 @@ enum MeetingStartPlanner {
                 return .blocked(.recording(reason))
             }
         case .remote:
-            guard remoteASRConfiguration.isConfigured(for: remoteASRProvider) else {
+            guard remoteASRConfiguration.isConfigured else {
                 return .blocked(.remoteASRUnavailable)
             }
             guard RemoteASRMeetingConfiguration.hasValidMeetingModel(

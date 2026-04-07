@@ -213,12 +213,10 @@ For fuller provider notes, signup links, endpoints, and configuration examples, 
 | --- | --- | --- | --- | --- | --- | --- |
 | OpenAI Whisper / Transcribe | `whisper-1`, `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Multilingual | Partial. Voxt currently uses file-based transcription, with optional chunked pseudo-realtime preview | Medium | High | `v1/audio/transcriptions` |
 | Doubao ASR | `volc.seedasr.sauc.duration`, `volc.bigasr.sauc.duration`, meeting: `volc.bigasr.auc_turbo` | Chinese-first, well suited to mixed Chinese/English usage | Yes for normal transcription, meeting uses chunk/file mode | Fast | High | WebSocket ASR for normal transcription, HTTP flash/file ASR for meetings |
-| Doubao ASR Free | `doubao-ime-free-realtime` | Chinese-first, well suited to mixed Chinese/English usage | Yes for normal transcription and Meeting Notes | Fast | Medium-high | Configuration-free realtime path based on the Doubao IME service |
 | GLM ASR | `glm-asr-2512`, `glm-asr-1` | Officially positioned for broad scenarios and accents; Voxt currently integrates it as standard upload-based transcription | No (current implementation is upload transcription) | Medium | Medium-high | HTTP transcription endpoint |
 | Aliyun Bailian ASR | `qwen3-asr-flash-realtime`, `fun-asr-realtime`, `paraformer-realtime-*`, meeting: `qwen3-asr-flash-filetrans`, `fun-asr`, `paraformer-v2` | Depends on model family: Qwen3 ASR is multilingual, Fun/Paraformer cover Chinese-English or broader multilingual use | Yes for normal transcription, meeting uses chunk/file mode | Fast | High | Realtime WebSocket ASR plus meeting-specific async/file ASR |
 
 Meeting Notes has a separate `Meeting ASR` model slot for `Doubao ASR` and `Aliyun Bailian ASR`.
-`Doubao ASR Free` does not require a separate Meeting ASR model or any user credentials.
 
 - The section appears in the main window under `Model > Remote ASR > [Provider]` only when `Meeting Notes (Beta)` is enabled.
 - Meetings do not reuse the provider's normal realtime model. They use the dedicated meeting model instead.

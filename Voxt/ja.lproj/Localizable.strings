@@ -411,14 +411,6 @@
 "Forever" = "無期限";
 "History older than the selected retention time is automatically deleted." = "選択した保持期間を超えた履歴は自動的に削除されます。";
 "Configure %@" = "%@ を設定";
-"Doubao ASR Free" = "Doubao ASR Free";
-"Ready to use" = "すぐに使えます";
-"Doubao ASR Free uses the Doubao IME realtime service and works with no configuration." = "Doubao ASR Free は Doubao IME のリアルタイムサービスを使い、設定なしで利用できます。";
-"Connection test succeeded (Doubao ASR Free realtime reachable)." = "接続テストに成功しました（Doubao ASR Free のリアルタイム接続に到達可能です）。";
-"Reset Cached Credentials" = "キャッシュ済み認証情報をリセット";
-"Cached credentials cleared." = "キャッシュ済み認証情報を消去しました。";
-"Doubao ASR Free is busy right now. Please wait a moment and try again." = "Doubao ASR Free が混み合っています。少し待ってから再試行してください。";
-"Remote ASR failed to start recording." = "Remote ASR の録音開始に失敗しました。";
 "Endpoint (Optional)" = "エンドポイント（任意）";
 "API Key" = "API キー";
 "Paste API key" = "API キーを貼り付け";

@@ -31,12 +31,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     @Published var isRequesting = false
 
     var onTranscriptionFinished: ((String) -> Void)?
-    var onStartFailure: ((String) -> Void)?
 
     private var recorder: AVAudioRecorder?
     private let audioEngine = AVAudioEngine()
     private var doubaoStreamingContext: DoubaoStreamingContext?
-    private var doubaoFreeStreamingContext: DoubaoASRFreeStreamingContext?
     private var aliyunStreamingContext: AliyunFunStreamingContext?
     private var aliyunQwenStreamingContext: AliyunQwenStreamingContext?
     private var meterTimer: Timer?
@@ -62,7 +60,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         guard !isRecording else { return }
         cleanupActiveUploadTask()
         cleanupDoubaoStreamingState()
-        cleanupDoubaoFreeStreamingState()
         cleanupAliyunStreamingState()
         transcribedText = ""
         audioLevel = 0
@@ -81,13 +78,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 cleanupRecorderState()
                 cleanupDoubaoStreamingState()
                 activeProvider = nil
-                notifyStartFailure(error.localizedDescription)
             }
-            return
-        }
-
-        if provider == .doubaoASRFree {
-            startDoubaoFreeStreaming()
             return
         }
 
@@ -103,7 +94,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 cleanupRecorderState()
                 cleanupAliyunStreamingState()
                 activeProvider = nil
-                notifyStartFailure(error.localizedDescription)
             }
             return
         }
@@ -117,14 +107,12 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             VoxtLog.error("Remote ASR recorder setup failed: \(error.localizedDescription)")
             cleanupRecorderState()
             activeProvider = nil
-            notifyStartFailure(error.localizedDescription)
         }
     }
 
     func stopRecording() {
         let hasPendingRealtimeSession =
             doubaoStreamingContext != nil ||
-            doubaoFreeStreamingContext != nil ||
             aliyunStreamingContext != nil ||
             aliyunQwenStreamingContext != nil
         guard isRecording || hasPendingRealtimeSession || recorder != nil else { return }
@@ -136,23 +124,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             scheduleStreamingCompletion {
                 let finalText = await self.resolveStreamingResult(
                     warningMessage: "Doubao final result wait failed"
-                ) {
-                    try await context.responseState.waitForFinalResult(timeoutSeconds: self.streamingFinalWaitTimeout)
-                } fallback: {
-                    await context.responseState.currentText()
-                }
-                let currentText = await context.responseState.currentText()
-                return finalText.isEmpty ? currentText : finalText
-            }
-            return
-        }
-
-        if activeProvider == .doubaoASRFree, let context = doubaoFreeStreamingContext {
-            isRequesting = true
-            stopDoubaoFreeStreaming(context)
-            scheduleStreamingCompletion {
-                let finalText = await self.resolveStreamingResult(
-                    warningMessage: "Doubao ASR Free final result wait failed"
                 ) {
                     try await context.responseState.waitForFinalResult(timeoutSeconds: self.streamingFinalWaitTimeout)
                 } fallback: {
@@ -226,14 +197,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             return
         }
 
-        if let context = doubaoFreeStreamingContext {
-            if context.isReadyForAudio {
-                stopDoubaoAudioCapture()
-                try startDoubaoFreeAudioCapture()
-            }
-            return
-        }
-
         if let context = aliyunStreamingContext {
             stopAliyunAudioCapture()
             try startAliyunAudioCapture(context: context)
@@ -283,124 +246,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                     await responseState.markSocketClosed()
                 } else {
                     await responseState.markCompletedWithError(error)
-                }
-            }
-        }
-    }
-
-    private func startDoubaoFreeStreaming() {
-        let context = DoubaoASRFreeStreamingContext(responseState: DoubaoResponseState())
-        doubaoFreeStreamingContext = context
-        isRecording = true
-        context.setupTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            await beginDoubaoFreeStreamingSetup(context)
-        }
-    }
-
-    private func beginDoubaoFreeStreamingSetup(_ context: DoubaoASRFreeStreamingContext) async {
-        do {
-            let connectResult = try await DoubaoASRFreeRuntimeSupport.connectAndStartSession()
-            guard doubaoFreeStreamingContext === context else {
-                connectResult.managedSocket.task.cancel(with: .normalClosure, reason: nil)
-                return
-            }
-
-            if Task.isCancelled || stopRequested {
-                connectResult.managedSocket.task.cancel(with: .normalClosure, reason: nil)
-                await context.responseState.markSocketClosed()
-                finish(with: transcribedText)
-                return
-            }
-
-            context.managedSocket = connectResult.managedSocket
-            context.audioSender = try DoubaoASRFreeAudioSender(
-                requestID: connectResult.requestID,
-                token: connectResult.credentials.token
-            )
-            context.isReadyForAudio = true
-            receiveDoubaoFreeMessages(context)
-            try startDoubaoFreeAudioCapture()
-        } catch {
-            VoxtLog.error("Doubao ASR Free streaming setup failed: \(error.localizedDescription)")
-            await context.responseState.markCompletedWithError(error)
-            cleanupDoubaoFreeStreamingState()
-            cleanupRecorderState()
-            activeProvider = nil
-            notifyStartFailure(userVisibleRemoteStartFailureMessage(for: error))
-        }
-    }
-
-    private func stopDoubaoFreeStreaming(_ context: DoubaoASRFreeStreamingContext) {
-        isRecording = false
-        stopDoubaoAudioCapture()
-        context.setupTask?.cancel()
-        guard let ws = context.ws, let audioSender = context.audioSender, context.isReadyForAudio else {
-            Task { [responseState = context.responseState] in
-                await responseState.markSocketClosed()
-            }
-            return
-        }
-
-        Task { [weak self, responseState = context.responseState] in
-            do {
-                try await audioSender.finish(websocket: ws)
-            } catch {
-                await responseState.markCompletedWithError(error)
-                await MainActor.run {
-                    self?.cleanupDoubaoFreeStreamingState()
-                }
-            }
-        }
-    }
-
-    private func receiveDoubaoFreeMessages(_ context: DoubaoASRFreeStreamingContext) {
-        guard let ws = context.ws else { return }
-        ws.receive { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .success(let message):
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    defer {
-                        if !context.isClosed {
-                            self.receiveDoubaoFreeMessages(context)
-                        }
-                    }
-                    do {
-                        guard case .data(let payloadData) = message else { return }
-                        let parsed = try DoubaoASRFreeRuntimeSupport.parseServerResponse(payloadData)
-                        if let text = parsed.text, !text.isEmpty {
-                            let merged = await context.responseState.replace(text: text, isFinal: parsed.isFinal)
-                            self.transcribedText = merged
-                        } else if parsed.isFinal {
-                            await context.responseState.markFinal()
-                        }
-                        if parsed.messageType == "SessionFinished" {
-                            context.isClosed = true
-                            await context.responseState.markSocketClosed()
-                        }
-                    } catch {
-                        let nsError = error as NSError
-                        if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
-                            context.isClosed = true
-                            await context.responseState.markSocketClosed()
-                        } else {
-                            context.isClosed = true
-                            await context.responseState.markCompletedWithError(error)
-                        }
-                    }
-                }
-            case .failure(let error):
-                Task { @MainActor in
-                    let nsError = error as NSError
-                    if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
-                        context.isClosed = true
-                        await context.responseState.markSocketClosed()
-                    } else {
-                        context.isClosed = true
-                        await context.responseState.markCompletedWithError(error)
-                    }
                 }
             }
         }
@@ -492,12 +337,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             return try await transcribeGLM(fileURL: fileURL, configuration: configuration, hintPayload: hintPayload)
         case .doubaoASR:
             return try await transcribeDoubao(fileURL: fileURL, configuration: configuration, hintPayload: hintPayload)
-        case .doubaoASRFree:
-            throw NSError(
-                domain: "Voxt.RemoteASR",
-                code: -103,
-                userInfo: [NSLocalizedDescriptionKey: "Doubao ASR Free is only available through the realtime streaming path."]
-            )
         case .aliyunBailianASR:
             return try await transcribeAliyunBailian(fileURL: fileURL, configuration: configuration)
         }
@@ -552,7 +391,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         let currentMeeting = currentMeetingConfiguration()
         let provider = currentMeeting.provider
         let configuration = currentMeeting.configuration
-        guard configuration.isConfigured(for: provider) else {
+        guard configuration.isConfigured else {
             throw NSError(
                 domain: "Voxt.RemoteASR",
                 code: -101,
@@ -1510,38 +1349,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 else { return }
                 self.audioLevel = self.audioLevelFromPCM16(pcmData)
                 self.queueDoubaoAudioData(pcmData, context: context)
-            }
-        }
-
-        audioEngine.prepare()
-        try audioEngine.start()
-        isRecording = true
-    }
-
-    private func startDoubaoFreeAudioCapture() throws {
-        let inputNode = audioEngine.inputNode
-        applyPreferredInputDeviceIfNeeded(inputNode: inputNode)
-        let inputFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
-            guard let self else { return }
-            guard let pcmData = Self.makeDoubaoPCM16MonoData(from: buffer) else { return }
-            Task { @MainActor in
-                guard self.isRecording,
-                      let context = self.doubaoFreeStreamingContext,
-                      context.isReadyForAudio,
-                      !context.isClosed
-                else { return }
-                self.audioLevel = self.audioLevelFromPCM16(pcmData)
-                do {
-                    if let ws = context.ws, let audioSender = context.audioSender {
-                        try await audioSender.enqueuePCMData(pcmData, websocket: ws)
-                    }
-                } catch {
-                    await context.responseState.markCompletedWithError(error)
-                    self.cleanupDoubaoFreeStreamingState()
-                    self.activeProvider = nil
-                }
             }
         }
 
@@ -2724,16 +2531,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         stopDoubaoAudioCapture()
     }
 
-    private func cleanupDoubaoFreeStreamingState() {
-        if let context = doubaoFreeStreamingContext {
-            context.isClosed = true
-            context.setupTask?.cancel()
-            context.ws?.cancel(with: .normalClosure, reason: nil)
-        }
-        doubaoFreeStreamingContext = nil
-        stopDoubaoAudioCapture()
-    }
-
     private func cleanupAliyunStreamingState() {
         if let context = aliyunStreamingContext {
             context.isClosed = true
@@ -2850,28 +2647,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         cleanupActiveUploadTask()
         cleanupRecorderState()
         cleanupDoubaoStreamingState()
-        cleanupDoubaoFreeStreamingState()
         cleanupAliyunStreamingState()
         activeProvider = nil
         onTranscriptionFinished?(text.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-
-    private func notifyStartFailure(_ message: String) {
-        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        onStartFailure?(trimmed)
-    }
-
-    private func userVisibleRemoteStartFailureMessage(for error: Error) -> String {
-        let nsError = error as NSError
-        let description = nsError.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalized = description.lowercased()
-        if normalized.contains("exceededconcurrentquota") || normalized.contains("concurrent quota") {
-            return AppLocalization.localizedString("Doubao ASR Free is busy right now. Please wait a moment and try again.")
-        }
-        return description.isEmpty
-            ? AppLocalization.localizedString("Remote ASR failed to start recording.")
-            : description
     }
 }
 
@@ -3060,38 +2838,21 @@ private final class DoubaoStreamingContext {
     }
 }
 
-@MainActor
-private final class DoubaoASRFreeStreamingContext {
-    let responseState: DoubaoResponseState
-    var managedSocket: VoxtNetworkSession.ManagedWebSocketTask?
-    var setupTask: Task<Void, Never>?
-    var audioSender: DoubaoASRFreeAudioSender?
-    var isClosed = false
-    var isReadyForAudio = false
-
-    var ws: URLSessionWebSocketTask? {
-        managedSocket?.task
-    }
-
-    init(responseState: DoubaoResponseState) {
-        self.responseState = responseState
-    }
-}
-
 private actor DoubaoResponseState {
-    private var accumulator = DoubaoStreamingTextAccumulator()
+    private var text = ""
     private var isFinal = false
     private var completionError: Error?
     private var isSocketClosed = false
 
     func replace(text newText: String, isFinal: Bool) -> String {
-        let merged = accumulator.replace(text: newText, isFinal: isFinal)
-        self.isFinal = isFinal
-        return merged
+        text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isFinal {
+            self.isFinal = true
+        }
+        return text
     }
 
     func markFinal() {
-        _ = accumulator.markFinal()
         isFinal = true
     }
 
@@ -3117,143 +2878,13 @@ private actor DoubaoResponseState {
         if let completionError {
             throw completionError
         }
-        return accumulator.currentText
+        return text
     }
 
     func currentText() -> String {
-        accumulator.currentText
+        text
     }
 
-}
-
-struct DoubaoStreamingTextAccumulator {
-    private var committedSegments: [String] = []
-    private var livePartial = ""
-
-    var currentText: String {
-        mergedText(committedSegments, livePartial: livePartial)
-    }
-
-    mutating func replace(text newText: String, isFinal: Bool) -> String {
-        let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            if isFinal {
-                _ = markFinal()
-            }
-            return currentText
-        }
-
-        if isFinal {
-            commit(trimmed)
-        } else {
-            updateLivePartial(trimmed)
-        }
-        return currentText
-    }
-
-    @discardableResult
-    mutating func markFinal() -> String {
-        let trimmedPartial = livePartial.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedPartial.isEmpty {
-            appendCommitted(trimmedPartial)
-            livePartial = ""
-        }
-        return currentText
-    }
-
-    private mutating func updateLivePartial(_ incoming: String) {
-        if let suffix = suffixAfterCommittedPrefix(incoming), !suffix.isEmpty {
-            livePartial = suffix
-            return
-        }
-        if incoming == committedText {
-            livePartial = ""
-            return
-        }
-        livePartial = incoming
-    }
-
-    private mutating func commit(_ incoming: String) {
-        if let suffix = suffixAfterCommittedPrefix(incoming), !suffix.isEmpty {
-            appendCommitted(suffix)
-        } else if !livePartial.isEmpty, incoming == currentText {
-            appendCommitted(livePartial)
-        } else if !livePartial.isEmpty, incoming == livePartial {
-            appendCommitted(livePartial)
-        } else {
-            appendCommitted(incoming)
-        }
-        livePartial = ""
-    }
-
-    private mutating func appendCommitted(_ segment: String) {
-        let trimmed = segment.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        if trimmed == committedText {
-            return
-        }
-        if committedSegments.last != trimmed {
-            committedSegments.append(trimmed)
-        }
-    }
-
-    private var committedText: String {
-        mergedText(committedSegments, livePartial: nil)
-    }
-
-    private func suffixAfterCommittedPrefix(_ incoming: String) -> String? {
-        let committed = committedText
-        guard !committed.isEmpty else { return incoming }
-        guard incoming.hasPrefix(committed) else { return nil }
-        let start = incoming.index(incoming.startIndex, offsetBy: committed.count)
-        return incoming[start...].trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func mergedText(_ committedSegments: [String], livePartial: String?) -> String {
-        var values = committedSegments
-        if let livePartial {
-            let trimmed = livePartial.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                values.append(trimmed)
-            }
-        }
-        return values.reduce(into: "") { partialResult, segment in
-            partialResult = Self.mergeSegmentText(partialResult, segment)
-        }
-    }
-
-    private static func mergeSegmentText(_ lhs: String, _ rhs: String) -> String {
-        let left = lhs.trimmingCharacters(in: .whitespacesAndNewlines)
-        let right = rhs.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !left.isEmpty else { return right }
-        guard !right.isEmpty else { return left }
-
-        let leftLast = left.unicodeScalars.last
-        let rightFirst = right.unicodeScalars.first
-        let separator = needsInlineSeparator(leftLast: leftLast, rightFirst: rightFirst) ? " " : ""
-        return left + separator + right
-    }
-
-    private static func needsInlineSeparator(
-        leftLast: UnicodeScalar?,
-        rightFirst: UnicodeScalar?
-    ) -> Bool {
-        guard let leftLast, let rightFirst else { return true }
-        let punctuationScalars = CharacterSet(charactersIn: " \t\n\r,.!?;:，。！？；：、)]}\"'》】）")
-        if punctuationScalars.contains(leftLast) || punctuationScalars.contains(rightFirst) {
-            return false
-        }
-        return isASCIIInlineWordScalar(leftLast) && isASCIIInlineWordScalar(rightFirst)
-    }
-
-    private static func isASCIIInlineWordScalar(_ scalar: UnicodeScalar) -> Bool {
-        switch scalar.value {
-        case 48...57, 65...90, 97...122:
-            return true
-        default:
-            return false
-        }
-    }
 }
 
     private extension UInt32 {

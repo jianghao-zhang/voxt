@@ -14,7 +14,7 @@ enum RemoteASRMeetingConfiguration {
                 provider: provider,
                 configuration: configuration
             )
-        case .doubaoASRFree, .openAIWhisper, .glmASR:
+        case .openAIWhisper, .glmASR:
             return false
         }
     }
@@ -23,8 +23,6 @@ enum RemoteASRMeetingConfiguration {
         switch provider {
         case .doubaoASR:
             return DoubaoASRConfiguration.meetingModelTurbo
-        case .doubaoASRFree:
-            return provider.suggestedModel
         case .aliyunBailianASR:
             return AliyunMeetingASRConfiguration.defaultMeetingModel
         case .openAIWhisper, .glmASR:
@@ -38,8 +36,6 @@ enum RemoteASRMeetingConfiguration {
             return [
                 RemoteModelOption(id: DoubaoASRConfiguration.meetingModelTurbo, title: "Doubao Flash ASR Turbo")
             ]
-        case .doubaoASRFree:
-            return []
         case .aliyunBailianASR:
             return AliyunMeetingASRConfiguration.meetingModelOptions()
         case .openAIWhisper, .glmASR:
@@ -59,7 +55,7 @@ enum RemoteASRMeetingConfiguration {
                 model: configuration.meetingModel,
                 endpoint: configuration.endpoint
             ) == nil
-        case .doubaoASR, .doubaoASRFree, .openAIWhisper, .glmASR:
+        case .doubaoASR, .openAIWhisper, .glmASR:
             return true
         }
     }
@@ -74,8 +70,6 @@ enum RemoteASRMeetingConfiguration {
         switch provider {
         case .doubaoASR:
             resolved.model = DoubaoASRConfiguration.canonicalMeetingModel(trimmedModel)
-        case .doubaoASRFree:
-            resolved.model = provider.suggestedModel
         case .aliyunBailianASR:
             resolved.model = AliyunMeetingASRConfiguration.normalizedMeetingModel(trimmedModel)
         case .openAIWhisper, .glmASR:

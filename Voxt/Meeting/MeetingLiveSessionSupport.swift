@@ -32,16 +32,6 @@ struct MeetingLiveSessionPolicy: Equatable, Sendable {
                 prebufferDuration: 1.0,
                 segmentSilenceSplitThreshold: 1.2
             )
-        case .doubaoASRFree:
-            return MeetingLiveSessionPolicy(
-                idleKeepaliveEnabled: true,
-                idleKeepaliveInterval: 3.0,
-                idleKeepaliveFrameDuration: 0.2,
-                providerIdleTimeoutSafetyWindow: 2.0,
-                autoReconnectOnUnexpectedClose: true,
-                prebufferDuration: 1.0,
-                segmentSilenceSplitThreshold: 1.2
-            )
         case .aliyunBailianASR:
             let isRealtimeModel = RemoteASRRealtimeSupport.isAliyunRealtimeModel(configuration.model)
             return MeetingLiveSessionPolicy(

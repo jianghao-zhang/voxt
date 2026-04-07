@@ -108,25 +108,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertFalse(resolved.openAIChunkPseudoRealtimeEnabled)
     }
 
-    func testDoubaoASRFreeDefaultsAndConfigurationPolicy() {
-        let resolved = RemoteModelConfigurationStore.resolvedASRConfiguration(
-            provider: .doubaoASRFree,
-            stored: [:]
-        )
-
-        XCTAssertEqual(resolved.providerID, RemoteASRProvider.doubaoASRFree.rawValue)
-        XCTAssertEqual(resolved.model, DoubaoASRFreeConfiguration.modelRealtime)
-        XCTAssertTrue(resolved.isConfigured(for: .doubaoASRFree))
-        XCTAssertFalse(
-            RemoteProviderConfiguration(
-                providerID: RemoteASRProvider.doubaoASRFree.rawValue,
-                model: "",
-                endpoint: "",
-                apiKey: ""
-            ).isConfigured(for: .doubaoASRFree)
-        )
-    }
-
     func testResolvedLLMConfigurationDefaultsWhenMissing() {
         let resolved = RemoteModelConfigurationStore.resolvedLLMConfiguration(
             provider: .anthropic,
@@ -221,25 +202,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
             )
         )
 
-        let doubaoFreeRealtime = RemoteProviderConfiguration(
-            providerID: RemoteASRProvider.doubaoASRFree.rawValue,
-            model: DoubaoASRFreeConfiguration.modelRealtime,
-            endpoint: "",
-            apiKey: ""
-        )
-        XCTAssertFalse(
-            RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(
-                .doubaoASRFree,
-                configuration: doubaoFreeRealtime
-            )
-        )
-        XCTAssertTrue(
-            RemoteASRMeetingConfiguration.hasValidMeetingModel(
-                provider: .doubaoASRFree,
-                configuration: doubaoFreeRealtime
-            )
-        )
-
         let aliyunRealtime = RemoteProviderConfiguration(
             providerID: RemoteASRProvider.aliyunBailianASR.rawValue,
             model: "fun-asr-realtime",
@@ -265,31 +227,5 @@ final class RemoteModelConfigurationTests: XCTestCase {
                 configuration: aliyunFile
             )
         )
-    }
-
-    func testDoubaoStreamingTextAccumulatorAppendsSegmentedFinalResults() {
-        var accumulator = DoubaoStreamingTextAccumulator()
-
-        XCTAssertEqual(accumulator.replace(text: "你好", isFinal: false), "你好")
-        XCTAssertEqual(accumulator.replace(text: "你好", isFinal: true), "你好")
-        XCTAssertEqual(accumulator.replace(text: "测试豆包", isFinal: false), "你好测试豆包")
-        XCTAssertEqual(accumulator.replace(text: "测试豆包", isFinal: true), "你好测试豆包")
-    }
-
-    func testDoubaoStreamingTextAccumulatorHandlesCumulativeResultsWithoutDuplication() {
-        var accumulator = DoubaoStreamingTextAccumulator()
-
-        XCTAssertEqual(accumulator.replace(text: "hello", isFinal: true), "hello")
-        XCTAssertEqual(accumulator.replace(text: "hello world", isFinal: false), "hello world")
-        XCTAssertEqual(accumulator.replace(text: "hello world", isFinal: true), "hello world")
-        XCTAssertEqual(accumulator.replace(text: "hello world again", isFinal: false), "hello world again")
-    }
-
-    func testDoubaoStreamingTextAccumulatorAddsSpacesOnlyForAdjacentAlphanumerics() {
-        var accumulator = DoubaoStreamingTextAccumulator()
-
-        XCTAssertEqual(accumulator.replace(text: "hello", isFinal: true), "hello")
-        XCTAssertEqual(accumulator.replace(text: "world", isFinal: true), "hello world")
-        XCTAssertEqual(accumulator.replace(text: "你好", isFinal: true), "hello world你好")
     }
 }

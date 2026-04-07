@@ -118,14 +118,6 @@
 "When enabled, Voxt always writes transcription results to clipboard and does not auto-paste." = "When enabled, Voxt always writes transcription results to clipboard and does not auto-paste.";
 "When enabled, Voxt auto-pastes result text and also keeps it in clipboard." = "When enabled, Voxt auto-pastes result text and also keeps it in clipboard.";
 "Translate selected text with translation shortcut" = "Translate selected text with translation shortcut";
-"Doubao ASR Free" = "Doubao ASR Free";
-"Ready to use" = "Ready to use";
-"Doubao ASR Free uses the Doubao IME realtime service and works with no configuration." = "Doubao ASR Free uses the Doubao IME realtime service and works with no configuration.";
-"Connection test succeeded (Doubao ASR Free realtime reachable)." = "Connection test succeeded (Doubao ASR Free realtime reachable).";
-"Reset Cached Credentials" = "Reset Cached Credentials";
-"Cached credentials cleared." = "Cached credentials cleared.";
-"Doubao ASR Free is busy right now. Please wait a moment and try again." = "Doubao ASR Free is busy right now. Please wait a moment and try again.";
-"Remote ASR failed to start recording." = "Remote ASR failed to start recording.";
 "When enabled, pressing the translation shortcut with selected text translates the selection directly and replaces it." = "When enabled, pressing the translation shortcut with selected text translates the selection directly and replaces it.";
 "Automatically start Voxt when your Mac starts." = "Automatically start Voxt when your Mac starts.";
 "Show Voxt in your Mac Dock for quick access." = "Show Voxt in your Mac Dock for quick access.";

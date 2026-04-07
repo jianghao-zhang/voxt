@@ -178,29 +178,4 @@ final class MeetingASRSupportTests: XCTestCase {
         XCTAssertEqual(context.historyModelDescription, "\(RemoteASRProvider.doubaoASR.title) (\(DoubaoASRConfiguration.modelV2))")
         assertLiveMode(context, provider: .doubaoASR)
     }
-
-    func testDoubaoASRFreeMeetingUsesLiveRemoteModel() {
-        let context = MeetingASRSupport.resolveContext(
-            transcriptionEngine: .remote,
-            whisperModelState: .notDownloaded,
-            whisperCurrentModelID: "base",
-            whisperRealtimeEnabled: false,
-            whisperIsCurrentModelLoaded: false,
-            whisperDisplayTitle: { _ in "" },
-            mlxModelState: .notDownloaded,
-            mlxCurrentModelRepo: MLXModelManager.defaultModelRepo,
-            mlxIsCurrentModelLoaded: false,
-            mlxDisplayTitle: { _ in "" },
-            remoteProvider: .doubaoASRFree,
-            remoteConfiguration: .init(
-                providerID: RemoteASRProvider.doubaoASRFree.rawValue,
-                model: DoubaoASRFreeConfiguration.modelRealtime,
-                endpoint: "",
-                apiKey: ""
-            )
-        )
-
-        XCTAssertEqual(context.historyModelDescription, "\(RemoteASRProvider.doubaoASRFree.title) (\(DoubaoASRFreeConfiguration.modelRealtime))")
-        assertLiveMode(context, provider: .doubaoASRFree)
-    }
 }
