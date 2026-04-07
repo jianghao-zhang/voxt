@@ -182,7 +182,13 @@ class CustomLLMModelManager: ObservableObject {
                 inferenceModelRepo = modelRepo
             }
 
-            let session = ChatSession(container, instructions: systemPrompt)
+            let behavior = CustomLLMModelBehaviorResolver.behavior(for: modelRepo)
+            let session = makeChatSession(
+                container: container,
+                instructions: systemPrompt,
+                repo: modelRepo,
+                behavior: behavior
+            )
             let params = generationParameters(for: .enhancement, inputLength: input.count)
             session.generateParameters = params
 
@@ -193,7 +199,7 @@ class CustomLLMModelManager: ObservableObject {
 
             let startedAt = Date()
             VoxtLog.llm(
-                "Custom LLM enhance started. repo=\(modelRepo), inputChars=\(input.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP)"
+                "Custom LLM enhance started. repo=\(modelRepo), inputChars=\(input.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP), thinkingDisabled=\(behavior.disablesThinking)"
             )
             VoxtLog.llm(
                 """
@@ -206,7 +212,7 @@ class CustomLLMModelManager: ObservableObject {
                 \(VoxtLog.llmPreview(prompt))
                 """
             )
-            let response = try await session.respond(to: modelPrompt(prompt, repo: modelRepo))
+            let response = try await session.respond(to: prompt)
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
             let cleaned = extractResultText(response)
             VoxtLog.llm(
@@ -241,13 +247,19 @@ class CustomLLMModelManager: ObservableObject {
 
             let container = try await container(for: repo)
 
-            let session = ChatSession(container, instructions: "")
+            let behavior = CustomLLMModelBehaviorResolver.behavior(for: repo)
+            let session = makeChatSession(
+                container: container,
+                instructions: "",
+                repo: repo,
+                behavior: behavior
+            )
             let params = generationParameters(for: .enhancement, inputLength: prompt.count)
             session.generateParameters = params
 
             let startedAt = Date()
             VoxtLog.llm(
-                "Custom LLM enhance started. repo=\(repo), inputChars=\(prompt.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP), mode=userMessage"
+                "Custom LLM enhance started. repo=\(repo), inputChars=\(prompt.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP), mode=userMessage, thinkingDisabled=\(behavior.disablesThinking)"
             )
             VoxtLog.llm(
                 """
@@ -258,7 +270,7 @@ class CustomLLMModelManager: ObservableObject {
                 \(VoxtLog.llmPreview(prompt))
                 """
             )
-            let response = try await session.respond(to: modelPrompt(prompt, repo: repo))
+            let response = try await session.respond(to: prompt)
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
             let cleaned = extractResultText(response)
             VoxtLog.llm(
@@ -325,7 +337,13 @@ class CustomLLMModelManager: ObservableObject {
             }
 
             let container = try await container(for: modelRepo)
-            let session = ChatSession(container, instructions: instructions)
+            let behavior = CustomLLMModelBehaviorResolver.behavior(for: modelRepo)
+            let session = makeChatSession(
+                container: container,
+                instructions: instructions,
+                repo: modelRepo,
+                behavior: behavior
+            )
             let params = generationParameters(for: .translation, inputLength: text.count)
             session.generateParameters = params
             let prompt = structuredOutputPrompt(
@@ -334,7 +352,7 @@ class CustomLLMModelManager: ObservableObject {
             )
             let startedAt = Date()
             VoxtLog.llm(
-                "Custom LLM translate started. repo=\(modelRepo), inputChars=\(text.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP)"
+                "Custom LLM translate started. repo=\(modelRepo), inputChars=\(text.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP), thinkingDisabled=\(behavior.disablesThinking)"
             )
             VoxtLog.llm(
                 """
@@ -347,7 +365,7 @@ class CustomLLMModelManager: ObservableObject {
                 \(VoxtLog.llmPreview(prompt))
                 """
             )
-            let response = try await session.respond(to: modelPrompt(prompt, repo: modelRepo))
+            let response = try await session.respond(to: prompt)
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
             let result = extractResultText(response)
             VoxtLog.llm(
@@ -380,7 +398,13 @@ class CustomLLMModelManager: ObservableObject {
             }
 
             let container = try await container(for: modelRepo)
-            let session = ChatSession(container, instructions: instructions)
+            let behavior = CustomLLMModelBehaviorResolver.behavior(for: modelRepo)
+            let session = makeChatSession(
+                container: container,
+                instructions: instructions,
+                repo: modelRepo,
+                behavior: behavior
+            )
             let combinedInput = """
             Spoken instruction:
             \(dictatedPrompt)
@@ -396,7 +420,7 @@ class CustomLLMModelManager: ObservableObject {
             )
             let startedAt = Date()
             VoxtLog.llm(
-                "Custom LLM rewrite started. repo=\(modelRepo), instructionChars=\(dictatedPrompt.count), sourceChars=\(sourceText.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP)"
+                "Custom LLM rewrite started. repo=\(modelRepo), instructionChars=\(dictatedPrompt.count), sourceChars=\(sourceText.count), maxTokens=\(params.maxTokens ?? 0), temperature=\(params.temperature), topP=\(params.topP), thinkingDisabled=\(behavior.disablesThinking)"
             )
             VoxtLog.llm(
                 """
@@ -409,7 +433,7 @@ class CustomLLMModelManager: ObservableObject {
                 \(VoxtLog.llmPreview(prompt))
                 """
             )
-            let response = try await session.respond(to: modelPrompt(prompt, repo: modelRepo))
+            let response = try await session.respond(to: prompt)
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
             let result = extractResultText(response)
             VoxtLog.llm(
@@ -860,20 +884,21 @@ class CustomLLMModelManager: ObservableObject {
         UserDefaults.standard.set(data, forKey: AppPreferenceKey.customLLMRemoteSizeCache)
     }
 
-    private func modelPrompt(_ prompt: String, repo: String) -> String {
-        guard shouldForceNoThink(repo: repo) else { return prompt }
-        return "/no_think\n\(prompt)"
-    }
-
-    private func shouldForceNoThink(repo: String) -> Bool {
-        switch repo {
-        case "mlx-community/Qwen3.5-2B-MLX-4bit",
-             "mlx-community/Qwen3.5-4B-MLX-4bit",
-             "mlx-community/Qwen3.5-9B-MLX-4bit":
-            return true
-        default:
-            return false
+    private func makeChatSession(
+        container: ModelContainer,
+        instructions: String,
+        repo: String,
+        behavior: CustomLLMModelBehavior
+    ) -> ChatSession {
+        let session = ChatSession(
+            container,
+            instructions: instructions,
+            additionalContext: CustomLLMModelBehaviorResolver.additionalContext(for: behavior)
+        )
+        if behavior.disablesThinking {
+            VoxtLog.llm("Custom LLM thinking disabled for repo=\(repo) using chat-template additionalContext.")
         }
+        return session
     }
 
     private func structuredOutputPrompt(taskInstruction: String, input: String) -> String {
@@ -902,7 +927,7 @@ class CustomLLMModelManager: ObservableObject {
                   let decoded = try? JSONDecoder().decode(TextResultPayload.self, from: data) else {
                 continue
             }
-            let text = Self.normalizeResultText(decoded.resultText)
+            let text = CustomLLMOutputSanitizer.normalizeResultText(decoded.resultText)
             if !text.isEmpty {
                 return text
             }
@@ -914,7 +939,7 @@ class CustomLLMModelManager: ObservableObject {
         let normalized = output.trimmingCharacters(in: .whitespacesAndNewlines)
         var candidates: [String] = [normalized]
 
-        let unfenced = Self.unwrapCodeFenceIfNeeded(normalized)
+        let unfenced = CustomLLMOutputSanitizer.unwrapCodeFenceIfNeeded(normalized)
         if unfenced != normalized {
             candidates.append(unfenced)
         }
@@ -937,31 +962,19 @@ class CustomLLMModelManager: ObservableObject {
     }
 
     private func sanitizeModelOutput(_ output: String) -> String {
-        Self.normalizeResultText(output)
-    }
-
-    private static func normalizeResultText(_ output: String) -> String {
-        var cleaned = output
-        if let regex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: [.caseInsensitive]) {
-            let range = NSRange(location: 0, length: (cleaned as NSString).length)
-            cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
+        let cleaned = CustomLLMOutputSanitizer.normalizeResultText(output)
+        if cleaned != output.trimmingCharacters(in: .whitespacesAndNewlines) {
+            VoxtLog.llm(
+                """
+                Custom LLM output sanitized.
+                [raw]
+                \(VoxtLog.llmPreview(output))
+                [cleaned]
+                \(VoxtLog.llmPreview(cleaned))
+                """
+            )
         }
-        cleaned = unwrapCodeFenceIfNeeded(cleaned)
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func unwrapCodeFenceIfNeeded(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("```"), trimmed.hasSuffix("```") else {
-            return trimmed
-        }
-        var lines = trimmed.components(separatedBy: .newlines)
-        guard lines.count >= 2 else { return trimmed }
-        lines.removeFirst()
-        if let last = lines.last, last.trimmingCharacters(in: .whitespacesAndNewlines) == "```" {
-            lines.removeLast()
-        }
-        return lines.joined(separator: "\n")
+        return cleaned
     }
 
     private func cacheDirectory(for repo: String) -> URL? {
@@ -1057,5 +1070,51 @@ class CustomLLMModelManager: ObservableObject {
         idleUnloadTask = nil
         Memory.clearCache()
         VoxtLog.info("Custom LLM model released after idle period.", verbose: true)
+    }
+}
+
+struct CustomLLMModelBehavior: Equatable {
+    let disablesThinking: Bool
+}
+
+enum CustomLLMModelBehaviorResolver {
+    static func behavior(for repo: String) -> CustomLLMModelBehavior {
+        let normalizedRepo = repo.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return CustomLLMModelBehavior(
+            disablesThinking: normalizedRepo.contains("qwen3")
+        )
+    }
+
+    static func additionalContext(for behavior: CustomLLMModelBehavior) -> [String: any Sendable]? {
+        guard behavior.disablesThinking else { return nil }
+        return ["enable_thinking": false]
+    }
+}
+
+enum CustomLLMOutputSanitizer {
+    static func normalizeResultText(_ output: String) -> String {
+        var cleaned = output
+        if let regex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: [.caseInsensitive]) {
+            let range = NSRange(location: 0, length: (cleaned as NSString).length)
+            cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
+        }
+        cleaned = cleaned.replacingOccurrences(of: "<think>", with: "", options: .caseInsensitive)
+        cleaned = cleaned.replacingOccurrences(of: "</think>", with: "", options: .caseInsensitive)
+        cleaned = unwrapCodeFenceIfNeeded(cleaned)
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func unwrapCodeFenceIfNeeded(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("```"), trimmed.hasSuffix("```") else {
+            return trimmed
+        }
+        var lines = trimmed.components(separatedBy: .newlines)
+        guard lines.count >= 2 else { return trimmed }
+        lines.removeFirst()
+        if let last = lines.last, last.trimmingCharacters(in: .whitespacesAndNewlines) == "```" {
+            lines.removeLast()
+        }
+        return lines.joined(separator: "\n")
     }
 }

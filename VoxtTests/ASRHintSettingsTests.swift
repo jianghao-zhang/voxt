@@ -102,6 +102,38 @@ final class ASRHintSettingsTests: XCTestCase {
         XCTAssertEqual(payload.language, "Traditional Chinese")
     }
 
+    func testResolveDictationSettingsUsesMainLanguageAndContextualPhrases() {
+        let settings = ASRHintSettings(
+            followsUserMainLanguage: true,
+            contextualPhrasesText: "Voxt\nFireRed\n Voxt \n",
+            prefersOnDeviceRecognition: true,
+            addsPunctuation: false,
+            reportsPartialResults: false
+        )
+
+        let resolved = ASRHintResolver.resolveDictationSettings(
+            settings: settings,
+            userLanguageCodes: ["zh-Hant"]
+        )
+
+        XCTAssertEqual(resolved.localeIdentifier, "zh-TW")
+        XCTAssertEqual(resolved.contextualPhrases, ["Voxt", "FireRed", "Voxt"])
+        XCTAssertTrue(resolved.prefersOnDeviceRecognition)
+        XCTAssertFalse(resolved.addsPunctuation)
+        XCTAssertFalse(resolved.reportsPartialResults)
+    }
+
+    func testSanitizedDictationContextualPhrasesTrimBlankLines() {
+        let settings = ASRHintSettingsStore.sanitized(
+            ASRHintSettings(
+                contextualPhrasesText: "\n  Voxt  \n\n FireRed ASR \n"
+            ),
+            for: .dictation
+        )
+
+        XCTAssertEqual(settings.contextualPhrasesText, "Voxt\nFireRed ASR")
+    }
+
     func testLanguageSummaryAndOutputVariantDescription() {
         XCTAssertEqual(
             ASRHintResolver.selectedLanguageSummary(["zh-Hans", "en"]),

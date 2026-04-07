@@ -108,7 +108,6 @@ final class WhisperKitModelManager: ObservableObject {
     init(modelID: String, hubBaseURL: URL) {
         self.modelID = Self.canonicalModelID(modelID)
         self.hubBaseURL = hubBaseURL
-        prefetchAllModelSizes()
         checkExistingModel()
     }
 

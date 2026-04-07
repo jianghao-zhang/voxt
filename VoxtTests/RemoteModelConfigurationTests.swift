@@ -108,6 +108,25 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertFalse(resolved.openAIChunkPseudoRealtimeEnabled)
     }
 
+    func testDoubaoASRFreeDefaultsAndConfigurationPolicy() {
+        let resolved = RemoteModelConfigurationStore.resolvedASRConfiguration(
+            provider: .doubaoASRFree,
+            stored: [:]
+        )
+
+        XCTAssertEqual(resolved.providerID, RemoteASRProvider.doubaoASRFree.rawValue)
+        XCTAssertEqual(resolved.model, DoubaoASRFreeConfiguration.modelRealtime)
+        XCTAssertTrue(resolved.isConfigured(for: .doubaoASRFree))
+        XCTAssertFalse(
+            RemoteProviderConfiguration(
+                providerID: RemoteASRProvider.doubaoASRFree.rawValue,
+                model: "",
+                endpoint: "",
+                apiKey: ""
+            ).isConfigured(for: .doubaoASRFree)
+        )
+    }
+
     func testResolvedLLMConfigurationDefaultsWhenMissing() {
         let resolved = RemoteModelConfigurationStore.resolvedLLMConfiguration(
             provider: .anthropic,
@@ -199,6 +218,25 @@ final class RemoteModelConfigurationTests: XCTestCase {
             RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(
                 .doubaoASR,
                 configuration: doubaoRealtime
+            )
+        )
+
+        let doubaoFreeRealtime = RemoteProviderConfiguration(
+            providerID: RemoteASRProvider.doubaoASRFree.rawValue,
+            model: DoubaoASRFreeConfiguration.modelRealtime,
+            endpoint: "",
+            apiKey: ""
+        )
+        XCTAssertFalse(
+            RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(
+                .doubaoASRFree,
+                configuration: doubaoFreeRealtime
+            )
+        )
+        XCTAssertTrue(
+            RemoteASRMeetingConfiguration.hasValidMeetingModel(
+                provider: .doubaoASRFree,
+                configuration: doubaoFreeRealtime
             )
         )
 

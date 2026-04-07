@@ -60,8 +60,8 @@ struct OnboardingSettingsView: View {
     @State var translationTestInput = OnboardingTranslationTest.defaultInput
     @State var rewriteTestPrompt = OnboardingRewriteTest.defaultPrompt
     @State var rewriteTestSourceText = OnboardingRewriteTest.defaultSourceText
-    @State var appEnhancementDemoPlayer = AVPlayer(url: OnboardingVideoDemo.appEnhancementURL)
-    @State var meetingDemoPlayer = AVPlayer(url: OnboardingVideoDemo.meetingURL)
+    @State var appEnhancementDemoPlayer: AVPlayer?
+    @State var meetingDemoPlayer: AVPlayer?
 
     var interfaceLanguage: AppInterfaceLanguage {
         AppInterfaceLanguage(rawValue: interfaceLanguageRaw) ?? .system
@@ -308,6 +308,8 @@ struct OnboardingSettingsView: View {
         .onAppear {
             refreshInputDevices()
             refreshModelStorageDisplayPath()
+            syncOnboardingModelManagers()
+            prepareDemoPlayerIfNeeded(for: currentStep)
         }
         .onChange(of: muteSystemAudioWhileRecording) { _, newValue in
             guard newValue else {
@@ -333,8 +335,35 @@ struct OnboardingSettingsView: View {
         .onChange(of: modelStorageRootPath) { _, _ in
             refreshModelStorageDisplayPath()
         }
+        .onChange(of: mlxModelRepo) { _, newValue in
+            let canonicalRepo = MLXModelManager.canonicalModelRepo(newValue)
+            if canonicalRepo != newValue {
+                mlxModelRepo = canonicalRepo
+                return
+            }
+            mlxModelManager.updateModel(repo: canonicalRepo)
+        }
+        .onChange(of: whisperModelID) { _, newValue in
+            let canonicalModelID = WhisperKitModelManager.canonicalModelID(newValue)
+            if canonicalModelID != newValue {
+                whisperModelID = canonicalModelID
+                return
+            }
+            whisperModelManager.updateModel(id: canonicalModelID)
+        }
+        .onChange(of: customLLMRepo) { _, newValue in
+            let sanitizedRepo = CustomLLMModelManager.isSupportedModelRepo(newValue)
+                ? newValue
+                : CustomLLMModelManager.defaultModelRepo
+            if sanitizedRepo != newValue {
+                customLLMRepo = sanitizedRepo
+                return
+            }
+            customLLMManager.updateModel(repo: sanitizedRepo)
+        }
         .onChange(of: currentStep) { _, newValue in
             OnboardingPreferenceManager.saveLastStep(newValue)
+            prepareDemoPlayerIfNeeded(for: newValue)
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtAudioInputDevicesDidChange)) { _ in
             refreshInputDevices()
@@ -529,6 +558,43 @@ struct OnboardingSettingsView: View {
         OnboardingStepStatusResolver.resolve(step: step, snapshot: onboardingStatusSnapshot)
     }
 
+    private func syncOnboardingModelManagers() {
+        let canonicalRepo = MLXModelManager.canonicalModelRepo(mlxModelRepo)
+        if canonicalRepo != mlxModelRepo {
+            mlxModelRepo = canonicalRepo
+        }
+        mlxModelManager.updateModel(repo: canonicalRepo)
+
+        let canonicalWhisperModelID = WhisperKitModelManager.canonicalModelID(whisperModelID)
+        if canonicalWhisperModelID != whisperModelID {
+            whisperModelID = canonicalWhisperModelID
+        }
+        whisperModelManager.updateModel(id: canonicalWhisperModelID)
+
+        let sanitizedCustomLLMRepo = CustomLLMModelManager.isSupportedModelRepo(customLLMRepo)
+            ? customLLMRepo
+            : CustomLLMModelManager.defaultModelRepo
+        if sanitizedCustomLLMRepo != customLLMRepo {
+            customLLMRepo = sanitizedCustomLLMRepo
+        }
+        customLLMManager.updateModel(repo: sanitizedCustomLLMRepo)
+    }
+
+    private func prepareDemoPlayerIfNeeded(for step: OnboardingStep) {
+        switch step {
+        case .appEnhancement:
+            if appEnhancementDemoPlayer == nil {
+                appEnhancementDemoPlayer = AVPlayer(url: OnboardingVideoDemo.appEnhancementURL)
+            }
+        case .meeting:
+            if meetingDemoPlayer == nil {
+                meetingDemoPlayer = AVPlayer(url: OnboardingVideoDemo.meetingURL)
+            }
+        default:
+            break
+        }
+    }
+
     var recordingPermissionsSatisfied: Bool {
         OnboardingPermissionRequirementResolver.requiredPermissions(
             for: .transcription,
@@ -608,8 +674,12 @@ struct OnboardingSettingsView: View {
             provider: provider,
             stored: remoteASRConfigurations
         )
-        guard configuration.isConfigured else {
+        guard configuration.isConfigured(for: provider) else {
             return String(localized: "Not configured")
+        }
+
+        if provider == .doubaoASRFree {
+            return String(localized: "Ready to use")
         }
 
         var lines = [AppLocalization.format("Configured model: %@", configuration.model)]
@@ -735,6 +805,8 @@ struct OnboardingSettingsView: View {
         switch provider {
         case .doubaoASR:
             return AppLocalization.localizedString("Doubao uses App ID + Access Token for streaming API.")
+        case .doubaoASRFree:
+            return AppLocalization.localizedString("Doubao ASR Free uses the Doubao IME realtime service and works with no configuration.")
         case .aliyunBailianASR:
             return AppLocalization.localizedString("Aliyun ASR in Voxt uses realtime WebSocket only: Qwen models use /api-ws/v1/realtime, Fun/Paraformer models use /api-ws/v1/inference.")
         case .openAIWhisper, .glmASR:

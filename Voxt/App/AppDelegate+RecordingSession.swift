@@ -613,7 +613,7 @@ extension AppDelegate {
         case .openAIWhisper, .glmASR:
             // File-upload ASR can legitimately take longer than realtime providers.
             return 60
-        case .doubaoASR, .aliyunBailianASR:
+        case .doubaoASR, .doubaoASRFree, .aliyunBailianASR:
             return 8
         }
     }

@@ -803,7 +803,7 @@ enum ConfigurationTransferManager {
 
         if engine == .remote {
             let config = RemoteModelConfigurationStore.resolvedASRConfiguration(provider: selectedRemoteASR, stored: remoteASR)
-            if !config.isConfigured {
+            if !config.isConfigured(for: selectedRemoteASR) {
                 issues.append(.init(scope: .remoteASRProvider(selectedRemoteASR), message: AppLocalization.localizedString("Configuration required.")))
             } else if defaults.bool(forKey: AppPreferenceKey.meetingNotesBetaEnabled),
                       RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(selectedRemoteASR, configuration: config),

@@ -154,11 +154,10 @@ struct ModelSettingsView: View {
 
                         Spacer(minLength: 0)
 
-                        Button("Engine Hint Settings") {
+                        Button(selectedASRHintTarget.settingsTitle) {
                             isASRHintSettingsPresented = true
                         }
                         .buttonStyle(SettingsPillButtonStyle(height: 34))
-                        .disabled(selectedEngine == .dictation)
                     }
 
                     Text(selectedEngine.description)

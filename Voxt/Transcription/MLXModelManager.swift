@@ -183,6 +183,21 @@ class MLXModelManager: ObservableObject {
         case error(String)
     }
 
+    struct TranscriptionBehavior: Equatable {
+        enum CorrectionMode: Equatable {
+            case incremental
+            case finalizationOnly
+        }
+
+        let correctionMode: CorrectionMode
+        let allowsQuickStopPass: Bool
+        let preloadsOnRecordingStart: Bool
+
+        var runsIntermediateCorrections: Bool {
+            correctionMode == .incremental
+        }
+    }
+
     @Published private(set) var state: ModelState = .notDownloaded
     @Published private(set) var sizeState: ModelSizeState = .unknown
     @Published private(set) var remoteSizeTextByRepo: [String: String] = [:]
@@ -191,6 +206,8 @@ class MLXModelManager: ObservableObject {
     private var hubBaseURL: URL
     private var loadedModel: (any STTGenerationModel)?
     private var loadedRepo: String?
+    private var loadingTask: Task<Void, Error>?
+    private var loadingRepo: String?
     private var downloadTask: Task<Void, Never>?
     private var sizeTask: Task<Void, Never>?
     private var idleUnloadTask: Task<Void, Never>?
@@ -266,6 +283,9 @@ class MLXModelManager: ObservableObject {
         let canonicalRepo = Self.canonicalModelRepo(repo)
         guard canonicalRepo != modelRepo else { return }
         cancelIdleUnloadTask()
+        loadingTask?.cancel()
+        loadingTask = nil
+        loadingRepo = nil
         modelRepo = canonicalRepo
         loadedModel = nil
         loadedRepo = nil
@@ -281,6 +301,27 @@ class MLXModelManager: ObservableObject {
 
     static func isRealtimeCapableModelRepo(_ repo: String) -> Bool {
         realtimeCapableModelRepos.contains(canonicalModelRepo(repo))
+    }
+
+    static func transcriptionBehavior(for repo: String) -> TranscriptionBehavior {
+        let canonicalRepo = canonicalModelRepo(repo)
+        if canonicalRepo.localizedCaseInsensitiveContains("firered") {
+            return TranscriptionBehavior(
+                correctionMode: .finalizationOnly,
+                allowsQuickStopPass: false,
+                preloadsOnRecordingStart: true
+            )
+        }
+
+        return TranscriptionBehavior(
+            correctionMode: .incremental,
+            allowsQuickStopPass: true,
+            preloadsOnRecordingStart: true
+        )
+    }
+
+    var currentTranscriptionBehavior: TranscriptionBehavior {
+        Self.transcriptionBehavior(for: modelRepo)
     }
 
     func updateHubBaseURL(_ url: URL) {
@@ -383,24 +424,53 @@ class MLXModelManager: ObservableObject {
     func loadModel() async throws -> any STTGenerationModel {
         cancelIdleUnloadTask()
         if let model = loadedModel, loadedRepo == modelRepo {
+            VoxtLog.info("MLX Audio model reuse existing instance. repo=\(modelRepo)", verbose: true)
             return model
         }
+        if let loadingTask, loadingRepo == modelRepo {
+            VoxtLog.info("MLX Audio model awaiting in-flight load. repo=\(modelRepo)", verbose: true)
+            try await loadingTask.value
+            return try readyModel(for: modelRepo)
+        }
 
+        let repo = modelRepo
+        let startedAt = Date()
+        VoxtLog.info("MLX Audio model load started. repo=\(repo)", verbose: true)
         state = .loading
+        let loadingTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let model = try await Self.loadSTTModel(for: repo)
+            guard !Task.isCancelled else { return }
+            guard self.loadingRepo == repo else { return }
+            self.loadedModel = model
+            self.loadedRepo = repo
+            self.state = .ready
+        }
+        self.loadingTask = loadingTask
+        self.loadingRepo = repo
         do {
-            let model = try await Self.loadSTTModel(for: modelRepo)
-            loadedModel = model
-            loadedRepo = modelRepo
-            state = .ready
+            try await loadingTask.value
+            self.loadingTask = nil
+            self.loadingRepo = nil
+            let model = try readyModel(for: repo)
+            let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            VoxtLog.info("MLX Audio model load completed. repo=\(repo), elapsedMs=\(elapsedMs)")
             return model
         } catch {
+            self.loadingTask = nil
+            self.loadingRepo = nil
             state = .error("Model load failed: \(error.localizedDescription)")
+            let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            VoxtLog.error("MLX Audio model load failed. repo=\(repo), elapsedMs=\(elapsedMs), error=\(error.localizedDescription)")
             throw error
         }
     }
 
     func deleteModel() {
         cancelIdleUnloadTask()
+        loadingTask?.cancel()
+        loadingTask = nil
+        loadingRepo = nil
         loadedModel = nil
         loadedRepo = nil
         activeUseCount = 0
@@ -424,7 +494,6 @@ class MLXModelManager: ObservableObject {
     func endActiveUse() {
         activeUseCount = max(0, activeUseCount - 1)
         guard activeUseCount == 0 else { return }
-        Memory.clearCache()
         scheduleIdleUnloadIfNeeded()
     }
 
@@ -435,6 +504,17 @@ class MLXModelManager: ObservableObject {
             return ""
         }
         return Self.byteFormatter.string(fromByteCount: Int64(size))
+    }
+
+    private func readyModel(for repo: String) throws -> any STTGenerationModel {
+        guard let model = loadedModel, loadedRepo == repo else {
+            throw NSError(
+                domain: "Voxt.MLXModelManager",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Model load finished without a ready model instance."]
+            )
+        }
+        return model
     }
 
     private static func loadSTTModel(for repo: String) async throws -> any STTGenerationModel {

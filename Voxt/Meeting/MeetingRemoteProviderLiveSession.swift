@@ -24,6 +24,14 @@ struct MeetingRemoteLiveSessionFactory: MeetingLiveSessionFactory {
                 timelineOffsetSeconds: timelineOffsetSeconds,
                 policy: policy
             )
+        case .doubaoASRFree:
+            return DoubaoFreeMeetingRemoteLiveSession(
+                speaker: speaker,
+                configuration: configuration,
+                hintPayload: hintPayload,
+                timelineOffsetSeconds: timelineOffsetSeconds,
+                policy: policy
+            )
         case .aliyunBailianASR:
             if MeetingAliyunRemoteSupport.isQwenRealtimeModel(configuration.model) {
                 return AliyunQwenMeetingRemoteLiveSession(
@@ -698,6 +706,113 @@ private final class DoubaoMeetingRemoteLiveSession: BaseMeetingRemoteLiveSession
                             )
                             await self.handleReadyForAudio()
                             self.emitProviderPacket(packet)
+                        }
+                    }
+                } catch {
+                    if self.isStopping || self.isCancelled || self.shouldTreatAsBenignSocketClosure(error) {
+                        self.signalFinished()
+                    } else {
+                        self.emitFailure(error)
+                    }
+                }
+            }
+        )
+    }
+
+    private func shouldTreatAsBenignSocketClosure(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSPOSIXErrorDomain, nsError.code == 57 {
+            return true
+        }
+        if nsError.domain == NSURLErrorDomain {
+            return [
+                NSURLErrorCancelled,
+                NSURLErrorNetworkConnectionLost,
+                NSURLErrorCannotConnectToHost,
+                NSURLErrorNotConnectedToInternet
+            ].contains(nsError.code)
+        }
+        return false
+    }
+}
+
+@MainActor
+private final class DoubaoFreeMeetingRemoteLiveSession: BaseMeetingRemoteLiveSession {
+    private var audioSender: DoubaoASRFreeAudioSender?
+
+    init(
+        speaker: MeetingSpeaker,
+        configuration: RemoteProviderConfiguration,
+        hintPayload: ResolvedASRHintPayload,
+        timelineOffsetSeconds: TimeInterval,
+        policy: MeetingLiveSessionPolicy
+    ) {
+        super.init(
+            speaker: speaker,
+            configuration: configuration,
+            hintPayload: hintPayload,
+            speechThreshold: speaker == .me ? 0.015 : 0.025,
+            timelineOffsetSeconds: timelineOffsetSeconds,
+            policy: policy
+        )
+    }
+
+    override func openTransport() async throws {
+        let connectResult = try await DoubaoASRFreeRuntimeSupport.connectAndStartSession()
+        registerSocket(connectResult.managedSocket)
+        audioSender = try DoubaoASRFreeAudioSender(
+            requestID: connectResult.requestID,
+            token: connectResult.credentials.token
+        )
+        startReceiveLoop()
+        await handleReadyForAudio()
+    }
+
+    override func sendAudioPacket(_ pcmData: Data, isLast: Bool) async {
+        guard let ws = socketTask(), let audioSender else { return }
+        do {
+            if isLast {
+                try await audioSender.finish(websocket: ws)
+                return
+            }
+            try await audioSender.enqueuePCMData(pcmData, websocket: ws)
+            if consumeShouldLogNextSpeechAudioPacket() {
+                logFirstAudioPacketIfNeeded(kind: "doubaoFree")
+            }
+        } catch {
+            emitFailure(error)
+            await cancel()
+        }
+    }
+
+    override func sendFinishSignal() async {
+        await sendAudioPacket(Data(), isLast: true)
+    }
+
+    private func startReceiveLoop() {
+        guard let ws = socketTask() else { return }
+        finishReceiveLoop(
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    while !Task.isCancelled {
+                        let message = try await ws.receive()
+                        guard case .data(let payloadData) = message else { continue }
+                        let parsed = try DoubaoASRFreeRuntimeSupport.parseServerResponse(payloadData)
+                        self.logServerPacketIfNeeded(
+                            kind: "doubaoFree",
+                            parsed: (text: parsed.text, isFinal: parsed.isFinal, sequence: nil)
+                        )
+                        if let text = parsed.text,
+                           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            self.emitTranscript(text: text, isFinal: parsed.isFinal)
+                        } else if parsed.isFinal {
+                            self.signalFinished()
+                            break
+                        }
+                        if parsed.messageType == "SessionFinished" {
+                            self.signalFinished()
+                            break
                         }
                     }
                 } catch {

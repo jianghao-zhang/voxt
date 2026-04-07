@@ -61,7 +61,7 @@ extension ModelSettingsView {
                 isSelected &&
                 meetingNotesBetaEnabled &&
                 RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(provider, configuration: config) &&
-                config.isConfigured &&
+                config.isConfigured(for: provider) &&
                 !RemoteASRMeetingConfiguration.hasValidMeetingModel(provider: provider, configuration: config)
             return ModelTableRow(
                 id: provider.rawValue,
@@ -441,8 +441,12 @@ extension ModelSettingsView {
         configuration: RemoteProviderConfiguration,
         showMeetingSetupDetails: Bool = true
     ) -> String {
-        guard configuration.isConfigured else {
+        guard configuration.isConfigured(for: provider) else {
             return AppLocalization.localizedString("Not configured")
+        }
+
+        if provider == .doubaoASRFree {
+            return AppLocalization.localizedString("Ready to use")
         }
 
         var lines = [AppLocalization.format("Configured model: %@", configuration.model)]
@@ -557,6 +561,8 @@ extension ModelSettingsView {
         switch provider {
         case .doubaoASR:
             return AppLocalization.localizedString("Doubao uses App ID + Access Token for streaming API.")
+        case .doubaoASRFree:
+            return AppLocalization.localizedString("Doubao ASR Free uses the Doubao IME realtime service and works with no configuration.")
         case .aliyunBailianASR:
             return AppLocalization.localizedString("Aliyun ASR in Voxt uses realtime WebSocket only: Qwen models use /api-ws/v1/realtime, Fun/Paraformer models use /api-ws/v1/inference.")
         case .openAIWhisper, .glmASR:

@@ -6,6 +6,67 @@ import MLXAudioCore
 import MLXAudioSTT
 import AudioToolbox
 
+struct MLXIntermediateCorrectionDecision: Equatable {
+    let elapsedSeconds: Double
+    let contextSampleCount: Int
+}
+
+struct MLXFinalizationPlan: Equatable {
+    let durationSeconds: Double
+    let quickPassSampleCount: Int?
+
+    var shouldRunQuickPass: Bool {
+        quickPassSampleCount != nil
+    }
+}
+
+enum MLXTranscriptionPlanning {
+    static func intermediateCorrectionDecision(
+        sampleCount: Int,
+        sampleRate: Double,
+        nextCorrectionAtSeconds: Double,
+        behavior: MLXModelManager.TranscriptionBehavior,
+        firstCorrectionMinimumSeconds: Double,
+        contextWindowSeconds: Double
+    ) -> MLXIntermediateCorrectionDecision? {
+        guard behavior.runsIntermediateCorrections else { return nil }
+        guard sampleCount > 0 else { return nil }
+
+        let safeSampleRate = max(sampleRate, 1)
+        let elapsedSeconds = Double(sampleCount) / safeSampleRate
+        guard elapsedSeconds >= firstCorrectionMinimumSeconds else { return nil }
+        guard elapsedSeconds >= nextCorrectionAtSeconds else { return nil }
+
+        return MLXIntermediateCorrectionDecision(
+            elapsedSeconds: elapsedSeconds,
+            contextSampleCount: Int(contextWindowSeconds * safeSampleRate)
+        )
+    }
+
+    static func finalizationPlan(
+        sampleCount: Int,
+        sampleRate: Double,
+        behavior: MLXModelManager.TranscriptionBehavior,
+        quickPassMinimumDurationSeconds: Double,
+        quickPassContextWindowSeconds: Double
+    ) -> MLXFinalizationPlan {
+        let safeSampleRate = max(sampleRate, 1)
+        let durationSeconds = Double(sampleCount) / safeSampleRate
+        let quickPassSampleCount: Int?
+
+        if behavior.allowsQuickStopPass, durationSeconds >= quickPassMinimumDurationSeconds {
+            quickPassSampleCount = Int(quickPassContextWindowSeconds * safeSampleRate)
+        } else {
+            quickPassSampleCount = nil
+        }
+
+        return MLXFinalizationPlan(
+            durationSeconds: durationSeconds,
+            quickPassSampleCount: quickPassSampleCount
+        )
+    }
+}
+
 @MainActor
 class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private enum CorrectionStage {
@@ -17,6 +78,13 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private final class AudioSampleStore {
         private let lock = NSLock()
         private var samples: [Float] = []
+        private var callbackCount: Int = 0
+
+        func noteCallback() {
+            lock.lock()
+            defer { lock.unlock() }
+            callbackCount += 1
+        }
 
         func append(_ newSamples: [Float]) {
             lock.lock()
@@ -36,10 +104,17 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             return samples.count
         }
 
+        func callbacksReceived() -> Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return callbackCount
+        }
+
         func clear() {
             lock.lock()
             defer { lock.unlock() }
             samples.removeAll(keepingCapacity: false)
+            callbackCount = 0
         }
 
         func tail(sampleCount: Int) -> [Float] {
@@ -76,7 +151,14 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private var sessionRevision = 0
     private var correctionLoopTask: Task<Void, Never>?
     private var finalizationTask: Task<Void, Never>?
+    private var preloadTask: Task<Void, Never>?
+    private var captureWatchdogTask: Task<Void, Never>?
     private var inferenceBusy = false
+    private var didRetryCaptureStartup = false
+    private var loggedSampleExtractionFailure = false
+    private var activeSessionBehavior = MLXModelManager.transcriptionBehavior(
+        for: MLXModelManager.defaultModelRepo
+    )
 
     private var stableCommittedText = ""
     private var lastCandidateText = ""
@@ -101,15 +183,29 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         cancelActiveTasks()
         resetTransientState()
         sessionRevision += 1
+        let revision = sessionRevision
+        activeSessionBehavior = modelManager.currentTranscriptionBehavior
         isModelInitializing = modelManager.state != .ready
+        VoxtLog.info(
+            "MLX transcription session started. repo=\(modelManager.currentModelRepo), correctionMode=\(activeSessionBehavior.correctionMode), modelState=\(String(describing: modelManager.state))",
+            verbose: true
+        )
 
         do {
             try startAudioCaptureGraph()
             isRecording = true
+            scheduleCaptureStartupWatchdog(revision: revision)
+            startModelPreloadIfNeeded(revision: revision)
 
-            let revision = sessionRevision
-            correctionLoopTask = Task { [weak self] in
-                await self?.runIntermediateCorrectionLoop(revision: revision)
+            if activeSessionBehavior.runsIntermediateCorrections {
+                correctionLoopTask = Task { [weak self] in
+                    await self?.runIntermediateCorrectionLoop(revision: revision)
+                }
+            } else {
+                VoxtLog.info(
+                    "MLX transcription intermediate corrections disabled for repo=\(modelManager.currentModelRepo); finalization-only mode enabled.",
+                    verbose: true
+                )
             }
         } catch {
             VoxtLog.error("MLXTranscriber start recording failed: \(error)")
@@ -128,8 +224,19 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
 
         let revision = sessionRevision
         let sampleRate = inputSampleRate
+        let callbackCount = sampleStore.callbacksReceived()
+        let sampleCount = sampleStore.count()
+        VoxtLog.info(
+            "MLX recording stop captured. callbacks=\(callbackCount), samples=\(sampleCount), sampleRate=\(Int(sampleRate))",
+            verbose: true
+        )
 
-        guard sampleStore.count() > 0 else {
+        guard sampleCount > 0 else {
+            if callbackCount > 0 {
+                VoxtLog.warning(
+                    "MLX recording stopped with audio callbacks but no extracted samples. sampleRate=\(Int(sampleRate))"
+                )
+            }
             onTranscriptionFinished?("")
             return
         }
@@ -143,7 +250,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     /// Triggers an intermediate transcription pass while recording.
     /// Used to improve responsiveness during short pauses in speech.
     func forceIntermediateTranscription() {
-        guard isRecording else { return }
+        guard isRecording, activeSessionBehavior.runsIntermediateCorrections else { return }
         let revision = sessionRevision
         let sampleRate = inputSampleRate
         Task { [weak self] in
@@ -171,13 +278,15 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
 
             guard revision == sessionRevision, isRecording else { return }
             let sampleCount = sampleStore.count()
-            guard sampleCount > 0 else { continue }
-
-            let elapsed = Double(sampleCount) / safeSampleRate(inputSampleRate)
-            guard elapsed >= firstCorrectionMinimumSeconds else { continue }
-            guard elapsed >= nextCorrectionAtSeconds else { continue }
-            let contextCount = Int(intermediateContextWindowSeconds * safeSampleRate(inputSampleRate))
-            let intermediateSamples = sampleStore.tail(sampleCount: contextCount)
+            guard let decision = MLXTranscriptionPlanning.intermediateCorrectionDecision(
+                sampleCount: sampleCount,
+                sampleRate: inputSampleRate,
+                nextCorrectionAtSeconds: nextCorrectionAtSeconds,
+                behavior: activeSessionBehavior,
+                firstCorrectionMinimumSeconds: firstCorrectionMinimumSeconds,
+                contextWindowSeconds: intermediateContextWindowSeconds
+            ) else { continue }
+            let intermediateSamples = sampleStore.tail(sampleCount: decision.contextSampleCount)
 
             _ = await runCorrectionPass(
                 stage: .intermediate,
@@ -186,7 +295,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 sampleRate: inputSampleRate
             )
 
-            nextCorrectionAtSeconds = elapsed + correctionIntervalSeconds
+            nextCorrectionAtSeconds = decision.elapsedSeconds + correctionIntervalSeconds
         }
     }
 
@@ -198,11 +307,20 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             return
         }
 
-        let duration = Double(snapshot.count) / safeSampleRate(sampleRate)
+        let plan = MLXTranscriptionPlanning.finalizationPlan(
+            sampleCount: snapshot.count,
+            sampleRate: sampleRate,
+            behavior: activeSessionBehavior,
+            quickPassMinimumDurationSeconds: quickPassMinimumDurationSeconds,
+            quickPassContextWindowSeconds: quickPassContextWindowSeconds
+        )
+        VoxtLog.info(
+            "MLX finalization started. repo=\(modelManager.currentModelRepo), audioSec=\(String(format: "%.2f", plan.durationSeconds)), quickPass=\(plan.shouldRunQuickPass)",
+            verbose: true
+        )
         let quickSource: [Float]?
-        if duration >= quickPassMinimumDurationSeconds {
-            let quickContextCount = Int(quickPassContextWindowSeconds * safeSampleRate(sampleRate))
-            quickSource = latestWindow(from: snapshot, maxCount: quickContextCount)
+        if let quickPassSampleCount = plan.quickPassSampleCount {
+            quickSource = latestWindow(from: snapshot, maxCount: quickPassSampleCount)
         } else {
             quickSource = nil
         }
@@ -231,6 +349,10 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         transcribedText = resolved
         publishPartial(resolved)
         onTranscriptionFinished?(resolved)
+        VoxtLog.info(
+            "MLX finalization completed. repo=\(modelManager.currentModelRepo), audioSec=\(String(format: "%.2f", plan.durationSeconds)), textChars=\(resolved.count)",
+            verbose: true
+        )
         sampleStore.clear()
     }
 
@@ -241,6 +363,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         sampleRate: Double
     ) async -> String? {
         if stage == .intermediate, inferenceBusy {
+            VoxtLog.info("MLX intermediate correction skipped because inference is still busy.", verbose: true)
             return nil
         }
 
@@ -253,6 +376,9 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         guard revision == sessionRevision else { return nil }
         let rawSamples = explicitSamples ?? sampleStore.snapshot()
         guard !rawSamples.isEmpty else { return nil }
+        let audioSeconds = Double(rawSamples.count) / safeSampleRate(sampleRate)
+        let repo = modelManager.currentModelRepo
+        let passStartedAt = Date()
 
         do {
             modelManager.beginActiveUse()
@@ -263,21 +389,31 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             }
             let audioSamples = try prepareInputSamples(rawSamples, sampleRate: sampleRate)
             let parameters = generationParameters(for: stage)
+            let inferenceStartedAt = Date()
             let (streamedText, finalOutput) = try await runStreamingInference(
                 model: model,
                 audioSamples: audioSamples,
                 generationParameters: parameters
             )
+            let inferenceElapsedMs = Int(Date().timeIntervalSince(inferenceStartedAt) * 1000)
 
             let candidate = normalizeText(finalOutput?.text ?? streamedText)
             guard !candidate.isEmpty else { return nil }
             applyCandidate(candidate, stage: stage)
+            let elapsedMs = Int(Date().timeIntervalSince(passStartedAt) * 1000)
+            VoxtLog.info(
+                "MLX correction pass completed. repo=\(repo), stage=\(stageLabel(for: stage)), audioSec=\(String(format: "%.2f", audioSeconds)), elapsedMs=\(elapsedMs), inferenceMs=\(inferenceElapsedMs), textChars=\(candidate.count)",
+                verbose: true
+            )
             return candidate
         } catch {
             await MainActor.run {
                 self.isModelInitializing = false
             }
-            VoxtLog.error("MLXTranscriber \(stageLabel(for: stage)) pass failed: \(error)")
+            let elapsedMs = Int(Date().timeIntervalSince(passStartedAt) * 1000)
+            VoxtLog.error(
+                "MLXTranscriber \(stageLabel(for: stage)) pass failed. repo=\(repo), audioSec=\(String(format: "%.2f", audioSeconds)), elapsedMs=\(elapsedMs), error=\(error.localizedDescription)"
+            )
             return nil
         }
     }
@@ -290,6 +426,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         stableCommittedText = ""
         lastCandidateText = ""
         nextCorrectionAtSeconds = correctionIntervalSeconds
+        loggedSampleExtractionFailure = false
     }
 
     private func stopAudioEngine() {
@@ -302,6 +439,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         if audioEngine.isRunning {
             audioEngine.stop()
         }
+        audioEngine.reset()
 
         let inputNode = audioEngine.inputNode
         inputNode.removeTap(onBus: 0)
@@ -310,29 +448,37 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputSampleRate = recordingFormat.sampleRate
         let sampleStore = self.sampleStore
+        didRetryCaptureStartup = false
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            guard let self, let channelData = buffer.floatChannelData?[0] else { return }
+            guard let self else { return }
+            sampleStore.noteCallback()
 
-            let frameLength = Int(buffer.frameLength)
-            let samples = Array(UnsafeBufferPointer(start: channelData, count: frameLength))
+            guard let samples = AudioLevelMeter.monoSamples(from: buffer), !samples.isEmpty else {
+                if !self.loggedSampleExtractionFailure {
+                    self.loggedSampleExtractionFailure = true
+                    VoxtLog.warning(
+                        """
+                        MLX audio sample extraction failed. sampleRate=\(Int(buffer.format.sampleRate)), channels=\(buffer.format.channelCount), format=\(buffer.format.commonFormat.rawValue), interleaved=\(buffer.format.isInterleaved)
+                        """
+                    )
+                }
+                return
+            }
+
             sampleStore.append(samples)
-
-            if frameLength > 0 {
-                var rms: Float = 0
-                for i in 0..<frameLength {
-                    rms += channelData[i] * channelData[i]
-                }
-                rms = sqrt(rms / Float(frameLength))
-                let normalized = min(rms * 20, 1.0)
-                Task { @MainActor [weak self] in
-                    self?.audioLevel = normalized
-                }
+            let normalized = AudioLevelMeter.normalizedLevel(fromSamples: samples)
+            Task { @MainActor [weak self] in
+                self?.audioLevel = normalized
             }
         }
 
         audioEngine.prepare()
         try audioEngine.start()
+        VoxtLog.info(
+            "MLX audio capture started. sampleRate=\(Int(recordingFormat.sampleRate)), channels=\(recordingFormat.channelCount), format=\(recordingFormat.commonFormat.rawValue), interleaved=\(recordingFormat.isInterleaved), deviceID=\(preferredInputDeviceID.map(String.init(describing:)) ?? "default")",
+            verbose: true
+        )
     }
 
     private func cancelActiveTasks() {
@@ -340,6 +486,10 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         correctionLoopTask = nil
         finalizationTask?.cancel()
         finalizationTask = nil
+        preloadTask?.cancel()
+        preloadTask = nil
+        captureWatchdogTask?.cancel()
+        captureWatchdogTask = nil
     }
 
     private func safeSampleRate(_ value: Double) -> Double {
@@ -353,6 +503,71 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
 
     private func publishPartial(_ text: String) {
         onPartialTranscription?(text)
+    }
+
+    private func startModelPreloadIfNeeded(revision: Int) {
+        guard activeSessionBehavior.preloadsOnRecordingStart else {
+            isModelInitializing = false
+            return
+        }
+        guard modelManager.state != .ready else {
+            isModelInitializing = false
+            return
+        }
+
+        preloadTask?.cancel()
+        preloadTask = Task { [weak self] in
+            guard let self else { return }
+            let startedAt = Date()
+            do {
+                self.modelManager.beginActiveUse()
+                defer { self.modelManager.endActiveUse() }
+                _ = try await self.modelManager.loadModel()
+                guard !Task.isCancelled, revision == self.sessionRevision else { return }
+                await MainActor.run {
+                    self.isModelInitializing = false
+                }
+                let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                VoxtLog.info(
+                    "MLX transcription preload completed. repo=\(self.modelManager.currentModelRepo), elapsedMs=\(elapsedMs)",
+                    verbose: true
+                )
+            } catch {
+                guard !Task.isCancelled else { return }
+                let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                VoxtLog.warning(
+                    "MLX transcription preload failed. repo=\(self.modelManager.currentModelRepo), elapsedMs=\(elapsedMs), error=\(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
+    private func scheduleCaptureStartupWatchdog(revision: Int) {
+        captureWatchdogTask?.cancel()
+        captureWatchdogTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(1.2))
+            } catch {
+                return
+            }
+            await self?.recoverAudioCaptureIfNeeded(revision: revision)
+        }
+    }
+
+    private func recoverAudioCaptureIfNeeded(revision: Int) async {
+        guard revision == sessionRevision, isRecording else { return }
+        guard sampleStore.callbacksReceived() == 0 else { return }
+        guard !didRetryCaptureStartup else { return }
+
+        didRetryCaptureStartup = true
+        VoxtLog.warning("MLX audio capture produced no initial callbacks. Restarting input graph once.")
+
+        do {
+            try startAudioCaptureGraph()
+            scheduleCaptureStartupWatchdog(revision: revision)
+        } catch {
+            VoxtLog.error("MLX audio capture recovery failed: \(error)")
+        }
     }
 
     private func applyCandidate(_ candidate: String, stage: CorrectionStage) {

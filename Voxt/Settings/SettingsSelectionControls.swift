@@ -118,6 +118,7 @@ enum SettingsMenuInteraction {
         }
 
         menu.performActionForItem(at: index)
+        menu.cancelTracking()
         return true
     }
 }

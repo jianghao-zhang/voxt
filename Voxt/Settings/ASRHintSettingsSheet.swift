@@ -42,6 +42,13 @@ struct ASRHintSettingsSheet: View {
         )
     }
 
+    private var resolvedDictationSettings: ResolvedDictationSettings {
+        ASRHintResolver.resolveDictationSettings(
+            settings: draftSettings,
+            userLanguageCodes: userLanguageCodes
+        )
+    }
+
     private var languagePreview: String {
         resolvedPayload.language ?? AppLocalization.localizedString("Automatic")
     }
@@ -51,10 +58,14 @@ struct ASRHintSettingsSheet: View {
         return hints.isEmpty ? AppLocalization.localizedString("Not applied") : hints.joined(separator: ", ")
     }
 
+    private var dictationLocalePreview: String {
+        resolvedDictationSettings.localeIdentifier ?? AppLocalization.localizedString("System default")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Engine Hint Settings")
+                Text(target.settingsTitle)
                     .font(.title3.weight(.semibold))
                 Text(target.title)
                     .font(.subheadline)
@@ -65,7 +76,10 @@ struct ASRHintSettingsSheet: View {
 
             HStack(alignment: .top, spacing: 16) {
                 infoRow(label: "Primary language", value: mainLanguage.title())
-                infoRow(label: "Resolved language", value: languagePreview)
+                infoRow(
+                    label: target == .dictation ? "Resolved locale" : "Resolved language",
+                    value: target == .dictation ? dictationLocalePreview : languagePreview
+                )
             }
 
             if target == .aliyunBailianASR {
@@ -81,6 +95,24 @@ struct ASRHintSettingsSheet: View {
 
             if target == .mlxAudio, let mlxModelRepo, !mlxModelRepo.isEmpty {
                 infoRow(label: "Current model", value: mlxModelRepo)
+            }
+
+            if target == .dictation {
+                Toggle("Prefer On-Device Recognition", isOn: $draftSettings.prefersOnDeviceRecognition)
+                Toggle("Add Punctuation", isOn: $draftSettings.addsPunctuation)
+                Toggle("Report Partial Results", isOn: $draftSettings.reportsPartialResults)
+
+                Text("Contextual Phrases")
+                    .font(.subheadline.weight(.medium))
+                PromptEditorView(text: $draftSettings.contextualPhrasesText, height: 120)
+                Text("Enter one phrase per line. These phrases bias Apple's recognizer toward names, products, and domain terms.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                infoRow(
+                    label: "Phrases count",
+                    value: String(resolvedDictationSettings.contextualPhrases.count)
+                )
             }
 
             Text(target.helpText)

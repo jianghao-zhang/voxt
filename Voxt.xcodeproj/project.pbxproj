@@ -876,14 +876,14 @@
 				minimumVersion = 2.6.4;
 			};
 		};
-			C1D2E3F4A5060708090A0B03 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
-				isa = XCRemoteSwiftPackageReference;
-				repositoryURL = "https://github.com/ml-explore/mlx-swift-lm.git";
-				requirement = {
-					kind = revision;
-					revision = e33eba8513595bde535719c48fedcb10ade5af57;
-				};
+		C1D2E3F4A5060708090A0B03 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm.git";
+			requirement = {
+				kind = revision;
+				revision = e33eba8513595bde535719c48fedcb10ade5af57;
 			};
+		};
 		D1E2F3A4B5C60718293A4B5E /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/argmaxinc/WhisperKit.git";

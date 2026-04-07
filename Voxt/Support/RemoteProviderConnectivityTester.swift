@@ -1,4 +1,7 @@
 import Foundation
+import CryptoKit
+import AVFoundation
+import AudioToolbox
 import zlib
 
 enum RemoteProviderTestTarget {
@@ -41,6 +44,9 @@ struct RemoteProviderConnectivityTester {
                 accessToken: token,
                 model: configuration.model
             )
+        case .doubaoASRFree:
+            _ = try await DoubaoASRFreeRuntimeSupport.connectAndStartSession()
+            return AppLocalization.localizedString("Connection test succeeded (Doubao ASR Free realtime reachable).")
         case .openAIWhisper:
             guard !configuration.apiKey.isEmpty else {
                 throw NSError(domain: "Voxt.Settings", code: -3, userInfo: [NSLocalizedDescriptionKey: AppLocalization.localizedString("OpenAI API Key is required for testing.")])
@@ -133,6 +139,9 @@ struct RemoteProviderConnectivityTester {
                 model: meetingConfiguration.model,
                 successMessage: AppLocalization.localizedString("Connection test succeeded (Meeting ASR reachable).")
             )
+        case .doubaoASRFree:
+            _ = try await DoubaoASRFreeRuntimeSupport.connectAndStartSession()
+            return AppLocalization.localizedString("Connection test succeeded (Meeting ASR reachable).")
         case .aliyunBailianASR:
             guard !meetingConfiguration.apiKey.isEmpty else {
                 throw NSError(domain: "Voxt.Settings", code: -9, userInfo: [NSLocalizedDescriptionKey: AppLocalization.localizedString("Aliyun Bailian API Key is required for testing.")])
@@ -1648,5 +1657,823 @@ struct RemoteProviderConnectivityTester {
         model.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .hasPrefix("qwen3-asr-flash-realtime")
+    }
+}
+
+struct DoubaoASRFreeConnectResult {
+    let managedSocket: VoxtNetworkSession.ManagedWebSocketTask
+    let credentials: DoubaoASRFreeCredentials
+    let requestID: String
+}
+
+struct DoubaoASRFreeParsedResponse {
+    let messageType: String
+    let statusCode: Int
+    let statusMessage: String
+    let text: String?
+    let isFinal: Bool
+}
+
+struct DoubaoASRFreeCredentials: Codable, Equatable {
+    var deviceID: String
+    var installID: String
+    var cdid: String
+    var openudid: String
+    var clientudid: String
+    var token: String
+
+    var hasCachedIdentity: Bool {
+        !deviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !cdid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var hasUsableSession: Bool {
+        hasCachedIdentity && !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+final class DoubaoASRFreeAudioSender {
+    private let requestID: String
+    private let token: String
+    private let encoder: DoubaoASRFreeOpusEncoder
+    private var timestampMilliseconds: UInt64
+    private var frameIndex = 0
+    private var pendingPCMData = Data()
+
+    init(requestID: String, token: String) throws {
+        self.requestID = requestID
+        self.token = token
+        self.encoder = try DoubaoASRFreeOpusEncoder()
+        self.timestampMilliseconds = UInt64(Date().timeIntervalSince1970 * 1000)
+    }
+
+    func enqueuePCMData(_ pcmData: Data, websocket: URLSessionWebSocketTask) async throws {
+        guard !pcmData.isEmpty else { return }
+        pendingPCMData.append(pcmData)
+        try await flushBufferedFrames(websocket: websocket, includeTrailingPartial: false)
+    }
+
+    func finish(websocket: URLSessionWebSocketTask) async throws {
+        if !pendingPCMData.isEmpty {
+            var finalFrame = pendingPCMData
+            if finalFrame.count < DoubaoASRFreeConfiguration.bytesPerFrame {
+                finalFrame.append(Data(repeating: 0, count: DoubaoASRFreeConfiguration.bytesPerFrame - finalFrame.count))
+            }
+            pendingPCMData.removeAll(keepingCapacity: false)
+            try await sendFrame(finalFrame, state: .last, websocket: websocket)
+        } else if frameIndex > 0 {
+            try await sendFrame(
+                Data(repeating: 0, count: DoubaoASRFreeConfiguration.bytesPerFrame),
+                state: .last,
+                websocket: websocket
+            )
+        }
+
+        try await websocket.send(
+            .data(
+                DoubaoASRFreeRuntimeSupport.encodeRequest(
+                    token: token,
+                    serviceName: "ASR",
+                    methodName: "FinishSession",
+                    payload: "",
+                    audioData: Data(),
+                    requestID: requestID,
+                    frameState: nil
+                )
+            )
+        )
+    }
+
+    private func flushBufferedFrames(
+        websocket: URLSessionWebSocketTask,
+        includeTrailingPartial: Bool
+    ) async throws {
+        while pendingPCMData.count >= DoubaoASRFreeConfiguration.bytesPerFrame ||
+            (includeTrailingPartial && !pendingPCMData.isEmpty) {
+            let frameLength = min(pendingPCMData.count, DoubaoASRFreeConfiguration.bytesPerFrame)
+            var frame = Data(pendingPCMData.prefix(frameLength))
+            pendingPCMData.removeFirst(frameLength)
+            if frame.count < DoubaoASRFreeConfiguration.bytesPerFrame {
+                frame.append(
+                    Data(
+                        repeating: 0,
+                        count: DoubaoASRFreeConfiguration.bytesPerFrame - frame.count
+                    )
+                )
+            }
+            let state: DoubaoASRFreeRuntimeSupport.FrameState = frameIndex == 0 ? .first : .middle
+            try await sendFrame(frame, state: state, websocket: websocket)
+        }
+    }
+
+    private func sendFrame(
+        _ pcmFrame: Data,
+        state: DoubaoASRFreeRuntimeSupport.FrameState,
+        websocket: URLSessionWebSocketTask
+    ) async throws {
+        let opusData = try encoder.encodeFrame(pcmFrame)
+        let metadata = try JSONSerialization.data(
+            withJSONObject: [
+                "extra": [:],
+                "timestamp_ms": timestampMilliseconds
+            ]
+        )
+        let payload = String(data: metadata, encoding: .utf8) ?? ""
+        let message = DoubaoASRFreeRuntimeSupport.encodeRequest(
+            token: "",
+            serviceName: "ASR",
+            methodName: "TaskRequest",
+            payload: payload,
+            audioData: opusData,
+            requestID: requestID,
+            frameState: state
+        )
+        frameIndex += 1
+        timestampMilliseconds += UInt64(DoubaoASRFreeConfiguration.frameDurationMilliseconds)
+        try await websocket.send(.data(message))
+    }
+}
+
+enum DoubaoASRFreeRuntimeSupport {
+    enum FrameState: Int32 {
+        case first = 1
+        case middle = 3
+        case last = 9
+    }
+
+    static func cacheURL(fileManager: FileManager = .default) throws -> URL {
+        let appSupport = try fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directory = appSupport
+            .appendingPathComponent("Voxt", isDirectory: true)
+            .appendingPathComponent("Cache", isDirectory: true)
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        return directory.appendingPathComponent(DoubaoASRFreeConfiguration.credentialCacheFileName)
+    }
+
+    static func clearCachedCredentials(fileManager: FileManager = .default) {
+        guard let url = try? cacheURL(fileManager: fileManager) else { return }
+        try? fileManager.removeItem(at: url)
+    }
+
+    static func loadCachedCredentials(fileManager: FileManager = .default) -> DoubaoASRFreeCredentials? {
+        guard let url = try? cacheURL(fileManager: fileManager),
+              let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(DoubaoASRFreeCredentials.self, from: data)
+    }
+
+    static func saveCachedCredentials(_ credentials: DoubaoASRFreeCredentials, fileManager: FileManager = .default) throws {
+        let url = try cacheURL(fileManager: fileManager)
+        let data = try JSONEncoder().encode(credentials)
+        try data.write(to: url, options: .atomic)
+    }
+
+    static func ensureCredentials(forceRefresh: Bool = false) async throws -> DoubaoASRFreeCredentials {
+        if !forceRefresh,
+           let cached = loadCachedCredentials(),
+           cached.hasUsableSession {
+            return cached
+        }
+
+        let baseCredentials: DoubaoASRFreeCredentials
+        if !forceRefresh,
+           let cached = loadCachedCredentials(),
+           cached.hasCachedIdentity {
+            baseCredentials = cached
+        } else {
+            baseCredentials = try await registerDevice()
+        }
+
+        var resolved = baseCredentials
+        resolved.token = try await fetchToken(
+            deviceID: baseCredentials.deviceID,
+            cdid: baseCredentials.cdid
+        )
+        try saveCachedCredentials(resolved)
+        return resolved
+    }
+
+    static func connectAndStartSession(forceRefreshCredentials: Bool = false) async throws -> DoubaoASRFreeConnectResult {
+        do {
+            return try await connectAndStartSessionOnce(forceRefreshCredentials: forceRefreshCredentials)
+        } catch {
+            guard !forceRefreshCredentials else { throw error }
+            clearCachedCredentials()
+            return try await connectAndStartSessionOnce(forceRefreshCredentials: true)
+        }
+    }
+
+    private static func connectAndStartSessionOnce(forceRefreshCredentials: Bool) async throws -> DoubaoASRFreeConnectResult {
+        let credentials = try await ensureCredentials(forceRefresh: forceRefreshCredentials)
+        let requestID = UUID().uuidString.lowercased()
+        let request = try makeWebSocketRequest(deviceID: credentials.deviceID)
+        let managedSocket = VoxtNetworkSession.makeWebSocketTask(with: request)
+        managedSocket.task.resume()
+
+        do {
+            try await managedSocket.task.send(
+                .data(
+                    encodeRequest(
+                        token: credentials.token,
+                        serviceName: "ASR",
+                        methodName: "StartTask",
+                        payload: "",
+                        audioData: Data(),
+                        requestID: requestID,
+                        frameState: nil
+                    )
+                )
+            )
+            let startTask = try await receiveBinaryResponse(from: managedSocket.task)
+            try validateStartResponse(startTask, context: "StartTask")
+
+            let sessionPayloadData = try JSONSerialization.data(
+                withJSONObject: DoubaoASRFreeConfiguration.sessionPayload(deviceID: credentials.deviceID)
+            )
+            let sessionPayload = String(data: sessionPayloadData, encoding: .utf8) ?? ""
+            try await managedSocket.task.send(
+                .data(
+                    encodeRequest(
+                        token: credentials.token,
+                        serviceName: "ASR",
+                        methodName: "StartSession",
+                        payload: sessionPayload,
+                        audioData: Data(),
+                        requestID: requestID,
+                        frameState: nil
+                    )
+                )
+            )
+            let startSession = try await receiveBinaryResponse(from: managedSocket.task)
+            try validateStartResponse(startSession, context: "StartSession")
+            return DoubaoASRFreeConnectResult(
+                managedSocket: managedSocket,
+                credentials: credentials,
+                requestID: requestID
+            )
+        } catch {
+            managedSocket.task.cancel(with: .goingAway, reason: nil)
+            throw error
+        }
+    }
+
+    static func parseServerResponse(_ data: Data) throws -> DoubaoASRFreeParsedResponse {
+        let decoded = try decodeResponseEnvelope(data)
+        if decoded.messageType == "TaskFailed" || decoded.messageType == "SessionFailed" {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: decoded.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: decoded.statusMessage.isEmpty ? decoded.messageType : decoded.statusMessage]
+            )
+        }
+
+        guard !decoded.resultJSON.isEmpty,
+              let jsonData = decoded.resultJSON.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let results = object["results"] as? [[String: Any]] else {
+            return DoubaoASRFreeParsedResponse(
+                messageType: decoded.messageType,
+                statusCode: decoded.statusCode,
+                statusMessage: decoded.statusMessage,
+                text: nil,
+                isFinal: decoded.messageType == "SessionFinished"
+            )
+        }
+
+        var text: String?
+        var isInterim = true
+        var isVADFinished = false
+        var nonstreamResult = false
+
+        for result in results {
+            if let candidate = result["text"] as? String,
+               !candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                text = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if let interim = result["is_interim"] as? Bool, interim == false {
+                isInterim = false
+            }
+            if let vadFinished = result["is_vad_finished"] as? Bool, vadFinished {
+                isVADFinished = true
+            }
+            if let extra = result["extra"] as? [String: Any],
+               let isNonstream = extra["nonstream_result"] as? Bool,
+               isNonstream {
+                nonstreamResult = true
+            }
+        }
+
+        let isFinal = nonstreamResult || (!isInterim && isVADFinished)
+        return DoubaoASRFreeParsedResponse(
+            messageType: decoded.messageType,
+            statusCode: decoded.statusCode,
+            statusMessage: decoded.statusMessage,
+            text: text,
+            isFinal: isFinal || decoded.messageType == "SessionFinished"
+        )
+    }
+
+    static func encodeRequest(
+        token: String,
+        serviceName: String,
+        methodName: String,
+        payload: String,
+        audioData: Data,
+        requestID: String,
+        frameState: FrameState?
+    ) -> Data {
+        var data = Data()
+        writeStringField(2, value: token, into: &data)
+        writeStringField(3, value: serviceName, into: &data)
+        writeStringField(5, value: methodName, into: &data)
+        writeStringField(6, value: payload, into: &data)
+        writeBytesField(7, value: audioData, into: &data)
+        writeStringField(8, value: requestID, into: &data)
+        if let frameState {
+            writeVarintField(9, value: UInt64(frameState.rawValue), into: &data)
+        }
+        return data
+    }
+
+    private struct ResponseEnvelope {
+        var messageType = ""
+        var statusCode = 0
+        var statusMessage = ""
+        var resultJSON = ""
+    }
+
+    private static func validateStartResponse(_ response: DoubaoASRFreeParsedResponse, context: String) throws {
+        if response.messageType == "TaskStarted" || response.messageType == "SessionStarted" {
+            return
+        }
+        if response.statusCode == 20_000_000 {
+            return
+        }
+        let detail = response.statusMessage.isEmpty ? response.messageType : response.statusMessage
+        throw NSError(
+            domain: "Voxt.RemoteASR",
+            code: response.statusCode,
+            userInfo: [NSLocalizedDescriptionKey: "\(context) failed: \(detail)"]
+        )
+    }
+
+    private static func registerDevice() async throws -> DoubaoASRFreeCredentials {
+        let cdid = UUID().uuidString.lowercased()
+        let clientudid = UUID().uuidString.lowercased()
+        let openudid = String((0..<8).map { _ in String(format: "%02x", Int.random(in: 0...255)) }.joined())
+        let params: [URLQueryItem] = [
+            .init(name: "device_platform", value: "android"),
+            .init(name: "os", value: "android"),
+            .init(name: "ssmix", value: "a"),
+            .init(name: "_rticket", value: timestampString()),
+            .init(name: "cdid", value: cdid),
+            .init(name: "channel", value: "official"),
+            .init(name: "aid", value: String(DoubaoASRFreeConfiguration.aid)),
+            .init(name: "app_name", value: "oime"),
+            .init(name: "version_code", value: "100102018"),
+            .init(name: "version_name", value: "1.1.2"),
+            .init(name: "manifest_version_code", value: "100102018"),
+            .init(name: "update_version_code", value: "100102018"),
+            .init(name: "resolution", value: "1080*2400"),
+            .init(name: "dpi", value: "420"),
+            .init(name: "device_type", value: "Pixel 7 Pro"),
+            .init(name: "device_brand", value: "google"),
+            .init(name: "language", value: "zh"),
+            .init(name: "os_api", value: "34"),
+            .init(name: "os_version", value: "16"),
+            .init(name: "ac", value: "wifi")
+        ]
+        let body: [String: Any] = [
+            "magic_tag": "ss_app_log",
+            "header": [
+                "device_id": 0,
+                "install_id": 0,
+                "aid": DoubaoASRFreeConfiguration.aid,
+                "app_name": "oime",
+                "version_code": 100102018,
+                "version_name": "1.1.2",
+                "manifest_version_code": 100102018,
+                "update_version_code": 100102018,
+                "channel": "official",
+                "package": "com.bytedance.android.doubaoime",
+                "device_platform": "android",
+                "os": "android",
+                "os_api": "34",
+                "os_version": "16",
+                "device_type": "Pixel 7 Pro",
+                "device_brand": "google",
+                "device_model": "Pixel 7 Pro",
+                "resolution": "1080*2400",
+                "dpi": "420",
+                "language": "zh",
+                "timezone": 8,
+                "access": "wifi",
+                "rom": "UP1A.231005.007",
+                "rom_version": "UP1A.231005.007",
+                "region": "CN",
+                "tz_name": "Asia/Shanghai",
+                "tz_offset": 28_800,
+                "sim_region": "cn",
+                "carrier_region": "cn",
+                "cpu_abi": "arm64-v8a",
+                "build_serial": "unknown",
+                "not_request_sender": 0,
+                "sig_hash": "",
+                "google_aid": "",
+                "mc": "",
+                "serial_number": "",
+                "openudid": openudid,
+                "clientudid": clientudid,
+                "cdid": cdid
+            ],
+            "_gen_time": Int(Date().timeIntervalSince1970 * 1000)
+        ]
+
+        let object = try await postJSONObject(
+            urlString: DoubaoASRFreeConfiguration.registerURL,
+            queryItems: params,
+            headers: [
+                "User-Agent": DoubaoASRFreeConfiguration.userAgent,
+                "Content-Type": "application/json"
+            ],
+            body: body,
+            context: "Doubao ASR Free register device"
+        )
+        let deviceID = stringValue(in: object, keys: ["device_id"]) ??
+            stringValue(in: object, keys: ["device_id_str"]) ?? ""
+        guard !deviceID.isEmpty else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6100,
+                userInfo: [NSLocalizedDescriptionKey: "Doubao ASR Free device registration returned no device ID."]
+            )
+        }
+        return DoubaoASRFreeCredentials(
+            deviceID: deviceID,
+            installID: stringValue(in: object, keys: ["install_id"]) ?? "",
+            cdid: cdid,
+            openudid: openudid,
+            clientudid: clientudid,
+            token: ""
+        )
+    }
+
+    private static func fetchToken(deviceID: String, cdid: String) async throws -> String {
+        let bodyString = "body=null"
+        let stub = Insecure.MD5.hash(data: Data(bodyString.utf8)).map { String(format: "%02X", $0) }.joined()
+        let params: [URLQueryItem] = [
+            .init(name: "device_platform", value: "android"),
+            .init(name: "os", value: "android"),
+            .init(name: "ssmix", value: "a"),
+            .init(name: "channel", value: "official"),
+            .init(name: "aid", value: String(DoubaoASRFreeConfiguration.aid)),
+            .init(name: "app_name", value: "oime"),
+            .init(name: "version_code", value: "100102018"),
+            .init(name: "version_name", value: "1.1.2"),
+            .init(name: "device_id", value: deviceID),
+            .init(name: "cdid", value: cdid),
+            .init(name: "_rticket", value: timestampString())
+        ]
+        let object = try await postDataBody(
+            urlString: DoubaoASRFreeConfiguration.settingsURL,
+            queryItems: params,
+            headers: [
+                "User-Agent": DoubaoASRFreeConfiguration.userAgent,
+                "x-ss-stub": stub,
+                "Content-Type": "text/plain;charset=UTF-8"
+            ],
+            body: Data(bodyString.utf8),
+            context: "Doubao ASR Free fetch token"
+        )
+        guard
+            let data = object["data"] as? [String: Any],
+            let settings = data["settings"] as? [String: Any],
+            let asrConfig = settings["asr_config"] as? [String: Any],
+            let token = asrConfig["app_key"] as? String,
+            !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6101,
+                userInfo: [NSLocalizedDescriptionKey: "Doubao ASR Free token response was missing app_key."]
+            )
+        }
+        return token
+    }
+
+    private static func makeWebSocketRequest(deviceID: String) throws -> URLRequest {
+        guard var components = URLComponents(string: DoubaoASRFreeConfiguration.websocketURL) else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6102,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao ASR Free WebSocket URL."]
+            )
+        }
+        components.queryItems = [
+            .init(name: "aid", value: String(DoubaoASRFreeConfiguration.aid)),
+            .init(name: "device_id", value: deviceID)
+        ]
+        guard let url = components.url else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6103,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao ASR Free WebSocket URL."]
+            )
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 45
+        request.setValue(DoubaoASRFreeConfiguration.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("v2", forHTTPHeaderField: "proto-version")
+        request.setValue("true", forHTTPHeaderField: "x-custom-keepalive")
+        return request
+    }
+
+    private static func receiveBinaryResponse(from websocket: URLSessionWebSocketTask) async throws -> DoubaoASRFreeParsedResponse {
+        while true {
+            let message = try await websocket.receive()
+            switch message {
+            case .data(let data):
+                return try parseServerResponse(data)
+            case .string:
+                continue
+            @unknown default:
+                continue
+            }
+        }
+    }
+
+    private static func postJSONObject(
+        urlString: String,
+        queryItems: [URLQueryItem],
+        headers: [String: String],
+        body: [String: Any],
+        context: String
+    ) async throws -> [String: Any] {
+        let data = try JSONSerialization.data(withJSONObject: body)
+        return try await postDataBody(
+            urlString: urlString,
+            queryItems: queryItems,
+            headers: headers,
+            body: data,
+            context: context
+        )
+    }
+
+    private static func postDataBody(
+        urlString: String,
+        queryItems: [URLQueryItem],
+        headers: [String: String],
+        body: Data,
+        context: String
+    ) async throws -> [String: Any] {
+        guard var components = URLComponents(string: urlString) else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6104,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao ASR Free endpoint URL."]
+            )
+        }
+        components.queryItems = queryItems
+        guard let url = components.url else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6105,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao ASR Free endpoint URL."]
+            )
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        request.httpBody = body
+        let (responseData, response) = try await VoxtNetworkSession.active.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6106,
+                userInfo: [NSLocalizedDescriptionKey: "\(context) returned an invalid response."]
+            )
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let payload = String(data: responseData.prefix(300), encoding: .utf8) ?? ""
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "\(context) failed (HTTP \(http.statusCode)): \(payload)"]
+            )
+        }
+        guard
+            let object = try JSONSerialization.jsonObject(with: responseData) as? [String: Any]
+        else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6107,
+                userInfo: [NSLocalizedDescriptionKey: "\(context) returned invalid JSON."]
+            )
+        }
+        return object
+    }
+
+    private static func stringValue(in object: [String: Any], keys: [String]) -> String? {
+        for key in keys {
+            if let string = object[key] as? String, !string.isEmpty {
+                return string
+            }
+            if let number = object[key] as? NSNumber {
+                return number.stringValue
+            }
+        }
+        return nil
+    }
+
+    private static func timestampString() -> String {
+        String(Int(Date().timeIntervalSince1970 * 1000))
+    }
+
+    private static func writeStringField(_ fieldNumber: UInt64, value: String, into data: inout Data) {
+        guard !value.isEmpty else { return }
+        writeBytesField(fieldNumber, value: Data(value.utf8), into: &data)
+    }
+
+    private static func writeBytesField(_ fieldNumber: UInt64, value: Data, into data: inout Data) {
+        guard !value.isEmpty else { return }
+        writeVarint((fieldNumber << 3) | 2, into: &data)
+        writeVarint(UInt64(value.count), into: &data)
+        data.append(value)
+    }
+
+    private static func writeVarintField(_ fieldNumber: UInt64, value: UInt64, into data: inout Data) {
+        guard value != 0 else { return }
+        writeVarint((fieldNumber << 3) | 0, into: &data)
+        writeVarint(value, into: &data)
+    }
+
+    private static func writeVarint(_ value: UInt64, into data: inout Data) {
+        var remaining = value
+        while true {
+            let byte = UInt8(remaining & 0x7F)
+            remaining >>= 7
+            if remaining == 0 {
+                data.append(byte)
+                return
+            }
+            data.append(byte | 0x80)
+        }
+    }
+
+    private static func decodeResponseEnvelope(_ data: Data) throws -> ResponseEnvelope {
+        var response = ResponseEnvelope()
+        var offset = data.startIndex
+
+        while offset < data.endIndex {
+            let tag = try readVarint(from: data, offset: &offset)
+            let fieldNumber = tag >> 3
+            let wireType = tag & 0x07
+            switch wireType {
+            case 0:
+                let value = try readVarint(from: data, offset: &offset)
+                if fieldNumber == 5 {
+                    response.statusCode = Int(value)
+                }
+            case 2:
+                let length = Int(try readVarint(from: data, offset: &offset))
+                guard data.distance(from: offset, to: data.endIndex) >= length else {
+                    throw NSError(domain: "Voxt.RemoteASR", code: -6108, userInfo: [NSLocalizedDescriptionKey: "Doubao ASR Free response payload was truncated."])
+                }
+                let value = data[offset..<data.index(offset, offsetBy: length)]
+                offset = data.index(offset, offsetBy: length)
+                let string = String(decoding: value, as: UTF8.self)
+                switch fieldNumber {
+                case 4:
+                    response.messageType = string
+                case 6:
+                    response.statusMessage = string
+                case 7:
+                    response.resultJSON = string
+                default:
+                    break
+                }
+            case 1:
+                offset = data.index(offset, offsetBy: 8, limitedBy: data.endIndex) ?? data.endIndex
+            case 5:
+                offset = data.index(offset, offsetBy: 4, limitedBy: data.endIndex) ?? data.endIndex
+            default:
+                throw NSError(domain: "Voxt.RemoteASR", code: -6109, userInfo: [NSLocalizedDescriptionKey: "Doubao ASR Free response wire type is unsupported."])
+            }
+        }
+
+        return response
+    }
+
+    private static func readVarint(from data: Data, offset: inout Data.Index) throws -> UInt64 {
+        var value: UInt64 = 0
+        var shift: UInt64 = 0
+        while offset < data.endIndex {
+            let byte = data[offset]
+            offset = data.index(after: offset)
+            value |= UInt64(byte & 0x7F) << shift
+            if byte & 0x80 == 0 {
+                return value
+            }
+            shift += 7
+            if shift >= 64 {
+                break
+            }
+        }
+        throw NSError(
+            domain: "Voxt.RemoteASR",
+            code: -6110,
+            userInfo: [NSLocalizedDescriptionKey: "Doubao ASR Free response varint is invalid."]
+        )
+    }
+}
+
+final class DoubaoASRFreeOpusEncoder {
+    private let inputFormat: AVAudioFormat
+    private let outputFormat: AVAudioFormat
+    private let converter: AVAudioConverter
+
+    init() throws {
+        guard
+            let inputFormat = AVAudioFormat(
+                commonFormat: .pcmFormatInt16,
+                sampleRate: Double(DoubaoASRFreeConfiguration.sampleRate),
+                channels: AVAudioChannelCount(DoubaoASRFreeConfiguration.channelCount),
+                interleaved: false
+            ),
+            let outputFormat = AVAudioFormat(
+                settings: [
+                    AVFormatIDKey: kAudioFormatOpus,
+                    AVSampleRateKey: DoubaoASRFreeConfiguration.sampleRate,
+                    AVNumberOfChannelsKey: DoubaoASRFreeConfiguration.channelCount
+                ]
+            ),
+            let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+        else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6111,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to initialize Doubao ASR Free Opus encoder."]
+            )
+        }
+        self.inputFormat = inputFormat
+        self.outputFormat = outputFormat
+        self.converter = converter
+    }
+
+    func encodeFrame(_ pcmFrame: Data) throws -> Data {
+        guard pcmFrame.count == DoubaoASRFreeConfiguration.bytesPerFrame else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -6112,
+                userInfo: [NSLocalizedDescriptionKey: "Doubao ASR Free PCM frame size is invalid."]
+            )
+        }
+
+        let pcmBuffer = AVAudioPCMBuffer(
+            pcmFormat: inputFormat,
+            frameCapacity: AVAudioFrameCount(DoubaoASRFreeConfiguration.samplesPerFrame)
+        )!
+        pcmBuffer.frameLength = AVAudioFrameCount(DoubaoASRFreeConfiguration.samplesPerFrame)
+        pcmFrame.withUnsafeBytes { rawBuffer in
+            let source = rawBuffer.bindMemory(to: Int16.self)
+            let destination = pcmBuffer.int16ChannelData![0]
+            for index in 0..<DoubaoASRFreeConfiguration.samplesPerFrame {
+                destination[index] = source[index]
+            }
+        }
+
+        let compressedBuffer = AVAudioCompressedBuffer(
+            format: outputFormat,
+            packetCapacity: 1,
+            maximumPacketSize: 4096
+        )
+        var supplied = false
+        var conversionError: NSError?
+        _ = converter.convert(to: compressedBuffer, error: &conversionError) { _, status in
+            if supplied {
+                status.pointee = .noDataNow
+                return nil
+            }
+            supplied = true
+            status.pointee = .haveData
+            return pcmBuffer
+        }
+        if let conversionError {
+            throw conversionError
+        }
+        return Data(bytes: compressedBuffer.data, count: Int(compressedBuffer.byteLength))
     }
 }

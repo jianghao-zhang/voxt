@@ -23,6 +23,25 @@ final class MeetingLiveSessionSupportTests: XCTestCase {
         XCTAssertEqual(policy.segmentSilenceSplitThreshold, 1.2, accuracy: 0.001)
     }
 
+    func testDoubaoASRFreePolicyEnablesKeepaliveAndReconnect() {
+        let policy = MeetingLiveSessionPolicy.resolved(
+            provider: .doubaoASRFree,
+            configuration: .init(
+                providerID: RemoteASRProvider.doubaoASRFree.rawValue,
+                model: DoubaoASRFreeConfiguration.modelRealtime,
+                endpoint: "",
+                apiKey: ""
+            )
+        )
+
+        XCTAssertTrue(policy.idleKeepaliveEnabled)
+        XCTAssertEqual(policy.idleKeepaliveInterval, 3.0, accuracy: 0.001)
+        XCTAssertEqual(policy.idleKeepaliveFrameDuration, 0.2, accuracy: 0.001)
+        XCTAssertTrue(policy.autoReconnectOnUnexpectedClose)
+        XCTAssertEqual(policy.prebufferDuration, 1.0, accuracy: 0.001)
+        XCTAssertEqual(policy.segmentSilenceSplitThreshold, 1.2, accuracy: 0.001)
+    }
+
     func testAliyunNonRealtimePolicyDisablesKeepaliveAndReconnect() {
         let policy = MeetingLiveSessionPolicy.resolved(
             provider: .aliyunBailianASR,

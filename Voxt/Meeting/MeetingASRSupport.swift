@@ -108,6 +108,8 @@ enum MeetingASRSupport {
         switch provider {
         case .doubaoASR:
             return .chunk(profile: .quality)
+        case .doubaoASRFree:
+            return .liveRemote(provider: provider)
         case .aliyunBailianASR:
             return .chunk(profile: .quality)
         case .openAIWhisper:
@@ -148,6 +150,8 @@ enum RemoteASRRealtimeSupport {
         case .openAIWhisper:
             return false
         case .doubaoASR:
+            return true
+        case .doubaoASRFree:
             return true
         case .glmASR:
             return false
