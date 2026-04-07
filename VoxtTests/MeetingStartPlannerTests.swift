@@ -65,6 +65,22 @@ final class MeetingStartPlannerTests: XCTestCase {
         XCTAssertEqual(allowed, .start(.remote))
     }
 
+    func testDoubaoASRFreeMeetingUsesConfiguredRealtimeProvider() {
+        let allowed = MeetingStartPlanner.resolve(
+            selectedEngine: .remote,
+            mlxModelState: .ready,
+            whisperModelState: .ready,
+            remoteASRProvider: .doubaoASRFree,
+            remoteASRConfiguration: .init(
+                providerID: RemoteASRProvider.doubaoASRFree.rawValue,
+                model: DoubaoASRFreeConfiguration.modelRealtime,
+                endpoint: "",
+                apiKey: ""
+            )
+        )
+        XCTAssertEqual(allowed, .start(.remote))
+    }
+
     func testDictationMeetingIsBlocked() {
         let decision = MeetingStartPlanner.resolve(
             selectedEngine: .dictation,

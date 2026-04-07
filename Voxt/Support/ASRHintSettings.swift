@@ -7,6 +7,7 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
     case openAIWhisper
     case glmASR
     case doubaoASR
+    case doubaoASRFree
     case aliyunBailianASR
 
     var id: String { rawValue }
@@ -25,6 +26,8 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
             return AppLocalization.localizedString("GLM ASR")
         case .doubaoASR:
             return AppLocalization.localizedString("Doubao ASR")
+        case .doubaoASRFree:
+            return AppLocalization.localizedString("Doubao ASR Free")
         case .aliyunBailianASR:
             return AppLocalization.localizedString("Aliyun Bailian ASR")
         }
@@ -34,7 +37,7 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .whisperKit, .openAIWhisper, .glmASR:
             return true
-        case .dictation, .mlxAudio, .doubaoASR, .aliyunBailianASR:
+        case .dictation, .mlxAudio, .doubaoASR, .doubaoASRFree, .aliyunBailianASR:
             return false
         }
     }
@@ -53,7 +56,7 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
             return AppPreferenceKey.defaultOpenAIASRHintPrompt
         case .glmASR:
             return AppPreferenceKey.defaultGLMASRHintPrompt
-        case .mlxAudio, .doubaoASR, .aliyunBailianASR:
+        case .mlxAudio, .doubaoASR, .doubaoASRFree, .aliyunBailianASR:
             return ""
         }
     }
@@ -72,6 +75,8 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
             return AppLocalization.localizedString("GLM ASR uses a short prompt bias. It does not use hotwords in Voxt.")
         case .doubaoASR:
             return AppLocalization.localizedString("Doubao ASR uses language hints. Chinese output follows your selected simplified or traditional main language automatically.")
+        case .doubaoASRFree:
+            return AppLocalization.localizedString("Doubao ASR Free uses language hints. Chinese output follows your selected simplified or traditional main language automatically.")
         case .aliyunBailianASR:
             return AppLocalization.localizedString("Aliyun ASR uses language hints derived from your selected user languages.")
         }
@@ -81,7 +86,7 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .dictation:
             return AppLocalization.localizedString("Dictation Settings")
-        case .mlxAudio, .whisperKit, .openAIWhisper, .glmASR, .doubaoASR, .aliyunBailianASR:
+        case .mlxAudio, .whisperKit, .openAIWhisper, .glmASR, .doubaoASR, .doubaoASRFree, .aliyunBailianASR:
             return AppLocalization.localizedString("Engine Hint Settings")
         }
     }
@@ -102,6 +107,8 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
                 return .glmASR
             case .doubaoASR:
                 return .doubaoASR
+            case .doubaoASRFree:
+                return .doubaoASRFree
             case .aliyunBailianASR:
                 return .aliyunBailianASR
             }
@@ -299,6 +306,12 @@ enum ASRHintResolver {
                 prompt: prompt
             )
         case .doubaoASR:
+            return ResolvedASRHintPayload(
+                language: settings.followsUserMainLanguage ? resolvedDoubaoLanguage(mainLanguage) : nil,
+                chineseOutputVariant: resolvedDoubaoChineseVariant(mainLanguage),
+                prompt: nil
+            )
+        case .doubaoASRFree:
             return ResolvedASRHintPayload(
                 language: settings.followsUserMainLanguage ? resolvedDoubaoLanguage(mainLanguage) : nil,
                 chineseOutputVariant: resolvedDoubaoChineseVariant(mainLanguage),

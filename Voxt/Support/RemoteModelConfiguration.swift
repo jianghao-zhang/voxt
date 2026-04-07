@@ -197,9 +197,46 @@ enum DoubaoASRConfiguration {
     }
 }
 
+enum DoubaoASRFreeConfiguration {
+    static let modelRealtime = "doubao-ime-free-realtime"
+    static let websocketURL = "wss://frontier-audio-ime-ws.doubao.com/ocean/api/v1/ws"
+    static let registerURL = "https://log.snssdk.com/service/2/device_register/"
+    static let settingsURL = "https://is.snssdk.com/service/settings/v3/"
+    static let aid = 401734
+    static let userAgent = "com.bytedance.android.doubaoime/100102018 (Linux; U; Android 16; en_US; Pixel 7 Pro; Build/BP2A.250605.031.A2; Cronet/TTNetVersion:94cf429a 2025-11-17 QuicVersion:1f89f732 2025-05-08)"
+    static let sampleRate = 16_000
+    static let channelCount = 1
+    static let bitsPerSample = 16
+    static let frameDurationMilliseconds = 20
+    static let samplesPerFrame = sampleRate * frameDurationMilliseconds / 1000
+    static let bytesPerFrame = samplesPerFrame * channelCount * (bitsPerSample / 8)
+    static let credentialCacheFileName = "doubao-asr-free-credentials.json"
+
+    static func sessionPayload(deviceID: String) -> [String: Any] {
+        [
+            "audio_info": [
+                "channel": channelCount,
+                "format": "speech_opus",
+                "sample_rate": sampleRate
+            ],
+            "enable_punctuation": true,
+            "enable_speech_rejection": false,
+            "extra": [
+                "app_name": "com.android.chrome",
+                "cell_compress_rate": 8,
+                "did": deviceID,
+                "enable_asr_threepass": true,
+                "enable_asr_twopass": true,
+                "input_mode": "tool"
+            ]
+        ]
+    }
+}
+
 enum RemoteASRProvider: String, CaseIterable, Identifiable {
     case openAIWhisper
     case doubaoASR
+    case doubaoASRFree
     case glmASR
     case aliyunBailianASR
 
@@ -211,6 +248,8 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
             return AppLocalization.localizedString("OpenAI Whisper")
         case .doubaoASR:
             return AppLocalization.localizedString("Doubao ASR")
+        case .doubaoASRFree:
+            return AppLocalization.localizedString("Doubao ASR Free")
         case .glmASR:
             return AppLocalization.localizedString("GLM ASR")
         case .aliyunBailianASR:
@@ -224,6 +263,8 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
             return "whisper-1"
         case .doubaoASR:
             return DoubaoASRConfiguration.modelV2
+        case .doubaoASRFree:
+            return DoubaoASRFreeConfiguration.modelRealtime
         case .glmASR:
             return "glm-asr-1"
         case .aliyunBailianASR:
@@ -243,6 +284,10 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
             return [
                 RemoteModelOption(id: DoubaoASRConfiguration.modelV2, title: "Doubao ASR 2.0 (Hourly)"),
                 RemoteModelOption(id: DoubaoASRConfiguration.modelV1, title: "Doubao ASR 1.0 (Hourly)")
+            ]
+        case .doubaoASRFree:
+            return [
+                RemoteModelOption(id: DoubaoASRFreeConfiguration.modelRealtime, title: "Doubao ASR Free Realtime")
             ]
         case .glmASR:
             return [
@@ -637,6 +682,20 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
             !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
             !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         )
+    }
+
+    func isConfigured(for provider: RemoteASRProvider) -> Bool {
+        guard hasUsableModel else { return false }
+
+        switch provider {
+        case .doubaoASRFree:
+            return true
+        case .doubaoASR:
+            return !appID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .openAIWhisper, .glmASR, .aliyunBailianASR:
+            return !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     init(

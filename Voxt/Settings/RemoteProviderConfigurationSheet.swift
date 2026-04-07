@@ -66,7 +66,7 @@ struct RemoteProviderConfigurationSheet: View {
                 meetingModelSection
             }
 
-            if !isDoubaoASRTest {
+            if showsEndpointAndKeySection {
                 endpointAndKeySection
             }
 
@@ -268,6 +268,16 @@ struct RemoteProviderConfigurationSheet: View {
                 .buttonStyle(SettingsPillButtonStyle())
                 .disabled(isTestingConnection)
             }
+
+            if isDoubaoASRFreeTest {
+                Button("Reset Cached Credentials") {
+                    DoubaoASRFreeRuntimeSupport.clearCachedCredentials()
+                    testResultIsSuccess = true
+                    testResultMessage = AppLocalization.localizedString("Cached credentials cleared.")
+                }
+                .buttonStyle(SettingsPillButtonStyle())
+                .disabled(isTestingConnection)
+            }
         } trailing: {
             Button("Cancel") {
                 dismiss()
@@ -289,10 +299,10 @@ struct RemoteProviderConfigurationSheet: View {
             providerID: configuration.providerID,
             model: resolvedModelValue(),
             meetingModel: resolvedMeetingModelValue(),
-            endpoint: isDoubaoASRTest ? "" : endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
-            apiKey: isDoubaoASRTest ? "" : apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
-            appID: appID.trimmingCharacters(in: .whitespacesAndNewlines),
-            accessToken: accessToken.trimmingCharacters(in: .whitespacesAndNewlines),
+            endpoint: showsEndpointAndKeySection ? endpoint.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            apiKey: showsEndpointAndKeySection ? apiKey.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            appID: showsDoubaoFields ? appID.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            accessToken: showsDoubaoFields ? accessToken.trimmingCharacters(in: .whitespacesAndNewlines) : "",
             openAIChunkPseudoRealtimeEnabled: isOpenAIASRTest ? openAIChunkPseudoRealtimeEnabled : false
         )
     }
@@ -361,6 +371,20 @@ struct RemoteProviderConfigurationSheet: View {
 
     private var isOpenAIASRTest: Bool {
         RemoteProviderConfigurationPolicy.isOpenAIASRTest(testTarget)
+    }
+
+    private var isDoubaoASRFreeTest: Bool {
+        if case .asr(let provider) = testTarget {
+            return provider == .doubaoASRFree
+        }
+        if case .meetingASR(let provider) = testTarget {
+            return provider == .doubaoASRFree
+        }
+        return false
+    }
+
+    private var showsEndpointAndKeySection: Bool {
+        !isDoubaoASRTest && !isDoubaoASRFreeTest
     }
 
     private var customModelOptionID: String {

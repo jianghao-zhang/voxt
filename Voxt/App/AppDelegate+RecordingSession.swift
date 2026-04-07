@@ -506,6 +506,12 @@ extension AppDelegate {
             self.remoteASRTranscriber.onTranscriptionFinished = { [weak self] text in
                 self?.processTranscription(text, sessionID: sessionID)
             }
+            self.remoteASRTranscriber.onStartFailure = { [weak self] message in
+                guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
+                VoxtLog.warning("Remote ASR failed to start recording. reason=\(message)")
+                self.showOverlayReminder(message)
+                self.resetSessionAfterFailedStart()
+            }
             self.overlayState.bind(to: self.remoteASRTranscriber)
             self.overlayWindow.show(
                 state: self.overlayState,
@@ -613,7 +619,7 @@ extension AppDelegate {
         case .openAIWhisper, .glmASR:
             // File-upload ASR can legitimately take longer than realtime providers.
             return 60
-        case .doubaoASR, .aliyunBailianASR:
+        case .doubaoASR, .doubaoASRFree, .aliyunBailianASR:
             return 8
         }
     }

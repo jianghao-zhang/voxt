@@ -414,6 +414,14 @@
 "Forever" = "永久";
 "History older than the selected retention time is automatically deleted." = "超过所选保留时长的历史会自动删除。";
 "Configure %@" = "配置 %@";
+"Doubao ASR Free" = "豆包 ASR Free";
+"Ready to use" = "可直接使用";
+"Doubao ASR Free uses the Doubao IME realtime service and works with no configuration." = "Doubao ASR Free 使用豆包输入法实时服务，无需配置即可使用。";
+"Connection test succeeded (Doubao ASR Free realtime reachable)." = "连接测试成功（Doubao ASR Free 实时链路可达）。";
+"Reset Cached Credentials" = "重置缓存凭据";
+"Cached credentials cleared." = "缓存凭据已清除。";
+"Doubao ASR Free is busy right now. Please wait a moment and try again." = "Doubao ASR Free 当前繁忙，请稍等片刻后重试。";
+"Remote ASR failed to start recording." = "远程 ASR 启动录音失败。";
 "Endpoint (Optional)" = "端点（可选）";
 "API Key" = "API Key";
 "Paste API key" = "粘贴 API Key";
