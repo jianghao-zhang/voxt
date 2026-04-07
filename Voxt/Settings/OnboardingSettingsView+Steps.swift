@@ -129,8 +129,11 @@ extension OnboardingSettingsView {
                         selectionTitle: mlxModelManager.displayTitle(for: mlxModelRepo),
                         selectionDescription: modelDescription(for: mlxModelRepo),
                         isInstalled: mlxModelManager.isModelDownloaded(repo: mlxModelRepo),
+                        isInstalling: isSelectedMLXModelDownloading,
                         installLabel: "Download",
                         openLabel: "Open Folder",
+                        downloadStatus: selectedMLXDownloadStatus,
+                        errorMessage: selectedMLXDownloadErrorMessage,
                         onChoose: {},
                         pickerContent: {
                             SettingsMenuPicker(
@@ -148,6 +151,9 @@ extension OnboardingSettingsView {
                         onOpen: {
                             guard let folderURL = mlxModelManager.modelDirectoryURL(repo: mlxModelRepo) else { return }
                             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
+                        },
+                        onCancel: {
+                            mlxModelManager.cancelDownload()
                         }
                     )
                 } else {
@@ -156,8 +162,11 @@ extension OnboardingSettingsView {
                         selectionTitle: whisperModelManager.displayTitle(for: whisperModelID),
                         selectionDescription: whisperDescription(for: whisperModelID),
                         isInstalled: whisperModelManager.isModelDownloaded(id: whisperModelID),
+                        isInstalling: isSelectedWhisperModelDownloading,
                         installLabel: "Download",
                         openLabel: "Open Folder",
+                        downloadStatus: selectedWhisperDownloadStatus,
+                        errorMessage: selectedWhisperDownloadErrorMessage,
                         onChoose: {},
                         pickerContent: {
                             SettingsMenuPicker(
@@ -175,6 +184,9 @@ extension OnboardingSettingsView {
                         onOpen: {
                             guard let folderURL = whisperModelManager.modelDirectoryURL(id: whisperModelID) else { return }
                             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
+                        },
+                        onCancel: {
+                            whisperModelManager.cancelDownload()
                         }
                     )
                 }
@@ -211,11 +223,27 @@ extension OnboardingSettingsView {
                             guard let folderURL = customLLMManager.modelDirectoryURL(repo: customLLMRepo) else { return }
                             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
                         }
+                    } else if isSelectedCustomLLMDownloading {
+                        Button("Cancel") {
+                            customLLMManager.cancelDownload()
+                        }
                     } else {
                         Button("Download") {
                             Task { await customLLMManager.downloadModel(repo: customLLMRepo) }
                         }
                     }
+                }
+                .buttonStyle(SettingsPillButtonStyle())
+
+                if let customLLMDownloadStatus {
+                    ModelDownloadStatusView(status: customLLMDownloadStatus)
+                }
+
+                if let customLLMDownloadErrorMessage {
+                    Text(customLLMDownloadErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -570,14 +598,20 @@ extension OnboardingSettingsView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                OnboardingVideoPlayerView(player: appEnhancementDemoPlayer)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                    )
+                if let appEnhancementDemoPlayer {
+                    OnboardingVideoPlayerView(player: appEnhancementDemoPlayer)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+                } else {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 220)
+                }
             }
         }
     }
@@ -621,14 +655,20 @@ extension OnboardingSettingsView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                OnboardingVideoPlayerView(player: meetingDemoPlayer)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                    )
+                if let meetingDemoPlayer {
+                    OnboardingVideoPlayerView(player: meetingDemoPlayer)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+                } else {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 220)
+                }
             }
         }
     }
@@ -711,6 +751,55 @@ extension OnboardingSettingsView {
 
     func customLLMDescription(for repo: String) -> String {
         CustomLLMModelManager.availableModels.first(where: { $0.id == repo })?.description ?? ""
+    }
+
+    var isSelectedMLXModelDownloading: Bool {
+        guard case .downloading = mlxModelManager.state else { return false }
+        return MLXModelManager.canonicalModelRepo(mlxModelManager.currentModelRepo) == MLXModelManager.canonicalModelRepo(mlxModelRepo)
+    }
+
+    var selectedMLXDownloadStatus: ModelDownloadStatusSnapshot? {
+        guard isSelectedMLXModelDownloading else { return nil }
+        return ModelDownloadStatusSnapshot.fromMLXState(mlxModelManager.state)
+    }
+
+    var selectedMLXDownloadErrorMessage: String? {
+        guard MLXModelManager.canonicalModelRepo(mlxModelManager.currentModelRepo) == MLXModelManager.canonicalModelRepo(mlxModelRepo),
+              case .error(let message) = mlxModelManager.state else {
+            return nil
+        }
+        return message
+    }
+
+    var isSelectedWhisperModelDownloading: Bool {
+        whisperModelManager.activeDownload?.modelID == WhisperKitModelManager.canonicalModelID(whisperModelID)
+    }
+
+    var selectedWhisperDownloadStatus: ModelDownloadStatusSnapshot? {
+        guard isSelectedWhisperModelDownloading else { return nil }
+        return ModelDownloadStatusSnapshot.fromWhisperDownload(whisperModelManager.activeDownload)
+    }
+
+    var selectedWhisperDownloadErrorMessage: String? {
+        whisperModelManager.downloadErrorMessage(for: whisperModelID)
+    }
+
+    var isSelectedCustomLLMDownloading: Bool {
+        guard case .downloading = customLLMManager.state else { return false }
+        return customLLMManager.currentModelRepo == customLLMRepo
+    }
+
+    var customLLMDownloadStatus: ModelDownloadStatusSnapshot? {
+        guard isSelectedCustomLLMDownloading else { return nil }
+        return ModelDownloadStatusSnapshot.fromCustomLLMState(customLLMManager.state)
+    }
+
+    var customLLMDownloadErrorMessage: String? {
+        guard customLLMManager.currentModelRepo == customLLMRepo,
+              case .error(let message) = customLLMManager.state else {
+            return nil
+        }
+        return message
     }
 
     var hotkeyPresetDescription: String {

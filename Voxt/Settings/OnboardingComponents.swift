@@ -82,12 +82,16 @@ struct LocalModelPickerCard<PickerContent: View>: View {
     let selectionTitle: String
     let selectionDescription: String
     let isInstalled: Bool
+    var isInstalling: Bool = false
     let installLabel: LocalizedStringKey
     let openLabel: LocalizedStringKey
+    var downloadStatus: ModelDownloadStatusSnapshot? = nil
+    var errorMessage: String? = nil
     let onChoose: () -> Void
     @ViewBuilder let pickerContent: () -> PickerContent
     let onInstall: () -> Void
     let onOpen: () -> Void
+    var onCancel: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -108,6 +112,14 @@ struct LocalModelPickerCard<PickerContent: View>: View {
                         .foregroundStyle(.green)
                     Button(openLabel, action: onOpen)
                         .buttonStyle(SettingsPillButtonStyle())
+                } else if isInstalling {
+                    Text("Downloading")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                    if let onCancel {
+                        Button("Cancel", action: onCancel)
+                            .buttonStyle(SettingsPillButtonStyle())
+                    }
                 } else {
                     Text("Not installed")
                         .font(.caption.weight(.semibold))
@@ -115,6 +127,17 @@ struct LocalModelPickerCard<PickerContent: View>: View {
                     Button(installLabel, action: onInstall)
                         .buttonStyle(SettingsPillButtonStyle())
                 }
+            }
+
+            if let downloadStatus {
+                ModelDownloadStatusView(status: downloadStatus)
+            }
+
+            if let errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)

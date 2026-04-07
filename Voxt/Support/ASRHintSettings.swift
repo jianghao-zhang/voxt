@@ -1,6 +1,7 @@
 import Foundation
 
 enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
+    case dictation
     case mlxAudio
     case whisperKit
     case openAIWhisper
@@ -12,6 +13,8 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
+        case .dictation:
+            return AppLocalization.localizedString("Direct Dictation")
         case .mlxAudio:
             return AppLocalization.localizedString("MLX Audio")
         case .whisperKit:
@@ -31,7 +34,7 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .whisperKit, .openAIWhisper, .glmASR:
             return true
-        case .mlxAudio, .doubaoASR, .aliyunBailianASR:
+        case .dictation, .mlxAudio, .doubaoASR, .aliyunBailianASR:
             return false
         }
     }
@@ -42,6 +45,8 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
 
     var defaultPromptTemplate: String {
         switch self {
+        case .dictation:
+            return ""
         case .whisperKit:
             return AppPreferenceKey.defaultWhisperASRHintPrompt
         case .openAIWhisper:
@@ -55,6 +60,8 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
 
     var helpText: String {
         switch self {
+        case .dictation:
+            return AppLocalization.localizedString("Direct Dictation uses your main language, optional contextual phrases, on-device preference, and punctuation settings. Prompt editing is not applied.")
         case .mlxAudio:
             return AppLocalization.localizedString("MLX uses language hints only. Prompt editing is not applied for on-device MLX ASR.")
         case .whisperKit:
@@ -70,8 +77,19 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    var settingsTitle: String {
+        switch self {
+        case .dictation:
+            return AppLocalization.localizedString("Dictation Settings")
+        case .mlxAudio, .whisperKit, .openAIWhisper, .glmASR, .doubaoASR, .aliyunBailianASR:
+            return AppLocalization.localizedString("Engine Hint Settings")
+        }
+    }
+
     static func from(engine: TranscriptionEngine, remoteProvider: RemoteASRProvider?) -> ASRHintTarget {
         switch engine {
+        case .dictation:
+            return .dictation
         case .mlxAudio:
             return .mlxAudio
         case .whisperKit:
@@ -87,8 +105,6 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
             case .aliyunBailianASR:
                 return .aliyunBailianASR
             }
-        case .dictation:
-            return .mlxAudio
         }
     }
 }
@@ -96,6 +112,55 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
 struct ASRHintSettings: Codable, Equatable {
     var followsUserMainLanguage: Bool = true
     var promptTemplate: String = ""
+    var contextualPhrasesText: String = ""
+    var prefersOnDeviceRecognition: Bool = false
+    var addsPunctuation: Bool = true
+    var reportsPartialResults: Bool = true
+
+    init(
+        followsUserMainLanguage: Bool = true,
+        promptTemplate: String = "",
+        contextualPhrasesText: String = "",
+        prefersOnDeviceRecognition: Bool = false,
+        addsPunctuation: Bool = true,
+        reportsPartialResults: Bool = true
+    ) {
+        self.followsUserMainLanguage = followsUserMainLanguage
+        self.promptTemplate = promptTemplate
+        self.contextualPhrasesText = contextualPhrasesText
+        self.prefersOnDeviceRecognition = prefersOnDeviceRecognition
+        self.addsPunctuation = addsPunctuation
+        self.reportsPartialResults = reportsPartialResults
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case followsUserMainLanguage
+        case promptTemplate
+        case contextualPhrasesText
+        case prefersOnDeviceRecognition
+        case addsPunctuation
+        case reportsPartialResults
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        followsUserMainLanguage = try container.decodeIfPresent(Bool.self, forKey: .followsUserMainLanguage) ?? true
+        promptTemplate = try container.decodeIfPresent(String.self, forKey: .promptTemplate) ?? ""
+        contextualPhrasesText = try container.decodeIfPresent(String.self, forKey: .contextualPhrasesText) ?? ""
+        prefersOnDeviceRecognition = try container.decodeIfPresent(Bool.self, forKey: .prefersOnDeviceRecognition) ?? false
+        addsPunctuation = try container.decodeIfPresent(Bool.self, forKey: .addsPunctuation) ?? true
+        reportsPartialResults = try container.decodeIfPresent(Bool.self, forKey: .reportsPartialResults) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(followsUserMainLanguage, forKey: .followsUserMainLanguage)
+        try container.encode(promptTemplate, forKey: .promptTemplate)
+        try container.encode(contextualPhrasesText, forKey: .contextualPhrasesText)
+        try container.encode(prefersOnDeviceRecognition, forKey: .prefersOnDeviceRecognition)
+        try container.encode(addsPunctuation, forKey: .addsPunctuation)
+        try container.encode(reportsPartialResults, forKey: .reportsPartialResults)
+    }
 }
 
 enum ASRHintSettingsStore {
@@ -157,10 +222,27 @@ enum ASRHintSettingsStore {
             trimmedPrompt = ""
         }
 
+        let contextualPhrases = parseContextualPhrases(settings.contextualPhrasesText)
+
         return ASRHintSettings(
             followsUserMainLanguage: settings.followsUserMainLanguage,
-            promptTemplate: trimmedPrompt
+            promptTemplate: trimmedPrompt,
+            contextualPhrasesText: contextualPhrases.joined(separator: "\n"),
+            prefersOnDeviceRecognition: settings.prefersOnDeviceRecognition,
+            addsPunctuation: settings.addsPunctuation,
+            reportsPartialResults: settings.reportsPartialResults
         )
+    }
+
+    static func contextualPhrases(from settings: ASRHintSettings) -> [String] {
+        parseContextualPhrases(settings.contextualPhrasesText)
+    }
+
+    private static func parseContextualPhrases(_ rawValue: String) -> [String] {
+        rawValue
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }
 
@@ -169,6 +251,14 @@ struct ResolvedASRHintPayload {
     var languageHints: [String] = []
     var chineseOutputVariant: String?
     var prompt: String?
+}
+
+struct ResolvedDictationSettings: Equatable {
+    var localeIdentifier: String?
+    var contextualPhrases: [String]
+    var prefersOnDeviceRecognition: Bool
+    var addsPunctuation: Bool
+    var reportsPartialResults: Bool
 }
 
 @MainActor
@@ -186,6 +276,8 @@ enum ASRHintResolver {
         let prompt = resolvePrompt(for: target, template: settings.promptTemplate, mainLanguage: mainLanguage)
 
         switch target {
+        case .dictation:
+            return ResolvedASRHintPayload()
         case .mlxAudio:
             return ResolvedASRHintPayload(
                 language: settings.followsUserMainLanguage ? resolvedMLXLanguage(mainLanguage: mainLanguage, modelRepo: mlxModelRepo) : nil,
@@ -237,6 +329,24 @@ enum ASRHintResolver {
         return mainLanguage.isTraditionalChinese
             ? AppLocalization.localizedString("Traditional Chinese")
             : AppLocalization.localizedString("Simplified Chinese")
+    }
+
+    static func resolveDictationSettings(
+        settings: ASRHintSettings,
+        userLanguageCodes: [String]
+    ) -> ResolvedDictationSettings {
+        let mainLanguage = UserMainLanguageOption
+            .sanitizedSelection(userLanguageCodes)
+            .compactMap(UserMainLanguageOption.option(for:))
+            .first ?? UserMainLanguageOption.fallbackOption()
+
+        return ResolvedDictationSettings(
+            localeIdentifier: settings.followsUserMainLanguage ? resolvedDictationLocaleIdentifier(mainLanguage) : nil,
+            contextualPhrases: ASRHintSettingsStore.contextualPhrases(from: settings),
+            prefersOnDeviceRecognition: settings.prefersOnDeviceRecognition,
+            addsPunctuation: settings.addsPunctuation,
+            reportsPartialResults: settings.reportsPartialResults
+        )
     }
 
     private static func resolvePrompt(
@@ -319,6 +429,17 @@ enum ASRHintResolver {
             return "ja"
         case "ko":
             return "ko"
+        default:
+            return mainLanguage.baseLanguageCode
+        }
+    }
+
+    private static func resolvedDictationLocaleIdentifier(_ mainLanguage: UserMainLanguageOption) -> String {
+        switch mainLanguage.code {
+        case "zh-hans":
+            return "zh-CN"
+        case "zh-hant":
+            return "zh-TW"
         default:
             return mainLanguage.baseLanguageCode
         }

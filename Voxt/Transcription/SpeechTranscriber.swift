@@ -24,11 +24,7 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
     private(set) var lastStartFailureMessage: String?
 
     init() {
-        speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
-        if speechRecognizer == nil {
-            lastStartFailureMessage = String(localized: "Direct Dictation is unavailable for the current language.")
-            VoxtLog.warning("Speech recognizer initialization failed for current locale.")
-        }
+        refreshSpeechRecognizer(localeIdentifier: nil)
     }
 
     func setPreferredInputDevice(_ deviceID: AudioDeviceID?) {
@@ -51,10 +47,21 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
         guard !isRecording else { return }
         lastStartFailureMessage = nil
 
+        let settings = resolvedDictationSettings()
+        refreshSpeechRecognizer(localeIdentifier: settings.localeIdentifier)
+
         guard let recognizer = speechRecognizer else {
             let message = String(localized: "Direct Dictation is unavailable for the current language.")
             lastStartFailureMessage = message
             VoxtLog.warning("Speech transcriber start blocked: recognizer is unavailable for current locale.")
+            return
+        }
+        if settings.prefersOnDeviceRecognition && !recognizer.supportsOnDeviceRecognition {
+            let message = String(localized: "Direct Dictation on-device recognition is unavailable for the selected language.")
+            lastStartFailureMessage = message
+            VoxtLog.warning(
+                "Speech transcriber start blocked: on-device recognition is unavailable. locale=\(recognizer.locale.identifier)"
+            )
             return
         }
         guard recognizer.isAvailable else {
@@ -70,7 +77,7 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
         hasDeliveredFinalResult = false
 
         do {
-            try startSpeechRecognition(recognizer: recognizer)
+            try startSpeechRecognition(recognizer: recognizer, settings: settings)
             isRecording = true
             lastStartFailureMessage = nil
         } catch {
@@ -97,6 +104,8 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
 
     func restartCaptureForPreferredInputDevice() throws {
         guard isRecording else { return }
+        let settings = resolvedDictationSettings()
+        refreshSpeechRecognizer(localeIdentifier: settings.localeIdentifier)
         guard let recognizer = speechRecognizer else {
             throw NSError(
                 domain: "Voxt.SpeechTranscriber",
@@ -104,8 +113,15 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
                 userInfo: [NSLocalizedDescriptionKey: "Speech recognizer is unavailable."]
             )
         }
+        if settings.prefersOnDeviceRecognition && !recognizer.supportsOnDeviceRecognition {
+            throw NSError(
+                domain: "Voxt.SpeechTranscriber",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "On-device recognition is unavailable for the selected language."]
+            )
+        }
         stopAudioCapture()
-        try startSpeechRecognition(recognizer: recognizer)
+        try startSpeechRecognition(recognizer: recognizer, settings: settings)
     }
 
     private func cleanupSessionState() {
@@ -139,7 +155,10 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
         onTranscriptionFinished?(text.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    private func startSpeechRecognition(recognizer: SFSpeechRecognizer) throws {
+    private func startSpeechRecognition(
+        recognizer: SFSpeechRecognizer,
+        settings: ResolvedDictationSettings
+    ) throws {
         clearRecognitionPipeline(cancelTask: true)
 
         if audioEngine.isRunning {
@@ -148,8 +167,13 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
         }
 
         let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
+        request.shouldReportPartialResults = settings.reportsPartialResults
         request.taskHint = .dictation
+        request.contextualStrings = settings.contextualPhrases
+        request.requiresOnDeviceRecognition = settings.prefersOnDeviceRecognition
+        if #available(macOS 13.0, *) {
+            request.addsPunctuation = settings.addsPunctuation
+        }
         recognitionRequest = request
 
         let inputNode = audioEngine.inputNode
@@ -230,6 +254,30 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
         )
         if status != noErr {
             VoxtLog.warning("Unable to switch input device. status=\(status)")
+        }
+    }
+
+    private func resolvedDictationSettings() -> ResolvedDictationSettings {
+        let defaults = UserDefaults.standard
+        let settings = ASRHintSettingsStore.resolvedSettings(
+            for: .dictation,
+            rawValue: defaults.string(forKey: AppPreferenceKey.asrHintSettings)
+        )
+        let userLanguageCodes = UserMainLanguageOption.storedSelection(
+            from: defaults.string(forKey: AppPreferenceKey.userMainLanguageCodes)
+        )
+        return ASRHintResolver.resolveDictationSettings(
+            settings: settings,
+            userLanguageCodes: userLanguageCodes
+        )
+    }
+
+    private func refreshSpeechRecognizer(localeIdentifier: String?) {
+        let locale = localeIdentifier.map(Locale.init(identifier:)) ?? Locale.current
+        speechRecognizer = SFSpeechRecognizer(locale: locale)
+        if speechRecognizer == nil {
+            lastStartFailureMessage = String(localized: "Direct Dictation is unavailable for the current language.")
+            VoxtLog.warning("Speech recognizer initialization failed for locale=\(locale.identifier).")
         }
     }
 }

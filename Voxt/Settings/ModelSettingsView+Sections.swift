@@ -90,29 +90,8 @@ extension ModelSettingsView {
 
         ModelTableView(title: "Models", rows: mlxRows, viewportHeight: 320)
 
-        if case .downloading(let progress, let completed, let total, let currentFile, let completedFiles, let totalFiles) = mlxModelManager.state {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(
-                    String(
-                        format: NSLocalizedString("Downloading: %d%% • %@", comment: ""),
-                        Int(progress * 100),
-                        ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
-                    )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-
-                Text(
-                    ModelDownloadProgressFormatter.fileProgressText(
-                        currentFile: currentFile,
-                        completedFiles: completedFiles,
-                        totalFiles: totalFiles
-                    )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+        if let downloadStatus = ModelDownloadStatusSnapshot.fromMLXState(mlxModelManager.state) {
+            ModelDownloadStatusView(status: downloadStatus)
         }
     }
 
@@ -172,34 +151,8 @@ extension ModelSettingsView {
 
         ModelTableView(title: "Whisper Models", rows: whisperRows, viewportHeight: 260)
 
-        if let activeDownload = whisperModelManager.activeDownload {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(
-                    String(
-                        format: NSLocalizedString("Downloading: %d%% • %@", comment: ""),
-                        Int(activeDownload.progress * 100),
-                        ModelDownloadProgressFormatter.progressText(
-                            completed: activeDownload.completed,
-                            total: activeDownload.total
-                        )
-                    )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-
-                Text(
-                    ModelDownloadProgressFormatter.fileProgressText(
-                        currentFile: activeDownload.currentFile,
-                        currentFileCompleted: activeDownload.currentFileCompleted,
-                        currentFileTotal: activeDownload.currentFileTotal,
-                        completedFiles: activeDownload.completedFiles,
-                        totalFiles: activeDownload.totalFiles
-                    )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+        if let downloadStatus = ModelDownloadStatusSnapshot.fromWhisperDownload(whisperModelManager.activeDownload) {
+            ModelDownloadStatusView(status: downloadStatus)
         }
     }
 
@@ -290,29 +243,8 @@ extension ModelSettingsView {
 
         ModelTableView(title: "Custom LLM Models", rows: customLLMRows, viewportHeight: 260)
 
-        if case .downloading(let progress, let completed, let total, let currentFile, let completedFiles, let totalFiles) = customLLMManager.state {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(
-                    String(
-                        format: NSLocalizedString("Custom LLM downloading: %d%% • %@", comment: ""),
-                        Int(progress * 100),
-                        ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
-                    )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-
-                Text(
-                    ModelDownloadProgressFormatter.fileProgressText(
-                        currentFile: currentFile,
-                        completedFiles: completedFiles,
-                        totalFiles: totalFiles
-                    )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+        if let downloadStatus = ModelDownloadStatusSnapshot.fromCustomLLMState(customLLMManager.state) {
+            ModelDownloadStatusView(status: downloadStatus)
         }
     }
 
