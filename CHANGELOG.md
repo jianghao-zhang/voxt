@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.8.6] - 2026-04-07
+
+### Fixed
+- Fixed Doubao remote ASR streaming shutdown so successful transcriptions no longer trigger protocol sequence mismatch warnings when you stop a session.
+
 ## [1.8.5] - 2026-04-07
 
 ### Added
