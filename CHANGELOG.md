@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-04-09
+
+### Added
+- Added filtered feature-specific model pickers so you can quickly choose installed, configured, local, remote, and in-use models for transcription, translation, rewrite, and meeting workflows.
+- Added dedicated meeting workflow controls for meeting-only ASR, summary model, prompt, realtime translation target, and screen-sharing visibility in onboarding and Settings.
+- Added Doubao dictionary boosting controls so active Voxt dictionary hotwords and corrections can be sent with each ASR request when needed.
+
+### Changed
+- Reworked Settings and onboarding around feature-focused flows, with clearer guidance for permissions, model setup, downloads, and shortcut configuration.
+- Improved remote provider setup with endpoint presets, meeting ASR testing, and clearer provider-specific guidance.
+
 ## [1.8.6] - 2026-04-07
 
 ### Fixed
