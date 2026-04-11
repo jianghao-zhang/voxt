@@ -6,6 +6,35 @@ struct WaveformView: View {
     @AppStorage(AppPreferenceKey.overlayCardOpacity) private var overlayCardOpacity = 82
     @AppStorage(AppPreferenceKey.overlayCardCornerRadius) private var overlayCardCornerRadius = 24
 
+    static let defaultWaveformBarWidth: CGFloat = 3.2
+    static let defaultWaveformBarSpacing: CGFloat = 2.5
+    static let defaultWaveformSlotWidth: CGFloat = 94
+    static let defaultSessionLanguagePickerWidth: CGFloat = 198
+
+    static func waveformVisualWidth(
+        barCount: Int = 16,
+        barWidth: CGFloat = Self.defaultWaveformBarWidth,
+        barSpacing: CGFloat = Self.defaultWaveformBarSpacing
+    ) -> CGFloat {
+        guard barCount > 0 else { return 0 }
+        return (CGFloat(barCount) * barWidth) + (CGFloat(barCount - 1) * barSpacing)
+    }
+
+    static func shouldShowSessionTranslationLanguagePill(
+        displayMode: OverlayDisplayMode,
+        allowsSwitching: Bool,
+        sessionTranslationTargetLanguage: TranslationTargetLanguage?,
+        isHovering: Bool,
+        isPickerPresented: Bool
+    ) -> Bool {
+        displayMode == .recording &&
+            allowsSwitching &&
+            sessionTranslationTargetLanguage != nil &&
+            (isHovering || isPickerPresented)
+    }
+
+    private let waveformBarWidth: CGFloat = Self.defaultWaveformBarWidth
+    private let waveformBarSpacing: CGFloat = Self.defaultWaveformBarSpacing
     var displayMode: OverlayDisplayMode
     var sessionIconMode: OverlaySessionIconMode
     var isModelInitializing: Bool = false
@@ -21,11 +50,22 @@ struct WaveformView: View {
     var answerTitle: String = ""
     var answerContent: String = ""
     var canInjectAnswer: Bool = false
+    var sessionTranslationTargetLanguage: TranslationTargetLanguage? = nil
+    var sessionTranslationDraftLanguage: TranslationTargetLanguage? = nil
+    var isSessionTranslationTargetPickerPresented: Bool = false
+    var isSessionTranslationLanguageHovering: Bool = false
+    var allowsSessionTranslationLanguageSwitching: Bool = false
     var onInject: () -> Void = {}
     var onClose: () -> Void = {}
+    var onSessionTranslationLanguageHoverChanged: (Bool) -> Void = { _ in }
+    var onToggleSessionTranslationTargetPicker: () -> Void = {}
+    var onSelectSessionTranslationTargetLanguage: (TranslationTargetLanguage) -> Void = { _ in }
+    var onDismissSessionTranslationTargetPicker: () -> Void = {}
 
     private let iconSlotSize = CGSize(width: 16, height: 28)
     private let barAreaHeight: CGFloat = 28
+    private let waveformSlotWidth: CGFloat = Self.defaultWaveformSlotWidth
+    private let sessionLanguagePickerWidth: CGFloat = Self.defaultSessionLanguagePickerWidth
     private let barCount = 16
     private let basePhases: [Double] = (0..<16).map { Double($0) * 0.4 }
     private let baseTravelPhase = 0.0
@@ -53,28 +93,53 @@ struct WaveformView: View {
     private var textOverflows: Bool { displayText.count > 38 }
     private var showsLoadingSpinner: Bool { isEnhancing || isRequesting }
     private var showsInitializationIcon: Bool { isModelInitializing && !showsLoadingSpinner }
+    private var showsSessionTranslationLanguagePill: Bool {
+        Self.shouldShowSessionTranslationLanguagePill(
+            displayMode: displayMode,
+            allowsSwitching: allowsSessionTranslationLanguageSwitching,
+            sessionTranslationTargetLanguage: sessionTranslationTargetLanguage,
+            isHovering: isSessionTranslationLanguageHovering,
+            isPickerPresented: isSessionTranslationTargetPickerPresented
+        )
+    }
+    private var selectedSessionTranslationLanguage: TranslationTargetLanguage? {
+        sessionTranslationDraftLanguage ?? sessionTranslationTargetLanguage
+    }
+    private var waveformVisualWidth: CGFloat {
+        Self.waveformVisualWidth(
+            barCount: barCount,
+            barWidth: waveformBarWidth,
+            barSpacing: waveformBarSpacing
+        )
+    }
 
     var body: some View {
-        Group {
-            if isAnswerMode {
-                answerCard
-                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
-            } else {
-                compactCard
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+        VStack(alignment: .leading, spacing: 10) {
+            if !isAnswerMode && isSessionTranslationTargetPickerPresented {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+
+                    sessionTranslationLanguagePicker
+                        .transition(
+                            .opacity.combined(with: .scale(scale: 0.92, anchor: .bottom))
+                        )
+
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
+
+            cardView
         }
-        .padding(.horizontal, isAnswerMode ? 18 : (isCompact ? 14 : 20))
-        .padding(.vertical, isAnswerMode ? 16 : (isCompact ? 10 : 12))
-        .background(cardBackground)
-        .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .animation(.spring(response: 0.38, dampingFraction: 0.78), value: displayMode)
-        .animation(.spring(response: 0.4, dampingFraction: 0.55, blendDuration: 0.1), value: isCompact)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .scaleEffect(appeared ? 1.0 : 0.5, anchor: .top)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSessionTranslationTargetPickerPresented)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .scaleEffect(appeared ? 1.0 : 0.5, anchor: .bottom)
         .opacity(appeared ? 1.0 : 0.0)
         .animation(.spring(response: 0.35, dampingFraction: 0.5, blendDuration: 0.1), value: appeared)
+        .onHover { hovering in
+            guard allowsSessionTranslationLanguageSwitching else { return }
+            onSessionTranslationLanguageHoverChanged(hovering)
+        }
         .onAppear {
             updateAnimationState()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
@@ -96,6 +161,31 @@ struct WaveformView: View {
         }
     }
 
+    private var cardView: some View {
+        Group {
+            if isAnswerMode {
+                answerCard
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+            } else {
+                compactCard
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .padding(.horizontal, isAnswerMode ? 18 : (isCompact ? 14 : 20))
+        .padding(.vertical, isAnswerMode ? 16 : (isCompact ? 10 : 12))
+        .background(cardBackground)
+        .compositingGroup()
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .animation(.spring(response: 0.38, dampingFraction: 0.78), value: displayMode)
+        .animation(.spring(response: 0.4, dampingFraction: 0.55, blendDuration: 0.1), value: isCompact)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .onTapGesture {
+            guard isSessionTranslationTargetPickerPresented else { return }
+            onDismissSessionTranslationTargetPicker()
+        }
+    }
+
     private var compactCard: some View {
         VStack(spacing: isCompact ? 0 : 8) {
             HStack(spacing: 10) {
@@ -103,16 +193,11 @@ struct WaveformView: View {
                     .frame(width: iconSlotSize.width, height: iconSlotSize.height, alignment: .center)
                     .transition(.opacity)
 
-                if showsLoadingSpinner {
-                    processingBars
-                        .transition(.opacity)
-                } else {
-                    waveformBars
-                        .transition(.opacity)
-                }
+                waveformSlot
             }
             .frame(height: barAreaHeight)
             .animation(.easeInOut(duration: 0.25), value: showsLoadingSpinner)
+            .animation(.spring(response: 0.22, dampingFraction: 0.82), value: showsSessionTranslationLanguagePill)
 
             if hasText {
                 ScrollViewReader { proxy in
@@ -154,6 +239,119 @@ struct WaveformView: View {
                 .transition(.opacity)
             }
         }
+    }
+
+    @ViewBuilder
+    private var waveformSlot: some View {
+        if showsLoadingSpinner {
+            processingBars
+                .frame(width: waveformSlotWidth, height: barAreaHeight, alignment: .center)
+                .transition(.opacity)
+        } else if showsSessionTranslationLanguagePill {
+            ZStack {
+                Color.clear
+
+                sessionTranslationLanguagePill
+            }
+            .frame(width: waveformSlotWidth, height: barAreaHeight, alignment: .center)
+            .transition(.opacity.combined(with: .scale(scale: 0.92)))
+        } else {
+            waveformBars
+                .frame(width: waveformVisualWidth, height: barAreaHeight, alignment: .center)
+                .transition(.opacity)
+        }
+    }
+
+    private var sessionTranslationLanguagePill: some View {
+        Button(action: onToggleSessionTranslationTargetPicker) {
+            HStack(spacing: 6) {
+                Text(sessionTranslationTargetLanguage?.title ?? "")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 62, alignment: .center)
+
+                Image(systemName: isSessionTranslationTargetPickerPresented ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(
+                Capsule()
+                    .fill(.white.opacity(0.09))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        isSessionTranslationTargetPickerPresented ? Color.accentColor.opacity(0.28) : .white.opacity(0.14),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(String(localized: "Target Language")))
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var sessionTranslationLanguagePicker: some View {
+        ScrollView {
+            VStack(spacing: 4) {
+                ForEach(TranslationTargetLanguage.allCases) { language in
+                    Button {
+                        onSelectSessionTranslationTargetLanguage(language)
+                    } label: {
+                        sessionTranslationLanguageRow(for: language)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(7)
+        }
+        .frame(width: sessionLanguagePickerWidth, alignment: .top)
+        .frame(maxHeight: 184, alignment: .top)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.black.opacity(0.96))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.22), radius: 16, y: 10)
+        .accessibilityLabel(Text(String(localized: "Translation Language")))
+    }
+
+    private func sessionTranslationLanguageRow(for language: TranslationTargetLanguage) -> some View {
+        let isSelected = selectedSessionTranslationLanguage == language
+        let backgroundColor: Color = isSelected ? Color.accentColor.opacity(0.20) : .white.opacity(0.05)
+        let borderColor: Color = isSelected ? Color.accentColor.opacity(0.36) : .white.opacity(0.08)
+
+        return HStack(spacing: 10) {
+            Text(language.title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.accentColor.opacity(0.95))
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(backgroundColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: 1)
+        )
     }
 
     private var answerCard: some View {
@@ -273,7 +471,7 @@ struct WaveformView: View {
     }
 
     private var waveformBars: some View {
-        HStack(alignment: .center, spacing: 2.5) {
+        HStack(alignment: .center, spacing: waveformBarSpacing) {
             ForEach(0..<barCount, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(
@@ -283,7 +481,7 @@ struct WaveformView: View {
                             endPoint: .bottom
                         )
                     )
-                    .frame(width: 3.2, height: barHeight(for: index))
+                    .frame(width: waveformBarWidth, height: barHeight(for: index))
                     .shadow(color: .white.opacity(glowOpacity(for: index)), radius: 3, x: 0, y: 0)
             }
         }
@@ -291,7 +489,7 @@ struct WaveformView: View {
     }
 
     private var processingBars: some View {
-        HStack(alignment: .center, spacing: 2.5) {
+        HStack(alignment: .center, spacing: waveformBarSpacing) {
             ForEach(0..<barCount, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(.white.opacity(processingBarOpacity(for: index)))

@@ -33,6 +33,11 @@ class OverlayState: ObservableObject {
     @Published var answerContent = ""
     @Published var canInjectAnswer = false
     @Published var isPresented = false
+    @Published var sessionTranslationTargetLanguage: TranslationTargetLanguage?
+    @Published var sessionTranslationDraftLanguage: TranslationTargetLanguage?
+    @Published var isSessionTranslationTargetPickerPresented = false
+    @Published var isSessionTranslationLanguageHovering = false
+    @Published var allowsSessionTranslationLanguageSwitching = false
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -104,6 +109,11 @@ class OverlayState: ObservableObject {
         answerContent = ""
         canInjectAnswer = false
         isPresented = false
+        sessionTranslationTargetLanguage = nil
+        sessionTranslationDraftLanguage = nil
+        isSessionTranslationTargetPickerPresented = false
+        isSessionTranslationLanguageHovering = false
+        allowsSessionTranslationLanguageSwitching = false
         cancellables.removeAll()
     }
 
@@ -119,6 +129,7 @@ class OverlayState: ObservableObject {
     func presentProcessing(iconMode: OverlaySessionIconMode? = nil) {
         guard displayMode != .answer else { return }
         displayMode = .processing
+        dismissSessionTranslationTargetPicker()
         if let iconMode {
             sessionIconMode = iconMode
         }
@@ -135,10 +146,39 @@ class OverlayState: ObservableObject {
         isRequesting = false
         isCompleting = false
         statusMessage = ""
+        dismissSessionTranslationTargetPicker()
     }
 
     var shouldAnimateVisuals: Bool {
         isPresented && (isRecording || isModelInitializing || displayMode == .processing || isEnhancing || isRequesting)
+    }
+
+    func configureSessionTranslationTargetLanguage(
+        _ language: TranslationTargetLanguage?,
+        allowsSwitching: Bool
+    ) {
+        sessionTranslationTargetLanguage = language
+        sessionTranslationDraftLanguage = language
+        allowsSessionTranslationLanguageSwitching = allowsSwitching
+        if !allowsSwitching {
+            dismissSessionTranslationTargetPicker()
+        }
+    }
+
+    func presentSessionTranslationTargetPicker() {
+        guard allowsSessionTranslationLanguageSwitching else { return }
+        sessionTranslationDraftLanguage = sessionTranslationTargetLanguage
+        isSessionTranslationTargetPickerPresented = true
+    }
+
+    func dismissSessionTranslationTargetPicker() {
+        sessionTranslationDraftLanguage = sessionTranslationTargetLanguage
+        isSessionTranslationTargetPickerPresented = false
+        isSessionTranslationLanguageHovering = false
+    }
+
+    func setSessionTranslationLanguageHovering(_ isHovering: Bool) {
+        isSessionTranslationLanguageHovering = isHovering
     }
 
     private func bind(
@@ -225,12 +265,18 @@ class RecordingOverlayWindow: NSPanel {
 
     private var hostingView: NSHostingView<OverlayContent>?
     private var visibilityToken: UInt64 = 0
-    private var displayModeCancellable: AnyCancellable?
+    private var appearanceStateCancellable: AnyCancellable?
+    private var pickerStateCancellable: AnyCancellable?
     private var overlayAppearanceCancellable: AnyCancellable?
     private weak var observedState: OverlayState?
+    private var localClickMonitor: Any?
+    private var globalClickMonitor: Any?
     private var currentPosition: OverlayPosition = .bottom
     var onRequestClose: (() -> Void)?
     var onRequestInject: (() -> Void)?
+    var onRequestSessionTranslationTargetPickerToggle: (() -> Void)?
+    var onRequestSessionTranslationTargetLanguageSelect: ((TranslationTargetLanguage) -> Void)?
+    var onRequestSessionTranslationTargetPickerDismiss: (() -> Void)?
 
     init() {
         super.init(
@@ -272,7 +318,16 @@ class RecordingOverlayWindow: NSPanel {
         let content = OverlayContent(
             state: state,
             onInject: { [weak self] in self?.onRequestInject?() },
-            onClose: { [weak self] in self?.onRequestClose?() }
+            onClose: { [weak self] in self?.onRequestClose?() },
+            onToggleSessionTranslationTargetPicker: { [weak self] in
+                self?.onRequestSessionTranslationTargetPickerToggle?()
+            },
+            onSelectSessionTranslationTargetLanguage: { [weak self] language in
+                self?.onRequestSessionTranslationTargetLanguageSelect?(language)
+            },
+            onDismissSessionTranslationTargetPicker: { [weak self] in
+                self?.onRequestSessionTranslationTargetPickerDismiss?()
+            }
         )
 
         if let hostingView {
@@ -299,6 +354,7 @@ class RecordingOverlayWindow: NSPanel {
         VoxtLog.info("Overlay hide requested. isVisible=\(isVisible)", verbose: true)
         observedState?.isPresented = false
         observedState?.audioLevel = 0
+        removeOutsideClickMonitors()
 
         guard isVisible else {
             orderOut(nil)
@@ -321,17 +377,33 @@ class RecordingOverlayWindow: NSPanel {
     private func observe(state: OverlayState) {
         guard observedState !== state else { return }
         observedState = state
-        displayModeCancellable = state.$displayMode
+        appearanceStateCancellable = Publishers.CombineLatest3(
+            state.$displayMode,
+            state.$allowsSessionTranslationLanguageSwitching,
+            state.$isSessionTranslationTargetPickerPresented
+        )
             .receive(on: RunLoop.main)
             .sink { [weak self, weak state] _ in
                 guard let self, let state else { return }
                 self.updateAppearance(for: state, animated: true)
             }
+
+        pickerStateCancellable = state.$isSessionTranslationTargetPickerPresented
+            .receive(on: RunLoop.main)
+            .sink { [weak self, weak state] isPresented in
+                guard let self, let state else { return }
+                if isPresented {
+                    self.installOutsideClickMonitors()
+                } else {
+                    self.removeOutsideClickMonitors()
+                }
+                self.updateMouseInteraction(for: state)
+            }
     }
 
     private func updateAppearance(for state: OverlayState, animated: Bool) {
-        ignoresMouseEvents = state.displayMode != .answer
-        let targetFrame = frame(for: panelSize(for: state.displayMode), position: currentPosition)
+        updateMouseInteraction(for: state)
+        let targetFrame = frame(for: panelSize(for: state), position: currentPosition)
 
         guard !targetFrame.isEmpty else { return }
         if animated, isVisible {
@@ -345,10 +417,10 @@ class RecordingOverlayWindow: NSPanel {
         }
     }
 
-    private func panelSize(for mode: OverlayDisplayMode) -> CGSize {
-        switch mode {
+    private func panelSize(for state: OverlayState) -> CGSize {
+        switch state.displayMode {
         case .recording, .processing:
-            return CGSize(width: 360, height: 140)
+            return CGSize(width: 360, height: state.isSessionTranslationTargetPickerPresented ? 388 : 140)
         case .answer:
             return CGSize(width: 560, height: 340)
         }
@@ -376,6 +448,62 @@ class RecordingOverlayWindow: NSPanel {
         let storedValue = UserDefaults.standard.object(forKey: AppPreferenceKey.overlayScreenEdgeInset) as? Int ?? 30
         return CGFloat(min(max(storedValue, 0), 120))
     }
+
+    private func updateMouseInteraction(for state: OverlayState) {
+        ignoresMouseEvents = !(
+            state.displayMode == .answer ||
+            (state.displayMode == .recording && state.allowsSessionTranslationLanguageSwitching)
+        )
+    }
+
+    private func installOutsideClickMonitors() {
+        guard localClickMonitor == nil, globalClickMonitor == nil else { return }
+
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] event in
+            self?.handleOutsideClickIfNeeded(eventLocationInScreen: NSEvent.mouseLocation, sourceWindow: event.window)
+            return event
+        }
+
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleOutsideClickIfNeeded(eventLocationInScreen: NSEvent.mouseLocation, sourceWindow: nil)
+            }
+        }
+    }
+
+    private func removeOutsideClickMonitors() {
+        if let localClickMonitor {
+            NSEvent.removeMonitor(localClickMonitor)
+            self.localClickMonitor = nil
+        }
+        if let globalClickMonitor {
+            NSEvent.removeMonitor(globalClickMonitor)
+            self.globalClickMonitor = nil
+        }
+    }
+
+    private func handleOutsideClickIfNeeded(eventLocationInScreen: NSPoint, sourceWindow: NSWindow?) {
+        guard let state = observedState,
+              state.isSessionTranslationTargetPickerPresented
+        else {
+            return
+        }
+
+        if sourceWindow === self {
+            return
+        }
+
+        guard !frame.contains(eventLocationInScreen) else { return }
+        onRequestSessionTranslationTargetPickerDismiss?()
+    }
+
+    deinit {
+        removeOutsideClickMonitors()
+    }
 }
 
 // MARK: - SwiftUI content hosted inside the panel
@@ -384,6 +512,9 @@ private struct OverlayContent: View {
     @ObservedObject var state: OverlayState
     let onInject: () -> Void
     let onClose: () -> Void
+    let onToggleSessionTranslationTargetPicker: () -> Void
+    let onSelectSessionTranslationTargetLanguage: (TranslationTargetLanguage) -> Void
+    let onDismissSessionTranslationTargetPicker: () -> Void
 
     var body: some View {
         WaveformView(
@@ -402,8 +533,17 @@ private struct OverlayContent: View {
             answerTitle: state.answerTitle,
             answerContent: state.answerContent,
             canInjectAnswer: state.canInjectAnswer,
+            sessionTranslationTargetLanguage: state.sessionTranslationTargetLanguage,
+            sessionTranslationDraftLanguage: state.sessionTranslationDraftLanguage,
+            isSessionTranslationTargetPickerPresented: state.isSessionTranslationTargetPickerPresented,
+            isSessionTranslationLanguageHovering: state.isSessionTranslationLanguageHovering,
+            allowsSessionTranslationLanguageSwitching: state.allowsSessionTranslationLanguageSwitching,
             onInject: onInject,
-            onClose: onClose
+            onClose: onClose,
+            onSessionTranslationLanguageHoverChanged: state.setSessionTranslationLanguageHovering,
+            onToggleSessionTranslationTargetPicker: onToggleSessionTranslationTargetPicker,
+            onSelectSessionTranslationTargetLanguage: onSelectSessionTranslationTargetLanguage,
+            onDismissSessionTranslationTargetPicker: onDismissSessionTranslationTargetPicker
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, 8)

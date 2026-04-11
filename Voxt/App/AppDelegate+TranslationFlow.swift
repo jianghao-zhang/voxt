@@ -89,9 +89,13 @@ extension AppDelegate {
 
     func processTranslatedTranscription(_ text: String, sessionID: UUID) {
         guard shouldHandleCallbacks(for: sessionID) else { return }
-        let resolution = resolvedTranslationProviderResolution(isSelectedTextTranslation: false)
+        let targetLanguage = effectiveSessionTranslationTargetLanguage
+        let resolution = resolvedTranslationProviderResolution(
+            targetLanguage: targetLanguage,
+            isSelectedTextTranslation: false
+        )
         VoxtLog.info(
-            "Translation flow started. inputChars=\(text.count), targetLanguage=\(translationTargetLanguage.instructionName), enhancementMode=\(enhancementMode.rawValue), provider=\(resolution.provider.rawValue)"
+            "Translation flow started. inputChars=\(text.count), targetLanguage=\(targetLanguage.instructionName), enhancementMode=\(enhancementMode.rawValue), provider=\(resolution.provider.rawValue)"
         )
         setEnhancingState(true)
         Task {
@@ -107,7 +111,7 @@ extension AppDelegate {
                 // Translation mode pipeline: enhance -> translate.
                 let translated = try await self.runTranslationPipeline(
                     text: text,
-                    targetLanguage: self.translationTargetLanguage,
+                    targetLanguage: targetLanguage,
                     includeEnhancement: true,
                     allowStrictRetry: false
                 )
@@ -204,6 +208,7 @@ extension AppDelegate {
         silenceMonitorTask = nil
         pauseLLMTask?.cancel()
         pauseLLMTask = nil
+        resetSessionTranslationState()
         overlayState.reset()
         overlayState.transcribedText = selectedText
         overlayState.statusMessage = ""
@@ -385,7 +390,10 @@ extension AppDelegate {
             strict: false
         )
         let translationRepo = translationCustomLLMRepo
-        let resolution = resolvedTranslationProviderResolution(isSelectedTextTranslation: isSelectedTextTranslationFlow)
+        let resolution = resolvedTranslationProviderResolution(
+            targetLanguage: targetLanguage,
+            isSelectedTextTranslation: isSelectedTextTranslationFlow
+        )
         let modelProvider = resolution.provider
         VoxtLog.llm(
             "Translation request. promptChars=\(resolvedPrompt.count), inputChars=\(text.count), provider=\(modelProvider.rawValue), selectedProvider=\(translationModelProvider.rawValue), fallbackReason=\(resolution.fallbackReason.map(String.init(describing:)) ?? "none"), translationRepo=\(translationRepo)"
@@ -493,7 +501,10 @@ extension AppDelegate {
             strict: true
         )
         let translationRepo = translationCustomLLMRepo
-        let resolution = resolvedTranslationProviderResolution(isSelectedTextTranslation: isSelectedTextTranslationFlow)
+        let resolution = resolvedTranslationProviderResolution(
+            targetLanguage: targetLanguage,
+            isSelectedTextTranslation: isSelectedTextTranslationFlow
+        )
         let modelProvider = resolution.provider
         VoxtLog.llm(
             "Strict translation retry. promptChars=\(strictPrompt.count), inputChars=\(text.count), provider=\(modelProvider.rawValue), selectedProvider=\(translationModelProvider.rawValue), fallbackReason=\(resolution.fallbackReason.map(String.init(describing:)) ?? "none"), translationRepo=\(translationRepo)"
@@ -526,15 +537,123 @@ extension AppDelegate {
         }
     }
 
-    private func resolvedTranslationProviderResolution(isSelectedTextTranslation: Bool) -> TranslationProviderResolution {
-        TranslationProviderResolver.resolve(
+    static func effectiveTranslationTargetLanguage(
+        savedTargetLanguage: TranslationTargetLanguage,
+        sessionOverride: TranslationTargetLanguage?,
+        isSelectedTextTranslation: Bool
+    ) -> TranslationTargetLanguage {
+        guard !isSelectedTextTranslation, let sessionOverride else {
+            return savedTargetLanguage
+        }
+        return sessionOverride
+    }
+
+    var effectiveSessionTranslationTargetLanguage: TranslationTargetLanguage {
+        Self.effectiveTranslationTargetLanguage(
+            savedTargetLanguage: translationTargetLanguage,
+            sessionOverride: sessionTranslationTargetLanguageOverride,
+            isSelectedTextTranslation: isSelectedTextTranslationFlow
+        )
+    }
+
+    func resolvedTranslationProviderResolution(
+        targetLanguage: TranslationTargetLanguage,
+        isSelectedTextTranslation: Bool
+    ) -> TranslationProviderResolution {
+        Self.resolvedSessionTranslationProviderResolution(
+            lockedResolution: activeSessionTranslationProviderResolution,
             selectedProvider: translationModelProvider,
             fallbackProvider: translationFallbackModelProvider,
             transcriptionEngine: transcriptionEngine,
-            targetLanguage: translationTargetLanguage,
+            targetLanguage: targetLanguage,
             isSelectedTextTranslation: isSelectedTextTranslation,
             whisperModelState: whisperModelManager.state
         )
+    }
+
+    static func resolvedSessionTranslationProviderResolution(
+        lockedResolution: TranslationProviderResolution?,
+        selectedProvider: TranslationModelProvider,
+        fallbackProvider: TranslationModelProvider,
+        transcriptionEngine: TranscriptionEngine,
+        targetLanguage: TranslationTargetLanguage,
+        isSelectedTextTranslation: Bool,
+        whisperModelState: WhisperKitModelManager.ModelState
+    ) -> TranslationProviderResolution {
+        if !isSelectedTextTranslation,
+           let lockedResolution {
+            return lockedResolution
+        }
+
+        return TranslationProviderResolver.resolve(
+            selectedProvider: selectedProvider,
+            fallbackProvider: fallbackProvider,
+            transcriptionEngine: transcriptionEngine,
+            targetLanguage: targetLanguage,
+            isSelectedTextTranslation: isSelectedTextTranslation,
+            whisperModelState: whisperModelState
+        )
+    }
+
+    func prepareMicrophoneTranslationSessionState() {
+        let persistedTargetLanguage = translationTargetLanguage
+        let resolution = TranslationProviderResolver.resolve(
+            selectedProvider: translationModelProvider,
+            fallbackProvider: translationFallbackModelProvider,
+            transcriptionEngine: transcriptionEngine,
+            targetLanguage: persistedTargetLanguage,
+            isSelectedTextTranslation: false,
+            whisperModelState: whisperModelManager.state
+        )
+
+        sessionTranslationTargetLanguageOverride = persistedTargetLanguage
+        activeSessionTranslationProviderResolution = resolution
+        sessionUsesWhisperDirectTranslation = resolution.usesWhisperDirectTranslation
+        overlayState.configureSessionTranslationTargetLanguage(
+            persistedTargetLanguage,
+            allowsSwitching: Self.shouldAllowSessionTranslationLanguageSwitching(
+                sessionOutputMode: .translation,
+                isSelectedTextTranslationFlow: false,
+                sessionUsesWhisperDirectTranslation: resolution.usesWhisperDirectTranslation
+            )
+        )
+    }
+
+    func resetSessionTranslationState() {
+        sessionTranslationTargetLanguageOverride = nil
+        activeSessionTranslationProviderResolution = nil
+        sessionUsesWhisperDirectTranslation = false
+        overlayState.configureSessionTranslationTargetLanguage(nil, allowsSwitching: false)
+    }
+
+    static func shouldAllowSessionTranslationLanguageSwitching(
+        sessionOutputMode: SessionOutputMode,
+        isSelectedTextTranslationFlow: Bool,
+        sessionUsesWhisperDirectTranslation: Bool
+    ) -> Bool {
+        sessionOutputMode == .translation &&
+            !isSelectedTextTranslationFlow &&
+            !sessionUsesWhisperDirectTranslation
+    }
+
+    func toggleSessionTranslationTargetPicker() {
+        guard overlayState.allowsSessionTranslationLanguageSwitching else { return }
+        if overlayState.isSessionTranslationTargetPickerPresented {
+            dismissSessionTranslationTargetPicker()
+        } else {
+            overlayState.presentSessionTranslationTargetPicker()
+        }
+    }
+
+    func selectSessionTranslationTargetLanguage(_ language: TranslationTargetLanguage) {
+        guard overlayState.allowsSessionTranslationLanguageSwitching else { return }
+        sessionTranslationTargetLanguageOverride = language
+        overlayState.configureSessionTranslationTargetLanguage(language, allowsSwitching: true)
+        overlayState.dismissSessionTranslationTargetPicker()
+    }
+
+    func dismissSessionTranslationTargetPicker() {
+        overlayState.dismissSessionTranslationTargetPicker()
     }
 
     private func resolvedTranslationPrompt(

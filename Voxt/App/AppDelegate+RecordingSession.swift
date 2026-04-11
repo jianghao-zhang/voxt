@@ -42,7 +42,7 @@ extension AppDelegate {
         sessionOutputMode = outputMode
         enhancementContextSnapshot = nil
         rewriteSessionHasSelectedSourceText = false
-        sessionUsesWhisperDirectTranslation = false
+        resetSessionTranslationState()
         let frontmostApplication = NSWorkspace.shared.frontmostApplication
         let frontmostBundleID = frontmostApplication?.bundleIdentifier
         let sessionTargetBundleID = fallbackInjectBundleID(from: frontmostBundleID)
@@ -68,6 +68,9 @@ extension AppDelegate {
         overlayState.reset()
         overlayState.statusMessage = ""
         overlayState.presentRecording(iconMode: overlayIconMode(for: outputMode))
+        if outputMode == .translation {
+            prepareMicrophoneTranslationSessionState()
+        }
 
         isSessionActive = true
         pendingSystemAudioMuteTask?.cancel()
@@ -159,7 +162,6 @@ extension AppDelegate {
         activeRecordingSessionID = UUID()
         isSessionCancellationRequested = true
         didCommitSessionOutput = true
-        sessionUsesWhisperDirectTranslation = false
         sessionTargetApplicationPID = nil
         sessionTargetApplicationBundleID = nil
 
@@ -533,7 +535,6 @@ extension AppDelegate {
         didCommitSessionOutput = false
         activeRecordingSessionID = UUID()
         sessionOutputMode = .transcription
-        sessionUsesWhisperDirectTranslation = false
         recordingStartedAt = nil
         recordingStoppedAt = nil
         transcriptionProcessingStartedAt = nil
@@ -546,6 +547,7 @@ extension AppDelegate {
         rewriteSessionHasSelectedSourceText = false
         rewriteSessionHadWritableFocusedInput = false
         resetVoiceEndCommandState()
+        resetSessionTranslationState()
         overlayState.reset()
         overlayWindow.hide()
     }
@@ -827,14 +829,7 @@ extension AppDelegate {
     }
 
     private func shouldUseWhisperDirectTranslationForCurrentSession() -> Bool {
-        TranslationProviderResolver.resolve(
-            selectedProvider: translationModelProvider,
-            fallbackProvider: translationFallbackModelProvider,
-            transcriptionEngine: transcriptionEngine,
-            targetLanguage: translationTargetLanguage,
-            isSelectedTextTranslation: false,
-            whisperModelState: whisperModelManager.state
-        ).usesWhisperDirectTranslation
+        activeSessionTranslationProviderResolution?.usesWhisperDirectTranslation == true
     }
 
     private func triggerVoiceEndCommandStop() {

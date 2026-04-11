@@ -342,6 +342,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var rewriteSessionHadWritableFocusedInput = false
     var rewriteSessionFallbackInjectBundleID: String?
     var sessionUsesWhisperDirectTranslation = false
+    var sessionTranslationTargetLanguageOverride: TranslationTargetLanguage?
+    var activeSessionTranslationProviderResolution: TranslationProviderResolution?
     var pendingMeetingSessionCompletionDisposition: MeetingSessionCompletionDisposition = .save
     let tapStopGuardInterval: TimeInterval = 0.35
     let transcriptionStartDebounceInterval: TimeInterval = 0.08
@@ -594,6 +596,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         overlayWindow.onRequestInject = { [weak self] in
             Task { @MainActor [weak self] in
                 self?.injectAnswerOverlayContent()
+            }
+        }
+        overlayWindow.onRequestSessionTranslationTargetPickerToggle = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.toggleSessionTranslationTargetPicker()
+            }
+        }
+        overlayWindow.onRequestSessionTranslationTargetLanguageSelect = { [weak self] language in
+            Task { @MainActor [weak self] in
+                self?.selectSessionTranslationTargetLanguage(language)
+            }
+        }
+        overlayWindow.onRequestSessionTranslationTargetPickerDismiss = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.dismissSessionTranslationTargetPicker()
             }
         }
         meetingOverlayWindow.onRequestClose = { [weak self] in

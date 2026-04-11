@@ -41,13 +41,13 @@ extension AppDelegate {
             delegate.isSessionActive = false
             delegate.sessionOutputMode = .transcription
             delegate.isSelectedTextTranslationFlow = false
-            delegate.sessionUsesWhisperDirectTranslation = false
             delegate.sessionTargetApplicationPID = nil
             delegate.sessionTargetApplicationBundleID = nil
             delegate.enhancementContextSnapshot = nil
             delegate.rewriteSessionHasSelectedSourceText = false
             delegate.rewriteSessionHadWritableFocusedInput = false
             delegate.rewriteSessionFallbackInjectBundleID = nil
+            delegate.resetSessionTranslationState()
             delegate.overlayState.isCompleting = false
             if delegate.overlayState.displayMode != .answer {
                 delegate.overlayState.reset()
