@@ -388,27 +388,6 @@ extension AppDelegate {
             return trimmedPreferredID
         }
 
-        switch enhancementMode {
-        case .appleIntelligence:
-            if availableOptions.contains(where: { $0.id == MeetingSummaryModelID.appleIntelligence }) {
-                return MeetingSummaryModelID.appleIntelligence
-            }
-        case .customLLM:
-            let repo = customLLMManager.currentModelRepo
-            let optionID = MeetingSummaryModelID.customLLM(repo)
-            if availableOptions.contains(where: { $0.id == optionID }) {
-                return optionID
-            }
-        case .remoteLLM:
-            let provider = remoteLLMSelectedProvider
-            let optionID = MeetingSummaryModelID.remoteLLM(provider)
-            if availableOptions.contains(where: { $0.id == optionID }) {
-                return optionID
-            }
-        case .off:
-            break
-        }
-
         return availableOptions.first?.id
     }
 

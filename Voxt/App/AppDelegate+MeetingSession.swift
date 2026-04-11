@@ -231,6 +231,7 @@ extension AppDelegate {
 
     private func preflightPermissionsForMeeting() -> Bool {
         prepareLegacySettingsForMeeting()
+        synchronizeRuntimeASRStateForMeeting()
 
         if isSessionActive {
             showOverlayStatus(

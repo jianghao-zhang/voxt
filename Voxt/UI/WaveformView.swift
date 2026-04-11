@@ -49,13 +49,23 @@ struct WaveformView: View {
     var isCompleting: Bool = false
     var answerTitle: String = ""
     var answerContent: String = ""
+    var isStreamingAnswer: Bool = false
+    var answerInteractionMode: AnswerInteractionMode = .singleResult
+    var rewriteConversationTurns: [RewriteConversationTurn] = []
+    var latestRewriteResult: RewriteAnswerPayload? = nil
     var canInjectAnswer: Bool = false
+    var canCopyAnswer: Bool = false
+    var canContinueAnswer: Bool = false
+    var canShowHistoryDetail: Bool = false
     var sessionTranslationTargetLanguage: TranslationTargetLanguage? = nil
     var sessionTranslationDraftLanguage: TranslationTargetLanguage? = nil
     var isSessionTranslationTargetPickerPresented: Bool = false
     var isSessionTranslationLanguageHovering: Bool = false
     var allowsSessionTranslationLanguageSwitching: Bool = false
     var onInject: () -> Void = {}
+    var onContinue: () -> Void = {}
+    var onToggleConversationRecording: () -> Void = {}
+    var onShowHistoryDetail: () -> Void = {}
     var onClose: () -> Void = {}
     var onSessionTranslationLanguageHoverChanged: (Bool) -> Void = { _ in }
     var onToggleSessionTranslationTargetPicker: () -> Void = {}
@@ -111,6 +121,24 @@ struct WaveformView: View {
             barWidth: waveformBarWidth,
             barSpacing: waveformBarSpacing
         )
+    }
+    private var displayedAnswerPayload: RewriteAnswerPayload {
+        let hasDraft = !answerTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !answerContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasDraft {
+            return RewriteAnswerPayload(title: answerTitle, content: answerContent)
+        }
+        return latestRewriteResult ?? RewriteAnswerPayload(title: answerTitle, content: answerContent)
+    }
+
+    private var copyableAnswerPayload: RewriteAnswerPayload? {
+        if let latestRewriteResult {
+            return latestRewriteResult
+        }
+        guard !isStreamingAnswer else { return nil }
+        let trimmed = answerContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return RewriteAnswerPayload(title: answerTitle, content: answerContent)
     }
 
     var body: some View {
@@ -356,14 +384,37 @@ struct WaveformView: View {
 
     private var answerCard: some View {
         WaveformAnswerCard(
-            title: answerTitle,
-            content: answerContent,
+            title: displayedAnswerPayload.title,
+            content: displayedAnswerPayload.content,
+            answerInteractionMode: answerInteractionMode,
+            conversationTurns: rewriteConversationTurns,
+            streamingUserPromptText: conversationStreamingUserPromptText,
             canInjectAnswer: canInjectAnswer,
+            canCopyAnswer: canCopyAnswer,
+            canContinueAnswer: canContinueAnswer,
+            canShowHistoryDetail: canShowHistoryDetail,
             didCopyAnswer: didCopyAnswer,
+            isRecording: isRecording,
+            isProcessing: isEnhancing || isRequesting,
+            audioLevel: audioLevel,
+            shouldAnimateWave: shouldAnimate,
+            streamingDraftPayload: answerInteractionMode == .conversation && isStreamingAnswer
+                ? displayedAnswerPayload
+                : nil,
             onInject: onInject,
+            onContinue: onContinue,
+            onToggleConversationRecording: onToggleConversationRecording,
+            onShowDetail: onShowHistoryDetail,
             onCopy: copyAnswerToPasteboard,
             onClose: onClose
         )
+    }
+
+    private var conversationStreamingUserPromptText: String? {
+        guard answerInteractionMode == .conversation else { return nil }
+        let trimmed = transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, (isRecording || isEnhancing || isRequesting) else { return nil }
+        return trimmed
     }
 
     @ViewBuilder
@@ -682,9 +733,8 @@ struct WaveformView: View {
     }
 
     private func copyAnswerToPasteboard() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(answerContent, forType: .string)
+        guard let payload = copyableAnswerPayload else { return }
+        copyTextToPasteboard(payload.content)
         let token = UUID()
         copyFeedbackToken = token
         didCopyAnswer = true
@@ -692,5 +742,11 @@ struct WaveformView: View {
             guard copyFeedbackToken == token else { return }
             didCopyAnswer = false
         }
+    }
+
+    private func copyTextToPasteboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 }

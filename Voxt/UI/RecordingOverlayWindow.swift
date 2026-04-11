@@ -15,6 +15,16 @@ enum OverlaySessionIconMode: Equatable {
     case rewrite
 }
 
+enum AnswerInteractionMode: Equatable {
+    case singleResult
+    case conversation
+}
+
+enum AnswerSpaceShortcutAction: Equatable {
+    case continueAndRecord
+    case toggleConversationRecording
+}
+
 /// Observable state that drives the overlay UI. Either transcriber populates this.
 @MainActor
 class OverlayState: ObservableObject {
@@ -31,6 +41,13 @@ class OverlayState: ObservableObject {
     @Published var sessionIconMode: OverlaySessionIconMode = .transcription
     @Published var answerTitle = ""
     @Published var answerContent = ""
+    @Published var answerInteractionMode: AnswerInteractionMode = .singleResult
+    @Published var rewriteConversationTurns: [RewriteConversationTurn] = []
+    @Published var latestRewriteResult: RewriteAnswerPayload?
+    @Published var latestHistoryEntryID: UUID?
+    @Published var rewriteConversationRemoteResponseID: String?
+    @Published var pendingConversationUserPrompt: String?
+    @Published var isStreamingAnswer = false
     @Published var canInjectAnswer = false
     @Published var isPresented = false
     @Published var sessionTranslationTargetLanguage: TranslationTargetLanguage?
@@ -107,6 +124,13 @@ class OverlayState: ObservableObject {
         sessionIconMode = .transcription
         answerTitle = ""
         answerContent = ""
+        answerInteractionMode = .singleResult
+        rewriteConversationTurns = []
+        latestRewriteResult = nil
+        latestHistoryEntryID = nil
+        rewriteConversationRemoteResponseID = nil
+        pendingConversationUserPrompt = nil
+        isStreamingAnswer = false
         canInjectAnswer = false
         isPresented = false
         sessionTranslationTargetLanguage = nil
@@ -124,6 +148,7 @@ class OverlayState: ObservableObject {
         }
         answerTitle = ""
         answerContent = ""
+        isStreamingAnswer = false
     }
 
     func presentProcessing(iconMode: OverlaySessionIconMode? = nil) {
@@ -136,8 +161,14 @@ class OverlayState: ObservableObject {
     }
 
     func presentAnswer(title: String, content: String, canInject: Bool) {
-        answerTitle = title
-        answerContent = content
+        let payload = RewriteAnswerPayloadParser.normalize(RewriteAnswerPayload(
+            title: title,
+            content: content
+        ))
+        answerTitle = payload.title
+        answerContent = payload.content
+        latestRewriteResult = payload
+        isStreamingAnswer = false
         canInjectAnswer = canInject
         displayMode = .answer
         isRecording = false
@@ -147,10 +178,187 @@ class OverlayState: ObservableObject {
         isCompleting = false
         statusMessage = ""
         dismissSessionTranslationTargetPicker()
+
+        if isRewriteConversationActive {
+            appendConversationResult(payload)
+        } else {
+            answerInteractionMode = .singleResult
+            rewriteConversationTurns = []
+            rewriteConversationRemoteResponseID = nil
+            pendingConversationUserPrompt = nil
+        }
+    }
+
+    func presentStreamingAnswer(title: String, content: String, canInject: Bool) {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? String(localized: "AI Answer")
+            : title
+        let previewPayload = RewriteAnswerPayload(
+            title: normalizedTitle,
+            content: content
+        )
+
+        answerTitle = previewPayload.title
+        answerContent = previewPayload.content
+        isStreamingAnswer = true
+        canInjectAnswer = canInject
+        displayMode = .answer
+        isRecording = false
+        audioLevel = 0
+        isCompleting = false
+        statusMessage = ""
+        dismissSessionTranslationTargetPicker()
+
+        if !isRewriteConversationActive {
+            answerInteractionMode = .singleResult
+            rewriteConversationTurns = []
+            rewriteConversationRemoteResponseID = nil
+            pendingConversationUserPrompt = nil
+        }
+    }
+
+    func presentConversationAnswer(content: String, canInject: Bool) {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedContent.isEmpty else { return }
+
+        let payload = RewriteAnswerPayload(title: "", content: trimmedContent)
+        answerTitle = ""
+        answerContent = payload.content
+        latestRewriteResult = payload
+        isStreamingAnswer = false
+        canInjectAnswer = canInject
+        displayMode = .answer
+        isRecording = false
+        audioLevel = 0
+        isEnhancing = false
+        isRequesting = false
+        isCompleting = false
+        statusMessage = ""
+        dismissSessionTranslationTargetPicker()
+
+        if isRewriteConversationActive {
+            appendConversationResult(payload)
+        } else {
+            answerInteractionMode = .conversation
+            rewriteConversationTurns = [RewriteConversationTurn.seed(from: payload)]
+            rewriteConversationRemoteResponseID = nil
+            pendingConversationUserPrompt = nil
+        }
+    }
+
+    func presentStreamingConversationAnswer(content: String, canInject: Bool) {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedContent.isEmpty else { return }
+
+        answerTitle = ""
+        answerContent = trimmedContent
+        isStreamingAnswer = true
+        canInjectAnswer = canInject
+        displayMode = .answer
+        isRecording = false
+        audioLevel = 0
+        isCompleting = false
+        statusMessage = ""
+        dismissSessionTranslationTargetPicker()
     }
 
     var shouldAnimateVisuals: Bool {
         isPresented && (isRecording || isModelInitializing || displayMode == .processing || isEnhancing || isRequesting)
+    }
+
+    var currentAnswerPayload: RewriteAnswerPayload? {
+        let draftTitle = answerTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let draftContent = answerContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !draftTitle.isEmpty || !draftContent.isEmpty {
+            return RewriteAnswerPayload(title: answerTitle, content: answerContent)
+        }
+
+        if let latestRewriteResult {
+            return latestRewriteResult
+        }
+
+        let content = answerContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return nil }
+        return RewriteAnswerPayload(title: answerTitle, content: answerContent)
+    }
+
+    var latestCompletedAnswerPayload: RewriteAnswerPayload? {
+        if let latestRewriteResult {
+            return latestRewriteResult
+        }
+
+        guard displayMode == .answer, !isStreamingAnswer else { return nil }
+        let content = answerContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return nil }
+        return RewriteAnswerPayload(title: answerTitle, content: answerContent)
+    }
+
+    var canCopyLatestAnswer: Bool {
+        latestCompletedAnswerPayload != nil
+    }
+
+    var canShowLatestHistoryDetail: Bool {
+        guard displayMode == .answer, !isStreamingAnswer else { return false }
+        return latestHistoryEntryID != nil
+    }
+
+    var canContinueRewriteAnswer: Bool {
+        guard displayMode == .answer,
+              sessionIconMode == .rewrite,
+              answerInteractionMode == .singleResult,
+              latestCompletedAnswerPayload != nil
+        else {
+            return false
+        }
+        return true
+    }
+
+    var showsRewriteContinueButton: Bool {
+        guard displayMode == .answer, sessionIconMode == .rewrite else { return false }
+        switch answerInteractionMode {
+        case .singleResult:
+            return latestCompletedAnswerPayload != nil
+        case .conversation:
+            return true
+        }
+    }
+
+    var isRewriteConversationActive: Bool {
+        displayMode == .answer &&
+            sessionIconMode == .rewrite &&
+            answerInteractionMode == .conversation
+    }
+
+    var rewriteConversationPromptHistory: [RewriteConversationPromptTurn] {
+        rewriteConversationTurns.map(\.promptTurn)
+    }
+
+    var answerSpaceShortcutAction: AnswerSpaceShortcutAction? {
+        guard displayMode == .answer, sessionIconMode == .rewrite else { return nil }
+        switch answerInteractionMode {
+        case .singleResult:
+            return latestCompletedAnswerPayload == nil ? nil : .continueAndRecord
+        case .conversation:
+            return .toggleConversationRecording
+        }
+    }
+
+    func beginRewriteConversationIfNeeded() {
+        guard canContinueRewriteAnswer, let payload = latestCompletedAnswerPayload else { return }
+        answerInteractionMode = .conversation
+        rewriteConversationTurns = [RewriteConversationTurn.seed(from: payload)]
+        latestRewriteResult = payload
+        rewriteConversationRemoteResponseID = nil
+        pendingConversationUserPrompt = nil
+    }
+
+    func stageConversationUserPrompt(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        pendingConversationUserPrompt = trimmed.isEmpty ? nil : trimmed
+    }
+
+    func clearPendingConversationUserPrompt() {
+        pendingConversationUserPrompt = nil
     }
 
     func configureSessionTranslationTargetLanguage(
@@ -179,6 +387,25 @@ class OverlayState: ObservableObject {
 
     func setSessionTranslationLanguageHovering(_ isHovering: Bool) {
         isSessionTranslationLanguageHovering = isHovering
+    }
+
+    private func appendConversationResult(_ payload: RewriteAnswerPayload) {
+        latestRewriteResult = payload
+        let userPrompt = pendingConversationUserPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        pendingConversationUserPrompt = nil
+
+        if rewriteConversationTurns.isEmpty {
+            rewriteConversationTurns = [RewriteConversationTurn.seed(from: payload)]
+            return
+        }
+
+        rewriteConversationTurns.append(
+            RewriteConversationTurn(
+                userPromptText: userPrompt,
+                resultTitle: payload.title,
+                resultContent: payload.content
+            )
+        )
     }
 
     private func bind(
@@ -274,6 +501,9 @@ class RecordingOverlayWindow: NSPanel {
     private var currentPosition: OverlayPosition = .bottom
     var onRequestClose: (() -> Void)?
     var onRequestInject: (() -> Void)?
+    var onRequestContinue: (() -> Void)?
+    var onRequestConversationRecordToggle: (() -> Void)?
+    var onRequestDetail: (() -> Void)?
     var onRequestSessionTranslationTargetPickerToggle: (() -> Void)?
     var onRequestSessionTranslationTargetLanguageSelect: ((TranslationTargetLanguage) -> Void)?
     var onRequestSessionTranslationTargetPickerDismiss: (() -> Void)?
@@ -318,6 +548,9 @@ class RecordingOverlayWindow: NSPanel {
         let content = OverlayContent(
             state: state,
             onInject: { [weak self] in self?.onRequestInject?() },
+            onContinue: { [weak self] in self?.onRequestContinue?() },
+            onToggleConversationRecording: { [weak self] in self?.onRequestConversationRecordToggle?() },
+            onShowDetail: { [weak self] in self?.onRequestDetail?() },
             onClose: { [weak self] in self?.onRequestClose?() },
             onToggleSessionTranslationTargetPicker: { [weak self] in
                 self?.onRequestSessionTranslationTargetPickerToggle?()
@@ -350,6 +583,23 @@ class RecordingOverlayWindow: NSPanel {
         }
     }
 
+    @discardableResult
+    func handleAnswerSpaceShortcut() -> Bool {
+        guard let state = observedState,
+              let action = state.answerSpaceShortcutAction
+        else {
+            return false
+        }
+
+        switch action {
+        case .continueAndRecord:
+            onRequestContinue?()
+        case .toggleConversationRecording:
+            onRequestConversationRecordToggle?()
+        }
+        return true
+    }
+
     func hide(completion: (() -> Void)? = nil) {
         VoxtLog.info("Overlay hide requested. isVisible=\(isVisible)", verbose: true)
         observedState?.isPresented = false
@@ -377,16 +627,17 @@ class RecordingOverlayWindow: NSPanel {
     private func observe(state: OverlayState) {
         guard observedState !== state else { return }
         observedState = state
-        appearanceStateCancellable = Publishers.CombineLatest3(
+        appearanceStateCancellable = Publishers.CombineLatest4(
             state.$displayMode,
             state.$allowsSessionTranslationLanguageSwitching,
-            state.$isSessionTranslationTargetPickerPresented
+            state.$isSessionTranslationTargetPickerPresented,
+            state.$answerInteractionMode
         )
-            .receive(on: RunLoop.main)
-            .sink { [weak self, weak state] _ in
-                guard let self, let state else { return }
-                self.updateAppearance(for: state, animated: true)
-            }
+        .receive(on: RunLoop.main)
+        .sink { [weak self, weak state] _ in
+            guard let self, let state else { return }
+            self.updateAppearance(for: state, animated: true)
+        }
 
         pickerStateCancellable = state.$isSessionTranslationTargetPickerPresented
             .receive(on: RunLoop.main)
@@ -511,6 +762,9 @@ class RecordingOverlayWindow: NSPanel {
 private struct OverlayContent: View {
     @ObservedObject var state: OverlayState
     let onInject: () -> Void
+    let onContinue: () -> Void
+    let onToggleConversationRecording: () -> Void
+    let onShowDetail: () -> Void
     let onClose: () -> Void
     let onToggleSessionTranslationTargetPicker: () -> Void
     let onSelectSessionTranslationTargetLanguage: (TranslationTargetLanguage) -> Void
@@ -532,13 +786,23 @@ private struct OverlayContent: View {
             isCompleting: state.isCompleting,
             answerTitle: state.answerTitle,
             answerContent: state.answerContent,
+            isStreamingAnswer: state.isStreamingAnswer,
+            answerInteractionMode: state.answerInteractionMode,
+            rewriteConversationTurns: state.rewriteConversationTurns,
+            latestRewriteResult: state.latestRewriteResult,
             canInjectAnswer: state.canInjectAnswer,
+            canCopyAnswer: state.canCopyLatestAnswer,
+            canContinueAnswer: state.showsRewriteContinueButton,
+            canShowHistoryDetail: state.canShowLatestHistoryDetail,
             sessionTranslationTargetLanguage: state.sessionTranslationTargetLanguage,
             sessionTranslationDraftLanguage: state.sessionTranslationDraftLanguage,
             isSessionTranslationTargetPickerPresented: state.isSessionTranslationTargetPickerPresented,
             isSessionTranslationLanguageHovering: state.isSessionTranslationLanguageHovering,
             allowsSessionTranslationLanguageSwitching: state.allowsSessionTranslationLanguageSwitching,
             onInject: onInject,
+            onContinue: onContinue,
+            onToggleConversationRecording: onToggleConversationRecording,
+            onShowHistoryDetail: onShowDetail,
             onClose: onClose,
             onSessionTranslationLanguageHoverChanged: state.setSessionTranslationLanguageHovering,
             onToggleSessionTranslationTargetPicker: onToggleSessionTranslationTargetPicker,

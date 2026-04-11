@@ -94,6 +94,34 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var supportsHostedSearch: Bool {
+        switch self {
+        case .anthropic, .google, .zai, .aliyunBailian:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var defaultSearchEnabled: Bool {
+        self == .aliyunBailian
+    }
+
+    var searchToggleDescription: String {
+        switch self {
+        case .anthropic:
+            return AppLocalization.localizedString("Use Anthropic hosted web search when the model needs current information. This may increase latency and usage.")
+        case .google:
+            return AppLocalization.localizedString("Ground responses with Google Search when Gemini needs fresher web context. This may increase latency and usage.")
+        case .zai:
+            return AppLocalization.localizedString("Allow GLM to call its hosted web search tool for fresher answers. This may increase latency and usage.")
+        case .aliyunBailian:
+            return AppLocalization.localizedString("Allow Qwen to use built-in web search. Enabled by default for Aliyun because it is available directly in the official compatible API.")
+        default:
+            return AppLocalization.localizedString("Use provider-hosted web search when available. This may increase latency and usage.")
+        }
+    }
+
     var title: String {
         switch self {
         case .anthropic:

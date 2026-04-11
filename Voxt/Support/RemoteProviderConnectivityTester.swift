@@ -676,22 +676,46 @@ struct RemoteProviderConnectivityTester {
             if !configuration.apiKey.isEmpty {
                 headers["Authorization"] = "Bearer \(configuration.apiKey)"
             }
-            return try await testOpenAICompatibleReachability(endpoint: endpoint, headers: headers, model: model)
+            return try await testOpenAICompatibleReachability(
+                provider: provider,
+                endpoint: endpoint,
+                headers: headers,
+                model: model
+            )
         }
     }
 
     private func testOpenAICompatibleReachability(
+        provider: RemoteLLMProvider,
         endpoint: String,
         headers: [String: String],
         model: String
     ) async throws -> String {
-        let body: [String: Any] = [
-            "model": model,
-            "messages": [
-                ["role": "user", "content": "ping"]
-            ],
-            "stream": false
-        ]
+        let body: [String: Any]
+        if provider == .ollama,
+           let url = URL(string: endpoint),
+           usesNativeOllamaChatEndpoint(url) {
+            body = [
+                "model": model,
+                "messages": [
+                    ["role": "user", "content": "ping"]
+                ],
+                "stream": false,
+                "options": [
+                    "temperature": 0.2,
+                    "top_p": 0.9,
+                    "num_predict": 32
+                ]
+            ]
+        } else {
+            body = [
+                "model": model,
+                "messages": [
+                    ["role": "user", "content": "ping"]
+                ],
+                "stream": false
+            ]
+        }
         return try await testJSONPOSTReachability(endpoint: endpoint, headers: headers, body: body)
     }
 
@@ -817,6 +841,10 @@ struct RemoteProviderConnectivityTester {
             code: http.statusCode,
             userInfo: [NSLocalizedDescriptionKey: AppLocalization.format("Connection failed (HTTP %d). %@", http.statusCode, payload)]
         )
+    }
+
+    private func usesNativeOllamaChatEndpoint(_ url: URL) -> Bool {
+        url.path.lowercased().hasSuffix("/api/chat")
     }
 
     private func testHTTPReachability(

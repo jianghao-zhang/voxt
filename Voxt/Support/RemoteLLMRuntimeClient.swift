@@ -2,7 +2,18 @@ import Foundation
 import CFNetwork
 
 struct RemoteLLMRuntimeClient {
-    private enum CompletionIntent {
+    struct StreamingFailure: Error {
+        let underlying: Error
+        let partialText: String
+        let emittedChunkCount: Int
+    }
+
+    private struct AliyunResponsesStreamingResult {
+        let text: String
+        let responseID: String?
+    }
+
+    private enum CompletionIntent: Equatable {
         case enhancement
         case translation
         case rewrite
@@ -86,8 +97,32 @@ struct RemoteLLMRuntimeClient {
         dictatedPrompt: String,
         systemPrompt: String,
         provider: RemoteLLMProvider,
-        configuration: RemoteProviderConfiguration
+        configuration: RemoteProviderConfiguration,
+        conversationHistory: [RewriteConversationPromptTurn] = [],
+        previousResponseID: String? = nil,
+        onPartialText: (@Sendable (String) -> Void)? = nil,
+        onResponseID: ((String) -> Void)? = nil
     ) async throws -> String {
+        if shouldUseAliyunResponsesAPI(
+            provider: provider,
+            configuration: configuration,
+            sourceText: sourceText,
+            wantsStreaming: onPartialText != nil
+        ) {
+            let result = try await completeAliyunResponsesRewrite(
+                dictatedPrompt: dictatedPrompt,
+                systemPrompt: systemPrompt,
+                provider: provider,
+                configuration: configuration,
+                conversationHistory: conversationHistory,
+                previousResponseID: previousResponseID,
+                onPartialText: onPartialText ?? { _ in },
+                onResponseID: onResponseID
+            )
+            let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? sourceText : trimmed
+        }
+
         let prompt = """
         Produce the final text to insert according to the instructions.
         Spoken instruction:
@@ -96,6 +131,10 @@ struct RemoteLLMRuntimeClient {
         Selected source text:
         \(sourceText)
         """
+        let shouldUseConversationMessages =
+            sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !conversationHistory.isEmpty
+        let userPrompt = shouldUseConversationMessages ? dictatedPrompt : prompt
         let output = try await complete(
             systemPrompt: systemPrompt,
             debugInput: """
@@ -105,14 +144,212 @@ struct RemoteLLMRuntimeClient {
             Selected source text:
             \(sourceText)
             """,
-            userPrompt: prompt,
+            userPrompt: userPrompt,
             inputTextLength: sourceText.count + dictatedPrompt.count,
             intent: .rewrite,
             provider: provider,
-            configuration: configuration
+            configuration: configuration,
+            messagesOverride: shouldUseConversationMessages
+                ? openAICompatibleConversationMessages(
+                    systemPrompt: systemPrompt,
+                    currentUserPrompt: dictatedPrompt,
+                    conversationHistory: conversationHistory
+                )
+                : nil,
+            onPartialText: onPartialText
         )
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? sourceText : trimmed
+    }
+
+    func shouldUseAliyunResponsesAPI(
+        provider: RemoteLLMProvider,
+        configuration: RemoteProviderConfiguration,
+        sourceText: String,
+        wantsStreaming: Bool
+    ) -> Bool {
+        guard wantsStreaming,
+              sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return false
+        }
+
+        let explicitEndpoint = configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !explicitEndpoint.isEmpty,
+              let url = URL(string: explicitEndpoint),
+              let host = url.host?.lowercased()
+        else {
+            return false
+        }
+
+        let path = url.path.lowercased()
+        let isDashScopeHost =
+            host.contains("dashscope.aliyuncs.com") ||
+            host.contains("dashscope-intl.aliyuncs.com") ||
+            host.contains("dashscope-us.aliyuncs.com")
+        let isResponsesEndpoint =
+            path.hasSuffix("/v1/responses") ||
+            path.hasSuffix("/responses")
+
+        return isDashScopeHost && isResponsesEndpoint
+    }
+
+    private func completeAliyunResponsesRewrite(
+        dictatedPrompt: String,
+        systemPrompt: String,
+        provider: RemoteLLMProvider,
+        configuration: RemoteProviderConfiguration,
+        conversationHistory: [RewriteConversationPromptTurn],
+        previousResponseID: String?,
+        onPartialText: @escaping (String) -> Void,
+        onResponseID: ((String) -> Void)?
+    ) async throws -> AliyunResponsesStreamingResult {
+        let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? provider.suggestedModel
+            : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpointValue = responsesEndpointValue(provider: provider, endpoint: configuration.endpoint, model: model)
+        let request = try makeAliyunResponsesRequest(
+            endpointValue: endpointValue,
+            model: model,
+            systemPrompt: systemPrompt,
+            dictatedPrompt: dictatedPrompt,
+            configuration: configuration,
+            conversationHistory: conversationHistory,
+            previousResponseID: previousResponseID,
+            streamingEnabled: true
+        )
+        let requestStartedAt = Date()
+        logRequest(
+            request: request,
+            provider: provider,
+            endpointValue: endpointValue,
+            model: model,
+            inputTextLength: dictatedPrompt.count,
+            systemPrompt: systemPrompt,
+            debugInput: dictatedPrompt,
+            userPrompt: dictatedPrompt,
+            tuning: generationTuning(
+                for: provider,
+                inputTextLength: dictatedPrompt.count,
+                systemPromptLength: systemPrompt.count,
+                userPromptLength: dictatedPrompt.count,
+                intent: .rewrite
+            )
+        )
+
+        var aggregated = ""
+        var responseID: String?
+        var emittedChunkCount = 0
+
+        do {
+            let (bytes, response) = try await VoxtNetworkSession.active.bytes(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw NSError(domain: "Voxt.RemoteLLM", code: -305, userInfo: [NSLocalizedDescriptionKey: "Invalid remote LLM response."])
+            }
+            guard (200...299).contains(http.statusCode) else {
+                throw NSError(
+                    domain: "Voxt.RemoteLLM",
+                    code: http.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: "Remote LLM request failed (HTTP \(http.statusCode)) while opening stream."]
+                )
+            }
+
+            var bufferedEventLines: [String] = []
+            var sawEventStreamMarkers = false
+
+            func publish(_ chunkPayload: String) throws {
+                let trimmed = chunkPayload.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty, trimmed != "[DONE]" else { return }
+                guard let data = trimmed.data(using: .utf8),
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    return
+                }
+
+                if let extractedResponseID = aliyunResponsesResponseID(from: object) {
+                    responseID = extractedResponseID
+                    onResponseID?(extractedResponseID)
+                }
+
+                if let errorMessage = extractStreamingErrorMessage(from: object) ?? aliyunResponsesErrorMessage(from: object) {
+                    throw NSError(
+                        domain: "Voxt.RemoteLLM",
+                        code: -307,
+                        userInfo: [NSLocalizedDescriptionKey: errorMessage]
+                    )
+                }
+
+                if let delta = aliyunResponsesStreamingDelta(from: object), !delta.isEmpty {
+                    aggregated.append(delta)
+                    emittedChunkCount += 1
+                    onPartialText(aggregated)
+                }
+            }
+
+            for try await line in bytes.lines {
+                let trimmedLine = line.trimmingCharacters(in: .newlines)
+                if trimmedLine.isEmpty {
+                    if !bufferedEventLines.isEmpty {
+                        try publish(bufferedEventLines.joined(separator: "\n"))
+                        bufferedEventLines.removeAll(keepingCapacity: true)
+                    }
+                    continue
+                }
+
+                if trimmedLine.hasPrefix(":") {
+                    continue
+                }
+
+                if trimmedLine.hasPrefix("event:") || trimmedLine.hasPrefix("id:") || trimmedLine.hasPrefix("retry:") {
+                    sawEventStreamMarkers = true
+                    continue
+                }
+
+                if trimmedLine.hasPrefix("data:") {
+                    sawEventStreamMarkers = true
+                    var payload = String(trimmedLine.dropFirst(5))
+                    if payload.hasPrefix(" ") {
+                        payload.removeFirst()
+                    }
+                    bufferedEventLines.append(payload)
+                    if shouldFlushBufferedEventLines(bufferedEventLines) {
+                        try publish(bufferedEventLines.joined(separator: "\n"))
+                        bufferedEventLines.removeAll(keepingCapacity: true)
+                    }
+                    continue
+                }
+
+                if sawEventStreamMarkers {
+                    bufferedEventLines.append(trimmedLine)
+                    if shouldFlushBufferedEventLines(bufferedEventLines) {
+                        try publish(bufferedEventLines.joined(separator: "\n"))
+                        bufferedEventLines.removeAll(keepingCapacity: true)
+                    }
+                }
+            }
+
+            if !bufferedEventLines.isEmpty {
+                try publish(bufferedEventLines.joined(separator: "\n"))
+            }
+
+            let totalElapsedMs = Int(Date().timeIntervalSince(requestStartedAt) * 1000)
+            VoxtLog.llm(
+                "Aliyun Responses streaming response received. endpoint=\(endpointValue), status=\(http.statusCode), chunks=\(emittedChunkCount), totalMs=\(totalElapsedMs), responseID=\(responseID ?? "nil")"
+            )
+            VoxtLog.llm(
+                """
+                Aliyun Responses streaming content. endpoint=\(endpointValue), status=\(http.statusCode)
+                [output]
+                \(VoxtLog.llmPreview(aggregated))
+                """
+            )
+            return AliyunResponsesStreamingResult(text: aggregated, responseID: responseID)
+        } catch {
+            throw StreamingFailure(
+                underlying: error,
+                partialText: aggregated,
+                emittedChunkCount: emittedChunkCount
+            )
+        }
     }
 
     private func complete(
@@ -122,7 +359,9 @@ struct RemoteLLMRuntimeClient {
         inputTextLength: Int,
         intent: CompletionIntent,
         provider: RemoteLLMProvider,
-        configuration: RemoteProviderConfiguration
+        configuration: RemoteProviderConfiguration,
+        messagesOverride: [[String: String]]? = nil,
+        onPartialText: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
         let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? provider.suggestedModel
@@ -130,22 +369,10 @@ struct RemoteLLMRuntimeClient {
         let endpoint = resolvedLLMEndpoint(provider: provider, endpoint: configuration.endpoint, model: model)
         let endpoints = resolvedEndpointCandidates(provider: provider, primaryEndpoint: endpoint)
         var lastError: Error?
+        let shouldAttemptStreaming = onPartialText != nil && supportsStreaming(provider: provider, intent: intent)
 
         for (index, endpointValue) in endpoints.enumerated() {
-            guard let url = URL(string: endpointValue) else {
-                lastError = NSError(
-                    domain: "Voxt.RemoteLLM",
-                    code: -300,
-                    userInfo: [NSLocalizedDescriptionKey: "Invalid remote LLM endpoint URL: \(endpointValue)"]
-                )
-                continue
-            }
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.timeoutInterval = requestTimeoutInterval(for: provider)
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            let attemptStartedAt = Date()
             let tuning = generationTuning(
                 for: provider,
                 inputTextLength: inputTextLength,
@@ -153,94 +380,78 @@ struct RemoteLLMRuntimeClient {
                 userPromptLength: userPrompt.count,
                 intent: intent
             )
-
-            switch provider {
-            case .anthropic:
-                guard !configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    throw NSError(domain: "Voxt.RemoteLLM", code: -301, userInfo: [NSLocalizedDescriptionKey: "Anthropic API key is empty."])
-                }
-                request.setValue(configuration.apiKey, forHTTPHeaderField: "x-api-key")
-                request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-                var payload: [String: Any] = [
-                    "model": model,
-                    "max_tokens": 2048,
-                    "messages": [
-                        ["role": "user", "content": userPrompt]
-                    ]
-                ]
-                let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedSystem.isEmpty {
-                    payload["system"] = systemPrompt
-                }
-                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            case .google:
-                let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !apiKey.isEmpty else {
-                    throw NSError(domain: "Voxt.RemoteLLM", code: -302, userInfo: [NSLocalizedDescriptionKey: "Google API key is empty."])
-                }
-                guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-                    throw NSError(domain: "Voxt.RemoteLLM", code: -303, userInfo: [NSLocalizedDescriptionKey: "Invalid Google endpoint URL."])
-                }
-                if !(components.queryItems?.contains(where: { $0.name == "key" }) ?? false) {
-                    var items = components.queryItems ?? []
-                    items.append(URLQueryItem(name: "key", value: apiKey))
-                    components.queryItems = items
-                }
-                request.url = components.url
-                var payload: [String: Any] = [
-                    "contents": [
-                        ["parts": [["text": userPrompt]]]
-                    ]
-                ]
-                let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedSystem.isEmpty {
-                    payload["system_instruction"] = ["parts": [["text": systemPrompt]]]
-                }
-                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            case .minimax:
-                let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !apiKey.isEmpty else {
-                    throw NSError(domain: "Voxt.RemoteLLM", code: -304, userInfo: [NSLocalizedDescriptionKey: "MiniMax API key is empty."])
-                }
-                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-                request.httpBody = try JSONSerialization.data(withJSONObject: [
-                    "model": model,
-                    "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt)
-                ])
-            default:
-                let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !apiKey.isEmpty {
-                    request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-                }
-                request.httpBody = try JSONSerialization.data(withJSONObject: [
-                    "model": model,
-                    "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt),
-                    "stream": false,
-                    "max_tokens": tuning.maxTokens,
-                    "temperature": tuning.temperature,
-                    "top_p": tuning.topP
-                ])
-            }
-
-            let requestStartedAt = Date()
-            let proxySettings = VoxtNetworkSession.currentProxySettings
-            let proxyRoute = resolvedProxyRoute(for: url, settings: proxySettings)
-            let networkMode = VoxtNetworkSession.modeDescription
-            VoxtLog.llm(
-                "Remote LLM request started. provider=\(provider.rawValue), endpoint=\(endpointValue), model=\(model), timeoutSec=\(Int(request.timeoutInterval)), inputChars=\(inputTextLength), systemChars=\(systemPrompt.count), userChars=\(userPrompt.count), maxTokens=\(tuning.maxTokens), temp=\(tuning.temperature), topP=\(tuning.topP), networkMode=\(networkMode), proxy=\(proxyRoute)"
-            )
-            VoxtLog.llm(
-                """
-                Remote LLM request content. provider=\(provider.rawValue), endpoint=\(endpointValue), model=\(model)
-                [system_prompt]
-                \(VoxtLog.llmPreview(systemPrompt))
-                [input]
-                \(VoxtLog.llmPreview(debugInput))
-                [request_content]
-                \(VoxtLog.llmPreview(userPrompt))
-                """
-            )
             do {
+                if shouldAttemptStreaming, let onPartialText {
+                    do {
+                        let streamingRequest = try makeCompletionRequest(
+                            provider: provider,
+                            configuration: configuration,
+                            endpointValue: endpointValue,
+                            model: model,
+                            systemPrompt: systemPrompt,
+                            userPrompt: userPrompt,
+                            messagesOverride: messagesOverride,
+                            tuning: tuning,
+                            streamingEnabled: true
+                        )
+                        let requestStartedAt = Date()
+                        logRequest(
+                            request: streamingRequest,
+                            provider: provider,
+                            endpointValue: endpointValue,
+                            model: model,
+                            inputTextLength: inputTextLength,
+                            systemPrompt: systemPrompt,
+                            debugInput: debugInput,
+                            userPrompt: userPrompt,
+                            tuning: tuning
+                        )
+                        let streamed = try await completeStreaming(
+                            request: streamingRequest,
+                            provider: provider,
+                            endpointValue: endpointValue,
+                            requestStartedAt: requestStartedAt,
+                            attempt: index + 1,
+                            endpointCount: endpoints.count,
+                            onPartialText: onPartialText
+                        )
+                        let trimmed = streamed.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else {
+                            throw NSError(domain: "Voxt.RemoteLLM", code: -306, userInfo: [NSLocalizedDescriptionKey: "Remote LLM returned no text content."])
+                        }
+                        return trimmed
+                    } catch let streamingFailure as StreamingFailure where streamingFailure.emittedChunkCount == 0 {
+                        VoxtLog.warning(
+                            "Remote LLM streaming unavailable, retrying non-streaming. provider=\(provider.rawValue), endpoint=\(endpointValue), attempt=\(index + 1)/\(endpoints.count), detail=\(streamingFailure.underlying.localizedDescription)"
+                        )
+                    } catch {
+                        throw error
+                    }
+                }
+
+                let request = try makeCompletionRequest(
+                    provider: provider,
+                    configuration: configuration,
+                    endpointValue: endpointValue,
+                    model: model,
+                    systemPrompt: systemPrompt,
+                    userPrompt: userPrompt,
+                    messagesOverride: messagesOverride,
+                    tuning: tuning,
+                    streamingEnabled: false
+                )
+                let requestStartedAt = Date()
+                logRequest(
+                    request: request,
+                    provider: provider,
+                    endpointValue: endpointValue,
+                    model: model,
+                    inputTextLength: inputTextLength,
+                    systemPrompt: systemPrompt,
+                    debugInput: debugInput,
+                    userPrompt: userPrompt,
+                    tuning: tuning
+                )
                 let (data, response) = try await VoxtNetworkSession.active.data(for: request)
                 let responseElapsedMs = Int(Date().timeIntervalSince(requestStartedAt) * 1000)
                 guard let http = response as? HTTPURLResponse else {
@@ -280,13 +491,23 @@ struct RemoteLLMRuntimeClient {
                 throw NSError(domain: "Voxt.RemoteLLM", code: -306, userInfo: [NSLocalizedDescriptionKey: "Remote LLM returned no text content."])
             } catch {
                 lastError = error
-                let elapsedMs = Int(Date().timeIntervalSince(requestStartedAt) * 1000)
+                let elapsedMs = Int(Date().timeIntervalSince(attemptStartedAt) * 1000)
                 let nsError = error as NSError
                 let isTimeout = nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut
                 let detail = networkErrorDetail(error: nsError)
                 let attempt = index + 1
+                let requestTimeout = requestTimeoutInterval(for: provider)
+                let resolvedURL = URL(string: streamingEndpointValue(
+                    provider: provider,
+                    endpoint: endpointValue,
+                    model: model,
+                    streamingEnabled: shouldAttemptStreaming
+                )) ?? URL(string: endpointValue)
+                let proxyRoute = resolvedURL.map {
+                    resolvedProxyRoute(for: $0, settings: VoxtNetworkSession.currentProxySettings)
+                } ?? "unavailable"
                 if isTimeout {
-                    VoxtLog.warning("Remote LLM request timeout. provider=\(provider.rawValue), endpoint=\(endpointValue), attempt=\(attempt)/\(endpoints.count), elapsedMs=\(elapsedMs), timeoutSec=\(Int(request.timeoutInterval)), proxy=\(proxyRoute), detail=\(detail)")
+                    VoxtLog.warning("Remote LLM request timeout. provider=\(provider.rawValue), endpoint=\(endpointValue), attempt=\(attempt)/\(endpoints.count), elapsedMs=\(elapsedMs), timeoutSec=\(Int(requestTimeout)), proxy=\(proxyRoute), detail=\(detail)")
                 } else {
                     VoxtLog.warning("Remote LLM request failed. provider=\(provider.rawValue), endpoint=\(endpointValue), attempt=\(attempt)/\(endpoints.count), elapsedMs=\(elapsedMs), proxy=\(proxyRoute), detail=\(detail)")
                 }
@@ -303,7 +524,327 @@ struct RemoteLLMRuntimeClient {
         throw lastError ?? NSError(domain: "Voxt.RemoteLLM", code: -306, userInfo: [NSLocalizedDescriptionKey: "Remote LLM returned no text content."])
     }
 
-    private func requestTimeoutInterval(for provider: RemoteLLMProvider) -> TimeInterval {
+    private func makeCompletionRequest(
+        provider: RemoteLLMProvider,
+        configuration: RemoteProviderConfiguration,
+        endpointValue: String,
+        model: String,
+        systemPrompt: String,
+        userPrompt: String,
+        messagesOverride: [[String: String]]? = nil,
+        tuning: GenerationTuning,
+        streamingEnabled: Bool
+    ) throws -> URLRequest {
+        let resolvedEndpoint = streamingEndpointValue(
+            provider: provider,
+            endpoint: endpointValue,
+            model: model,
+            streamingEnabled: streamingEnabled
+        )
+        guard let url = URL(string: resolvedEndpoint) else {
+            throw NSError(
+                domain: "Voxt.RemoteLLM",
+                code: -300,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid remote LLM endpoint URL: \(resolvedEndpoint)"]
+            )
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = requestTimeoutInterval(for: provider)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(
+            streamingEnabled ? "text/event-stream, application/x-ndjson, application/json" : "application/json",
+            forHTTPHeaderField: "Accept"
+        )
+
+        switch provider {
+        case .anthropic:
+            guard !configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw NSError(domain: "Voxt.RemoteLLM", code: -301, userInfo: [NSLocalizedDescriptionKey: "Anthropic API key is empty."])
+            }
+            request.setValue(configuration.apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+            var payload: [String: Any] = [
+                "model": model,
+                "max_tokens": 2048,
+                "stream": streamingEnabled,
+                "messages": [
+                    ["role": "user", "content": userPrompt]
+                ]
+            ]
+            let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedSystem.isEmpty {
+                payload["system"] = systemPrompt
+            }
+            if configuration.searchEnabled && provider.supportsHostedSearch {
+                payload["tools"] = [
+                    [
+                        "type": "web_search_20250305",
+                        "name": "web_search",
+                        "max_uses": 5
+                    ]
+                ]
+            }
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        case .google:
+            let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !apiKey.isEmpty else {
+                throw NSError(domain: "Voxt.RemoteLLM", code: -302, userInfo: [NSLocalizedDescriptionKey: "Google API key is empty."])
+            }
+            guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+                throw NSError(domain: "Voxt.RemoteLLM", code: -303, userInfo: [NSLocalizedDescriptionKey: "Invalid Google endpoint URL."])
+            }
+            var items = components.queryItems ?? []
+            if !items.contains(where: { $0.name == "key" }) {
+                items.append(URLQueryItem(name: "key", value: apiKey))
+            }
+            if streamingEnabled && !items.contains(where: { $0.name == "alt" }) {
+                items.append(URLQueryItem(name: "alt", value: "sse"))
+            }
+            components.queryItems = items
+            request.url = components.url
+            var payload: [String: Any] = [
+                "contents": [
+                    ["parts": [["text": userPrompt]]]
+                ]
+            ]
+            let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedSystem.isEmpty {
+                payload["system_instruction"] = ["parts": [["text": systemPrompt]]]
+            }
+            if configuration.searchEnabled && provider.supportsHostedSearch {
+                payload["tools"] = [googleSearchToolPayload(for: model)]
+            }
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        case .minimax:
+            let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !apiKey.isEmpty else {
+                throw NSError(domain: "Voxt.RemoteLLM", code: -304, userInfo: [NSLocalizedDescriptionKey: "MiniMax API key is empty."])
+            }
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "model": model,
+                "stream": streamingEnabled,
+                "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt)
+            ])
+        case .ollama where usesNativeOllamaChatEndpoint(url):
+            let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !apiKey.isEmpty {
+                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            }
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "model": model,
+                "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt),
+                "stream": streamingEnabled,
+                "options": [
+                    "temperature": tuning.temperature,
+                    "top_p": tuning.topP,
+                    "num_predict": tuning.maxTokens
+                ]
+            ])
+        default:
+            let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !apiKey.isEmpty {
+                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            }
+            var payload: [String: Any] = [
+                "model": model,
+                "messages": messagesOverride ?? openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt),
+                "stream": streamingEnabled,
+                "max_tokens": tuning.maxTokens,
+                "temperature": tuning.temperature,
+                "top_p": tuning.topP
+            ]
+            applyOpenAICompatibleSearchConfiguration(
+                to: &payload,
+                provider: provider,
+                configuration: configuration
+            )
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        }
+
+        return request
+    }
+
+    private func logRequest(
+        request: URLRequest,
+        provider: RemoteLLMProvider,
+        endpointValue: String,
+        model: String,
+        inputTextLength: Int,
+        systemPrompt: String,
+        debugInput: String,
+        userPrompt: String,
+        tuning: GenerationTuning
+    ) {
+        let proxySettings = VoxtNetworkSession.currentProxySettings
+        let proxyRoute = request.url.map { resolvedProxyRoute(for: $0, settings: proxySettings) } ?? "unavailable"
+        let networkMode = VoxtNetworkSession.modeDescription
+        VoxtLog.llm(
+            "Remote LLM request started. provider=\(provider.rawValue), endpoint=\(endpointValue), url=\(request.url?.absoluteString ?? endpointValue), model=\(model), timeoutSec=\(Int(request.timeoutInterval)), inputChars=\(inputTextLength), systemChars=\(systemPrompt.count), userChars=\(userPrompt.count), maxTokens=\(tuning.maxTokens), temp=\(tuning.temperature), topP=\(tuning.topP), networkMode=\(networkMode), proxy=\(proxyRoute)"
+        )
+        VoxtLog.llm(
+            """
+            Remote LLM request content. provider=\(provider.rawValue), endpoint=\(endpointValue), model=\(model)
+            [system_prompt]
+            \(VoxtLog.llmPreview(systemPrompt))
+            [input]
+            \(VoxtLog.llmPreview(debugInput))
+            [request_content]
+            \(VoxtLog.llmPreview(userPrompt))
+            """
+        )
+    }
+
+    private func completeStreaming(
+        request: URLRequest,
+        provider: RemoteLLMProvider,
+        endpointValue: String,
+        requestStartedAt: Date,
+        attempt: Int,
+        endpointCount: Int,
+        onPartialText: @Sendable (String) -> Void
+    ) async throws -> String {
+        var aggregated = ""
+        var emittedChunkCount = 0
+        do {
+            let (bytes, response) = try await VoxtNetworkSession.active.bytes(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw NSError(domain: "Voxt.RemoteLLM", code: -305, userInfo: [NSLocalizedDescriptionKey: "Invalid remote LLM response."])
+            }
+            guard (200...299).contains(http.statusCode) else {
+                throw NSError(
+                    domain: "Voxt.RemoteLLM",
+                    code: http.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: "Remote LLM request failed (HTTP \(http.statusCode)) while opening stream."]
+                )
+            }
+
+            var bufferedEventLines: [String] = []
+            var sawEventStreamMarkers = false
+            var nonEventStreamBuffer = ""
+
+            func publish(_ chunkPayload: String) throws {
+                let trimmed = chunkPayload.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty, trimmed != "[DONE]" else { return }
+
+                if let data = trimmed.data(using: .utf8),
+                   let object = try? JSONSerialization.jsonObject(with: data) {
+                    if let errorMessage = extractStreamingErrorMessage(from: object) {
+                        throw NSError(
+                            domain: "Voxt.RemoteLLM",
+                            code: -307,
+                            userInfo: [NSLocalizedDescriptionKey: errorMessage]
+                        )
+                    }
+                    if let delta = extractStreamingDelta(from: object), !delta.isEmpty {
+                        aggregated.append(delta)
+                    } else if let snapshot = extractPrimaryText(from: object), !snapshot.isEmpty {
+                        aggregated = mergedStreamingSnapshot(current: aggregated, next: snapshot)
+                    } else {
+                        return
+                    }
+                } else if let recovered = recoverStreamingDelta(fromRawPayload: trimmed), !recovered.isEmpty {
+                    aggregated.append(recovered)
+                } else if looksLikeStreamingEnvelopeFragment(trimmed) {
+                    return
+                } else {
+                    aggregated = mergedStreamingSnapshot(current: aggregated, next: trimmed)
+                }
+
+                emittedChunkCount += 1
+                onPartialText(aggregated)
+            }
+
+            for try await line in bytes.lines {
+                let trimmedLine = line.trimmingCharacters(in: .newlines)
+                if trimmedLine.isEmpty {
+                    if !bufferedEventLines.isEmpty {
+                        try publish(bufferedEventLines.joined(separator: "\n"))
+                        bufferedEventLines.removeAll(keepingCapacity: true)
+                    }
+                    continue
+                }
+
+                if trimmedLine.hasPrefix(":") {
+                    continue
+                }
+
+                if trimmedLine.hasPrefix("event:") || trimmedLine.hasPrefix("id:") || trimmedLine.hasPrefix("retry:") {
+                    sawEventStreamMarkers = true
+                    continue
+                }
+
+                if trimmedLine.hasPrefix("data:") {
+                    sawEventStreamMarkers = true
+                    var payload = String(trimmedLine.dropFirst(5))
+                    if payload.hasPrefix(" ") {
+                        payload.removeFirst()
+                    }
+                    bufferedEventLines.append(payload)
+                    if shouldFlushBufferedEventLines(bufferedEventLines) {
+                        try publish(bufferedEventLines.joined(separator: "\n"))
+                        bufferedEventLines.removeAll(keepingCapacity: true)
+                    }
+                    continue
+                }
+
+                if sawEventStreamMarkers {
+                    bufferedEventLines.append(trimmedLine)
+                    if shouldFlushBufferedEventLines(bufferedEventLines) {
+                        try publish(bufferedEventLines.joined(separator: "\n"))
+                        bufferedEventLines.removeAll(keepingCapacity: true)
+                    }
+                } else {
+                    nonEventStreamBuffer.append(line)
+                    nonEventStreamBuffer.append("\n")
+                    let payloads = drainNonEventStreamPayloads(buffer: &nonEventStreamBuffer)
+                    for payload in payloads {
+                        try publish(payload)
+                    }
+                }
+            }
+
+            if !bufferedEventLines.isEmpty {
+                try publish(bufferedEventLines.joined(separator: "\n"))
+            }
+            let trailingPayloads = drainNonEventStreamPayloads(buffer: &nonEventStreamBuffer)
+            for payload in trailingPayloads {
+                try publish(payload)
+            }
+            let trailingText = nonEventStreamBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trailingText.isEmpty {
+                try publish(trailingText)
+            }
+
+            let totalElapsedMs = Int(Date().timeIntervalSince(requestStartedAt) * 1000)
+            VoxtLog.llm(
+                "Remote LLM streaming response received. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode), attempt=\(attempt)/\(endpointCount), chunks=\(emittedChunkCount), totalMs=\(totalElapsedMs)"
+            )
+            VoxtLog.llm(
+                """
+                Remote LLM streaming content. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode)
+                [output]
+                \(VoxtLog.llmPreview(aggregated))
+                """
+            )
+            return aggregated
+        } catch {
+            throw StreamingFailure(
+                underlying: error,
+                partialText: aggregated,
+                emittedChunkCount: emittedChunkCount
+            )
+        }
+    }
+
+    private func supportsStreaming(provider: RemoteLLMProvider, intent: CompletionIntent) -> Bool {
+        guard intent == .rewrite else { return false }
+        return true
+    }
+
+    func requestTimeoutInterval(for provider: RemoteLLMProvider) -> TimeInterval {
         switch provider {
         case .zai, .volcengine:
             return 30
@@ -346,11 +887,31 @@ struct RemoteLLMRuntimeClient {
         // Keep output budget mainly tied to ASR text length, and reserve a small
         // extra window for instruction overhead (system/user prompt framing).
         let instructionChars = max(0, systemPromptLength + userPromptLength - safeInput)
-        let baseMultiplier: Double = (intent == .translation) ? 1.35 : 1.15
+        let baseMultiplier: Double
+        let minimumBudget: Int
+        let maximumBudget: Int
+
+        switch intent {
+        case .translation:
+            baseMultiplier = 1.35
+            minimumBudget = 128
+            maximumBudget = 1024
+        case .rewrite:
+            // Rewrite often needs to synthesize a fresh answer from a short spoken
+            // instruction, so the budget cannot track prompt length too closely.
+            baseMultiplier = safeInput < 180 ? 2.6 : 1.4
+            minimumBudget = safeInput < 180 ? 384 : 256
+            maximumBudget = 1536
+        case .enhancement:
+            baseMultiplier = 1.15
+            minimumBudget = 128
+            maximumBudget = 1024
+        }
+
         let contentEstimate = Int(Double(safeInput) * baseMultiplier)
-        let instructionReserve = min(192, max(32, instructionChars / 12))
+        let instructionReserve = min(intent == .rewrite ? 256 : 192, max(32, instructionChars / 12))
         let estimate = contentEstimate + instructionReserve
-        return max(128, min(estimate, 1024))
+        return max(minimumBudget, min(estimate, maximumBudget))
     }
 
     private func shouldRetry(error: Error, provider: RemoteLLMProvider) -> Bool {
@@ -401,242 +962,4 @@ struct RemoteLLMRuntimeClient {
         return "https://api.z.ai/api/paas/v4/chat/completions"
     }
 
-    private func extractPrimaryText(from object: Any) -> String? {
-        if let dict = object as? [String: Any] {
-            if let choices = dict["choices"] as? [[String: Any]],
-               let first = choices.first {
-                if let message = first["message"] as? [String: Any] {
-                    if let value = extractMessageContent(from: message["content"]) {
-                        return value
-                    }
-                }
-                if let text = first["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return text
-                }
-            }
-            if let contentArray = dict["content"] as? [[String: Any]] {
-                for item in contentArray {
-                    if let text = item["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        return text
-                    }
-                }
-            }
-            if let candidates = dict["candidates"] as? [[String: Any]],
-               let first = candidates.first,
-               let content = first["content"] as? [String: Any],
-               let parts = content["parts"] as? [[String: Any]] {
-                for part in parts {
-                    if let text = part["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        return text
-                    }
-                }
-            }
-            if let reply = dict["reply"] as? String, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return reply
-            }
-        }
-        return nil
-    }
-
-    private func extractMessageContent(from value: Any?) -> String? {
-        if let text = value as? String {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
-        }
-        if let blocks = value as? [[String: Any]] {
-            let texts = blocks.compactMap { block -> String? in
-                if let text = block["text"] as? String { return text }
-                return nil
-            }
-            let merged = texts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            return merged.isEmpty ? nil : merged
-        }
-        return nil
-    }
-
-    private func openAICompatibleMessages(systemPrompt: String, userPrompt: String) -> [[String: String]] {
-        let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedSystem.isEmpty {
-            return [
-                ["role": "user", "content": userPrompt]
-            ]
-        }
-        return [
-            ["role": "system", "content": systemPrompt],
-            ["role": "user", "content": userPrompt]
-        ]
-    }
-
-    private func providerDefaultEndpoint(_ provider: RemoteLLMProvider) -> String {
-        switch provider {
-        case .anthropic:
-            return "https://api.anthropic.com/v1/messages"
-        case .google:
-            return "https://generativelanguage.googleapis.com/v1beta/models"
-        case .openAI:
-            return "https://api.openai.com/v1/models"
-        case .ollama:
-            return "http://127.0.0.1:11434/api/chat"
-        case .deepseek:
-            return "https://api.deepseek.com/v1/models"
-        case .openrouter:
-            return "https://openrouter.ai/api/v1/models"
-        case .grok:
-            return "https://api.x.ai/v1/models"
-        case .zai:
-            return "https://open.bigmodel.cn/api/paas/v4/models"
-        case .volcengine:
-            return "https://ark.cn-beijing.volces.com/api/v3/models"
-        case .kimi:
-            return "https://api.moonshot.cn/v1/models"
-        case .lmStudio:
-            return "http://127.0.0.1:1234/v1/models"
-        case .minimax:
-            return "https://api.minimax.chat/v1/text/chatcompletion_v2"
-        case .aliyunBailian:
-            return "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
-        }
-    }
-
-    private func resolvedLLMEndpoint(provider: RemoteLLMProvider, endpoint: String, model: String) -> String {
-        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        let base = trimmed.isEmpty ? providerDefaultEndpoint(provider) : trimmed
-        guard let url = URL(string: base) else { return base }
-        let path = url.path.lowercased()
-
-        switch provider {
-        case .anthropic:
-            if path.hasSuffix("/v1/messages") { return base }
-            if path.hasSuffix("/v1/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/messages")
-            }
-            if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/messages") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/v1/messages") }
-            return base
-        case .google:
-            if path.contains(":generatecontent") { return base }
-            if path.hasSuffix("/v1beta/models") || path.hasSuffix("/v1/models") || path.hasSuffix("/models") {
-                return appendingPath(base, suffix: "/\(model):generateContent")
-            }
-            if path.hasSuffix("/v1beta") || path.hasSuffix("/v1") {
-                return appendingPath(base, suffix: "/models/\(model):generateContent")
-            }
-            if path.isEmpty || path == "/" {
-                return appendingPath(base, suffix: "/v1beta/models/\(model):generateContent")
-            }
-            return base
-        case .minimax:
-            if path.hasSuffix("/v1/text/chatcompletion_v2") || path.hasSuffix("/text/chatcompletion_v2") {
-                return base
-            }
-            if path.hasSuffix("/v1/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/text/chatcompletion_v2")
-            }
-            if path.hasSuffix("/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/models", newSuffix: "/text/chatcompletion_v2")
-            }
-            if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/text/chatcompletion_v2") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/v1/text/chatcompletion_v2") }
-            return base
-        case .ollama:
-            if path.hasSuffix("/api/chat") || path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
-                return base
-            }
-            if path.hasSuffix("/api/tags") {
-                return replacingPathSuffix(in: base, oldSuffix: "/api/tags", newSuffix: "/api/chat")
-            }
-            if path.hasSuffix("/v1/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/chat/completions")
-            }
-            if path.hasSuffix("/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/models", newSuffix: "/chat/completions")
-            }
-            if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/api/chat") }
-            return base
-        case .openAI, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio, .aliyunBailian:
-            if path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
-                return base
-            }
-            if path.hasSuffix("/v1/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/chat/completions")
-            }
-            if path.hasSuffix("/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/models", newSuffix: "/chat/completions")
-            }
-            if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/v1/chat/completions") }
-            return base
-        }
-    }
-
-    private func resolvedProxyRoute(for url: URL, settings: VoxtNetworkSession.ProxySettings) -> String {
-        let detected = resolvedSystemProxyRoute(for: url)
-        switch settings.mode {
-        case .system:
-            return "enabled(system),resolved=\(detected)"
-        case .disabled:
-            return "disabled(direct),systemDetected=\(detected)"
-        case .custom:
-            guard let port = settings.port, settings.hasValidCustomEndpoint else {
-                return "custom(incomplete),systemDetected=\(detected)"
-            }
-            return "custom(\(settings.scheme.rawValue)://\(settings.host):\(port)),systemDetected=\(detected)"
-        }
-    }
-
-    private func resolvedSystemProxyRoute(for url: URL) -> String {
-        guard
-            let settingsRef = CFNetworkCopySystemProxySettings(),
-            let settings = settingsRef.takeRetainedValue() as? [String: Any]
-        else {
-            return "unavailable"
-        }
-
-        let proxiesCF = CFNetworkCopyProxiesForURL(url as CFURL, settings as CFDictionary).takeRetainedValue()
-        guard
-            let proxies = proxiesCF as? [[String: Any]],
-            let selected = proxies.first
-        else {
-            return "unavailable"
-        }
-
-        let type = (selected[kCFProxyTypeKey as String] as? String) ?? "unknown"
-        if type == (kCFProxyTypeNone as String) {
-            return "none"
-        }
-
-        let host = (selected[kCFProxyHostNameKey as String] as? String) ?? ""
-        let portValue = selected[kCFProxyPortNumberKey as String]
-        let port: String
-        if let number = portValue as? NSNumber {
-            port = number.stringValue
-        } else if let value = portValue as? String {
-            port = value
-        } else {
-            port = ""
-        }
-
-        let auth = ((selected[kCFProxyUsernameKey as String] as? String)?.isEmpty == false) ? "auth" : "noauth"
-        let address = host.isEmpty ? "unknown" : (port.isEmpty ? host : "\(host):\(port)")
-        return "\(type)@\(address),\(auth)"
-    }
-
-    private func networkErrorDetail(error: NSError) -> String {
-        let streamDomain = error.userInfo["_kCFStreamErrorDomainKey"] ?? "nil"
-        let streamCode = error.userInfo["_kCFStreamErrorCodeKey"] ?? "nil"
-        return "domain=\(error.domain), code=\(error.code), streamDomain=\(streamDomain), streamCode=\(streamCode), desc=\(error.localizedDescription)"
-    }
-
-    private func replacingPathSuffix(in value: String, oldSuffix: String, newSuffix: String) -> String {
-        guard value.lowercased().hasSuffix(oldSuffix) else { return value }
-        return String(value.dropLast(oldSuffix.count)) + newSuffix
-    }
-
-    private func appendingPath(_ value: String, suffix: String) -> String {
-        if value.hasSuffix("/") {
-            return value + suffix.dropFirst()
-        }
-        return value + suffix
-    }
 }

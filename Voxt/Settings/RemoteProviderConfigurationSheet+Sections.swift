@@ -143,6 +143,20 @@ extension RemoteProviderConfigurationSheet {
         }
     }
 
+    var searchSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Search", isOn: $searchEnabled)
+                .toggleStyle(.switch)
+
+            if let provider = llmProviderForPicker {
+                Text(provider.searchToggleDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     var actionSection: some View {
         SettingsDialogActionRow {
             if isTestingConnection {

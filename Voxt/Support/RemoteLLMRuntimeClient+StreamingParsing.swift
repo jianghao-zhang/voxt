@@ -1,0 +1,442 @@
+import Foundation
+
+extension RemoteLLMRuntimeClient {
+    func extractPrimaryText(from object: Any) -> String? {
+        if let dict = object as? [String: Any] {
+            if let choices = dict["choices"] as? [[String: Any]],
+               let first = choices.first {
+                if let message = first["message"] as? [String: Any] {
+                    if let value = extractMessageContent(from: message["content"]) {
+                        return value
+                    }
+                }
+                if let text = first["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return text
+                }
+            }
+            if let contentArray = dict["content"] as? [[String: Any]] {
+                for item in contentArray {
+                    if let text = item["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return text
+                    }
+                }
+            }
+            if let candidates = dict["candidates"] as? [[String: Any]],
+               let first = candidates.first,
+               let content = first["content"] as? [String: Any],
+               let parts = content["parts"] as? [[String: Any]] {
+                for part in parts {
+                    if let text = part["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return text
+                    }
+                }
+            }
+            if let message = dict["message"] as? [String: Any],
+               let value = extractMessageContent(from: message["content"]) {
+                return value
+            }
+            if let reply = dict["reply"] as? String, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return reply
+            }
+            if let response = dict["response"] as? String, !response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return response
+            }
+        }
+        return nil
+    }
+
+    func extractStreamingDelta(from object: Any) -> String? {
+        guard let dict = object as? [String: Any] else { return nil }
+
+        if let type = dict["type"] as? String,
+           type == "content_block_delta",
+           let delta = dict["delta"] as? [String: Any],
+           (delta["type"] as? String) == "text_delta",
+           let text = delta["text"] as? String,
+           !text.isEmpty {
+            return text
+        }
+
+        if let choices = dict["choices"] as? [[String: Any]],
+           let first = choices.first,
+           let delta = first["delta"] as? [String: Any] {
+            if let content = extractStreamingMessageContent(from: delta["content"]) {
+                return content
+            }
+            if let text = delta["text"] as? String, !text.isEmpty {
+                return text
+            }
+        }
+
+        if let delta = dict["delta"] as? [String: Any] {
+            if let text = delta["text"] as? String, !text.isEmpty {
+                return text
+            }
+            if let content = extractStreamingMessageContent(from: delta["content"]) {
+                return content
+            }
+        }
+
+        if let message = dict["message"] as? [String: Any],
+           let content = extractStreamingMessageContent(from: message["content"]) {
+            return content
+        }
+
+        if let reply = dict["reply"] as? String, !reply.isEmpty {
+            return reply
+        }
+
+        return nil
+    }
+
+    func mergedStreamingSnapshot(current: String, next: String) -> String {
+        let trimmedNext = next.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedNext.isEmpty else { return current }
+        guard !current.isEmpty else { return trimmedNext }
+
+        if trimmedNext.hasPrefix(current) {
+            return trimmedNext
+        }
+
+        if current.hasPrefix(trimmedNext) {
+            return current
+        }
+
+        if let overlap = longestSuffixPrefixOverlap(lhs: current, rhs: trimmedNext), overlap > 0 {
+            return current + trimmedNext.dropFirst(overlap)
+        }
+
+        return current + trimmedNext
+    }
+
+    func shouldFlushBufferedEventLines(_ bufferedEventLines: [String]) -> Bool {
+        let payload = bufferedEventLines
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !payload.isEmpty else { return false }
+        if payload == "[DONE]" { return true }
+        guard let first = payload.first, first == "{" || first == "[" else { return false }
+        guard let boundary = completeJSONBoundary(in: payload[...]) else { return false }
+        return boundary == payload.endIndex
+    }
+
+    func drainNonEventStreamPayloads(buffer: inout String) -> [String] {
+        var payloads: [String] = []
+
+        while true {
+            let trimmedBuffer = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedBuffer.isEmpty else {
+                buffer = ""
+                break
+            }
+
+            if trimmedBuffer.hasPrefix("[DONE]") {
+                payloads.append("[DONE]")
+                if let doneRange = buffer.range(of: "[DONE]") {
+                    buffer.removeSubrange(doneRange)
+                } else {
+                    buffer = ""
+                }
+                continue
+            }
+
+            let workingStart = buffer.firstIndex(where: { !$0.isWhitespace && !$0.isNewline })
+            guard let workingStart else {
+                buffer = ""
+                break
+            }
+
+            let working = buffer[workingStart...]
+            guard let first = working.first else {
+                buffer = ""
+                break
+            }
+
+            if first == "{" || first == "[" {
+                guard let end = completeJSONBoundary(in: working) else {
+                    break
+                }
+                let payload = String(working[..<end])
+                payloads.append(payload)
+                buffer.removeSubrange(workingStart..<end)
+                continue
+            }
+
+            guard let newline = working.firstIndex(of: "\n") else {
+                break
+            }
+            let payload = String(working[..<newline]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !payload.isEmpty {
+                payloads.append(payload)
+            }
+            buffer.removeSubrange(workingStart...newline)
+        }
+
+        return payloads
+    }
+
+    func completeJSONBoundary(in text: Substring) -> String.Index? {
+        var depth = 0
+        var insideString = false
+        var escaping = false
+        var started = false
+
+        for index in text.indices {
+            let character = text[index]
+
+            if insideString {
+                if escaping {
+                    escaping = false
+                    continue
+                }
+                if character == "\\" {
+                    escaping = true
+                    continue
+                }
+                if character == "\"" {
+                    insideString = false
+                }
+                continue
+            }
+
+            if character == "\"" {
+                insideString = true
+                continue
+            }
+
+            if character == "{" || character == "[" {
+                depth += 1
+                started = true
+            } else if character == "}" || character == "]" {
+                depth -= 1
+                if started && depth == 0 {
+                    return text.index(after: index)
+                }
+            }
+        }
+
+        return nil
+    }
+
+    func longestSuffixPrefixOverlap(lhs: String, rhs: String) -> Int? {
+        let maxOverlap = min(lhs.count, rhs.count)
+        guard maxOverlap > 0 else { return nil }
+        for length in stride(from: maxOverlap, through: 1, by: -1) {
+            let lhsSuffix = lhs.suffix(length)
+            let rhsPrefix = rhs.prefix(length)
+            if lhsSuffix == rhsPrefix {
+                return length
+            }
+        }
+        return nil
+    }
+
+    func extractMessageContent(from value: Any?) -> String? {
+        if let text = value as? String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let blocks = value as? [[String: Any]] {
+            let texts = blocks.compactMap { block -> String? in
+                if let text = block["text"] as? String { return text }
+                return nil
+            }
+            let merged = texts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            return merged.isEmpty ? nil : merged
+        }
+        return nil
+    }
+
+    func extractStreamingMessageContent(from value: Any?) -> String? {
+        if let text = value as? String {
+            return text.isEmpty ? nil : text
+        }
+        if let blocks = value as? [[String: Any]] {
+            let texts = blocks.compactMap { block -> String? in
+                if let text = block["text"] as? String {
+                    return text
+                }
+                return nil
+            }
+            let merged = texts.joined(separator: "\n")
+            return merged.isEmpty ? nil : merged
+        }
+        return nil
+    }
+
+    func recoverStreamingDelta(fromRawPayload text: String) -> String? {
+        if let envelopeFragment = extractMalformedStreamingFragment(
+            from: text,
+            markers: [
+                #""content":"#,
+                #""text":"#
+            ]
+        ) {
+            let normalized = decodeStreamingJSONStringFragment(envelopeFragment)
+            if !normalized.isEmpty {
+                return normalized
+            }
+        }
+
+        let patterns = [
+            #""delta"\s*:\s*\{\s*"content"\s*:\s*"((?:\\.|[^"\\])*)""#,
+            #""delta"\s*:\s*\{\s*"text"\s*:\s*"((?:\\.|[^"\\])*)""#,
+            #""message"\s*:\s*\{\s*"[^"]*"\s*:\s*"[^"]*"\s*,\s*"content"\s*:\s*"((?:\\.|[^"\\])*)""#,
+            #""message"\s*:\s*\{[\s\S]*?"content"\s*:\s*"((?:\\.|[^"\\])*)""#,
+            #""content"\s*:\s*"((?:\\.|[^"\\])*)""#
+        ]
+
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            guard let match = regex.firstMatch(in: text, options: [], range: range),
+                  match.numberOfRanges > 1,
+                  let valueRange = Range(match.range(at: 1), in: text) else {
+                continue
+            }
+
+            let rawValue = String(text[valueRange])
+            let normalized = decodeStreamingJSONStringFragment(rawValue)
+            if !normalized.isEmpty {
+                return normalized
+            }
+        }
+
+        return nil
+    }
+
+    func extractMalformedStreamingFragment(from text: String, markers: [String]) -> String? {
+        let lowercased = text.lowercased()
+        let lowercasedMarkers = markers.map { $0.lowercased() }
+        let suffixes = [
+            #","role":"#,
+            #""},"finish_reason":"#,
+            #""},"index":"#,
+            #""},"logprobs":"#,
+            #""},"object":"#,
+            #""},"usage":"#,
+            #""},"created":"#,
+            #""},"system_fingerprint":"#,
+            #""},"model":"#,
+            #""},"id":"#,
+            #""}],"object":"#
+        ]
+
+        for marker in lowercasedMarkers {
+            guard let markerRange = lowercased.range(of: marker) else { continue }
+            let contentStart = markerRange.upperBound
+            let remainder = lowercased[contentStart...]
+
+            let suffixStart = suffixes
+                .compactMap { suffix in
+                    remainder.range(of: suffix).map { $0.lowerBound }
+                }
+                .min() ?? lowercased.endIndex
+
+            guard suffixStart > contentStart else { continue }
+
+            var fragment = String(text[contentStart..<suffixStart])
+            if hasOddUnescapedQuoteCount(fragment), fragment.hasSuffix("\"") {
+                fragment.removeLast()
+            }
+            if !fragment.isEmpty {
+                return fragment
+            }
+        }
+
+        return nil
+    }
+
+    func decodeStreamingJSONStringFragment(_ value: String) -> String {
+        let wrapped = "\"\(value)\""
+        if let data = wrapped.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(String.self, from: data) {
+            return decoded
+        }
+
+        return value
+            .replacingOccurrences(of: #"\\n"#, with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: #"\\r"#, with: "\r", options: .regularExpression)
+            .replacingOccurrences(of: #"\\t"#, with: "\t", options: .regularExpression)
+            .replacingOccurrences(of: #"\\\""#, with: "\"", options: .regularExpression)
+            .replacingOccurrences(of: #"\\\\"#, with: "\\", options: .regularExpression)
+    }
+
+    func hasOddUnescapedQuoteCount(_ text: String) -> Bool {
+        var escaping = false
+        var quoteCount = 0
+
+        for character in text {
+            if escaping {
+                escaping = false
+                continue
+            }
+            if character == "\\" {
+                escaping = true
+                continue
+            }
+            if character == "\"" {
+                quoteCount += 1
+            }
+        }
+
+        return quoteCount % 2 == 1
+    }
+
+    func looksLikeStreamingEnvelopeFragment(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        if lowered == "[done]" || lowered.hasPrefix("data: [done]") {
+            return true
+        }
+
+        let markers = [
+            "chat.completion.chunk",
+            "\"choices\"",
+            "\"delta\"",
+            "\"finish_reason\"",
+            "\"index\"",
+            "\"object\"",
+            "\"id\"",
+            "\"model\"",
+            "\"usage\"",
+            "\"created\"",
+            "\"system_fingerprint\""
+        ]
+
+        return markers.contains(where: { lowered.contains($0) })
+    }
+
+    func extractStreamingErrorMessage(from object: Any) -> String? {
+        guard let dict = object as? [String: Any] else { return nil }
+
+        if let error = dict["error"] as? String,
+           !error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return error
+        }
+
+        if let error = dict["error"] as? [String: Any] {
+            if let message = error["message"] as? String,
+               !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return message
+            }
+            if let detail = error["detail"] as? String,
+               !detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return detail
+            }
+            if let code = error["code"] {
+                return "Remote LLM stream error: \(code)"
+            }
+            return "Remote LLM stream error."
+        }
+
+        if let message = dict["message"] as? String,
+           (dict["status"] as? String)?.lowercased() == "error" ||
+           (dict["type"] as? String)?.lowercased().contains("error") == true {
+            return message
+        }
+
+        return nil
+    }
+}

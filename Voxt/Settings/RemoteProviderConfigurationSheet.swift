@@ -20,6 +20,7 @@ struct RemoteProviderConfigurationSheet: View {
     @State var apiKey = ""
     @State var appID = ""
     @State var accessToken = ""
+    @State var searchEnabled = false
     @State var openAIChunkPseudoRealtimeEnabled = false
     @State var doubaoDictionaryMode = DoubaoDictionaryMode.requestScoped.rawValue
     @State var doubaoEnableRequestHotwords = true
@@ -41,6 +42,10 @@ struct RemoteProviderConfigurationSheet: View {
 
             if !isDoubaoASRTest {
                 endpointAndKeySection
+            }
+
+            if showsSearchSection {
+                searchSection
             }
 
             if showsDoubaoFields {
@@ -85,6 +90,7 @@ struct RemoteProviderConfigurationSheet: View {
             apiKey = configuration.apiKey
             appID = configuration.appID
             accessToken = configuration.accessToken
+            searchEnabled = configuration.searchEnabled
             openAIChunkPseudoRealtimeEnabled = configuration.openAIChunkPseudoRealtimeEnabled
             doubaoDictionaryMode = configuration.doubaoDictionaryMode
             doubaoEnableRequestHotwords = configuration.doubaoEnableRequestHotwords

@@ -68,10 +68,10 @@ struct HistorySettingsView: View {
                     GroupBox {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack(alignment: .center, spacing: 12) {
-                                Toggle("Enable Transcription History", isOn: $historyEnabled)
+                                Toggle(String(localized: "Enable Transcription History"), isOn: $historyEnabled)
                                 Spacer(minLength: 12)
                                 HStack(spacing: 4) {
-                                    Text("Retention")
+                                    Text(String(localized: "Retention"))
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                     Button {
@@ -100,7 +100,7 @@ struct HistorySettingsView: View {
                                 .disabled(!historyEnabled)
                             }
 
-                            Text("When enabled, each completed transcription result will be saved in local history.")
+                            Text(String(localized: "When enabled, each completed transcription result will be saved in local history."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -114,7 +114,7 @@ struct HistorySettingsView: View {
                             HStack(alignment: .center, spacing: 12) {
                                 HistoryFilterTabPicker(selectedTab: $selectedFilter)
                                 Spacer(minLength: 12)
-                                Button("Clean All", role: .destructive) {
+                                Button(String(localized: "Clean All"), role: .destructive) {
                                     copiedEntryID = nil
                                     historyStore.clearAll()
                                 }
@@ -123,15 +123,15 @@ struct HistorySettingsView: View {
                             }
 
                             if historyStore.entries.isEmpty && !historyEnabled {
-                                Text("History is currently disabled.")
+                                Text(String(localized: "History is currently disabled."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else if historyStore.entries.isEmpty {
-                                Text("No history yet.")
+                                Text(String(localized: "No history yet."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else if filteredEntries.isEmpty {
-                                Text("No entries in this category yet.")
+                                Text(String(localized: "No entries in this category yet."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
@@ -164,7 +164,7 @@ struct HistorySettingsView: View {
                                         }
 
                                         if historyStore.hasMore {
-                                            Button("Load More") {
+                                            Button(String(localized: "Load More")) {
                                                 historyStore.loadNextPage()
                                             }
                                             .buttonStyle(SettingsPillButtonStyle())
@@ -320,53 +320,13 @@ private struct HistoryRow: View {
                     }
                     .buttonStyle(.plain)
                     .popover(isPresented: $showModelInfo, arrowEdge: .trailing) {
-                        HistoryInfoPopover(entry: entry, locale: locale, hasDictionaryActivity: hasDictionaryActivity)
+                        HistoryInfoPopover(entry: entry, locale: locale)
                     }
 
-                    if entry.kind == .meeting {
-                        Button(String(localized: "Detail")) {
-                            guard let appDelegate = AppDelegate.shared else {
-                                VoxtLog.warning("History detail open skipped: AppDelegate.shared was unavailable.")
-                                return
-                            }
-                            MeetingDetailWindowManager.shared.presentHistoryMeeting(
-                                entry: entry,
-                                audioURL: meetingAudioURL,
-                                initialSummarySettings: appDelegate.currentMeetingSummarySettingsSnapshot(),
-                                summaryModelOptionsProvider: { @MainActor in
-                                    appDelegate.meetingSummaryModelOptions()
-                                },
-                                summarySettingsProvider: { @MainActor in
-                                    appDelegate.currentMeetingSummarySettingsSnapshot()
-                                },
-                                translationHandler: { @MainActor text, targetLanguage in
-                                    return try await appDelegate.translateMeetingRealtimeText(text, targetLanguage: targetLanguage)
-                                },
-                                summaryStatusProvider: { @MainActor settings in
-                                    return appDelegate.meetingSummaryProviderStatus(settings: settings)
-                                },
-                                summaryGenerator: { @MainActor transcript, settings in
-                                    return try await appDelegate.generateMeetingSummary(transcript: transcript, settings: settings)
-                                },
-                                summaryPersistence: { @MainActor entryID, summary in
-                                    return appDelegate.persistMeetingSummary(summary, for: entryID)
-                                },
-                                summaryChatAnswerer: { @MainActor transcript, summary, history, question, settings in
-                                    return try await appDelegate.answerMeetingSummaryFollowUp(
-                                        transcript: transcript,
-                                        summary: summary,
-                                        history: history,
-                                        question: question,
-                                        settings: settings
-                                    )
-                                },
-                                summaryChatPersistence: { @MainActor entryID, messages in
-                                    return appDelegate.persistMeetingSummaryChatMessages(messages, for: entryID)
-                                }
-                            )
-                        }
-                        .buttonStyle(SettingsPillButtonStyle())
+                    Button(String(localized: "Detail")) {
+                        openDetailWindow()
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
 
                     Button(role: .destructive, action: onDelete) {
                         Image(systemName: "trash")
@@ -375,7 +335,7 @@ private struct HistoryRow: View {
                 }
 
                 if isCopied {
-                    Text("Copied")
+                    Text(String(localized: "Copied"))
                         .font(.caption)
                         .foregroundStyle(.green)
                 }
@@ -416,13 +376,13 @@ private struct HistoryRow: View {
     private var historyBadge: some View {
         Group {
             if entry.kind == .translation {
-                Text("Translation")
+                Text(String(localized: "Translation"))
             } else if entry.kind == .rewrite {
-                Text("Rewrite")
+                Text(String(localized: "Rewrite"))
             } else if entry.kind == .meeting {
-                Text("Meeting")
+                Text(String(localized: "Meeting"))
             } else {
-                Text("Normal")
+                Text(String(localized: "Transcription"))
             }
         }
         .font(.system(size: 10, weight: .semibold))
@@ -483,146 +443,69 @@ private struct HistoryRow: View {
         let format = NSLocalizedString("%dm %ds", comment: "")
         return String(format: format, locale: locale, minutes, remain)
     }
+
+    private func openDetailWindow() {
+        if entry.kind == .meeting {
+            guard let appDelegate = AppDelegate.shared else {
+                VoxtLog.warning("History detail open skipped: AppDelegate.shared was unavailable.")
+                return
+            }
+            MeetingDetailWindowManager.shared.presentHistoryMeeting(
+                entry: entry,
+                audioURL: meetingAudioURL,
+                initialSummarySettings: appDelegate.currentMeetingSummarySettingsSnapshot(),
+                summaryModelOptionsProvider: { @MainActor in
+                    appDelegate.meetingSummaryModelOptions()
+                },
+                summarySettingsProvider: { @MainActor in
+                    appDelegate.currentMeetingSummarySettingsSnapshot()
+                },
+                translationHandler: { @MainActor text, targetLanguage in
+                    return try await appDelegate.translateMeetingRealtimeText(text, targetLanguage: targetLanguage)
+                },
+                summaryStatusProvider: { @MainActor settings in
+                    return appDelegate.meetingSummaryProviderStatus(settings: settings)
+                },
+                summaryGenerator: { @MainActor transcript, settings in
+                    return try await appDelegate.generateMeetingSummary(transcript: transcript, settings: settings)
+                },
+                summaryPersistence: { @MainActor entryID, summary in
+                    return appDelegate.persistMeetingSummary(summary, for: entryID)
+                },
+                summaryChatAnswerer: { @MainActor transcript, summary, history, question, settings in
+                    return try await appDelegate.answerMeetingSummaryFollowUp(
+                        transcript: transcript,
+                        summary: summary,
+                        history: history,
+                        question: question,
+                        settings: settings
+                    )
+                },
+                summaryChatPersistence: { @MainActor entryID, messages in
+                    return appDelegate.persistMeetingSummaryChatMessages(messages, for: entryID)
+                }
+            )
+            return
+        }
+
+        guard let appDelegate = AppDelegate.shared else {
+            VoxtLog.warning("Transcription detail open skipped: AppDelegate.shared was unavailable.")
+            return
+        }
+        appDelegate.showTranscriptionDetailWindow(for: entry)
+    }
 }
 
 private struct HistoryInfoPopover: View {
     let entry: TranscriptionHistoryEntry
     let locale: Locale
-    let hasDictionaryActivity: Bool
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Transcription Details")
-                    .font(.headline)
-                detailLine(labelKey: "Engine", value: entry.transcriptionEngine)
-                detailLine(labelKey: "Model", value: entry.transcriptionModel)
-                optionalDetailLine(labelKey: "Remote ASR Provider", value: entry.remoteASRProvider)
-                optionalDetailLine(labelKey: "Remote ASR Model", value: entry.remoteASRModel)
-                optionalDetailLine(labelKey: "Remote ASR Endpoint", value: entry.remoteASREndpoint)
-                detailLine(labelKey: "Enhancement", value: entry.enhancementMode)
-                detailLine(labelKey: "Enhancer Model", value: entry.enhancementModel)
-                optionalDetailLine(labelKey: "Remote LLM Provider", value: entry.remoteLLMProvider)
-                optionalDetailLine(labelKey: "Remote LLM Model", value: entry.remoteLLMModel)
-                optionalDetailLine(labelKey: "Remote LLM Endpoint", value: entry.remoteLLMEndpoint)
-                optionalDetailLine(labelKey: "Focused App", value: entry.focusedAppName)
-                optionalDetailLine(labelKey: "App Group", value: entry.matchedAppGroupName)
-                optionalDetailLine(labelKey: "URL Group", value: entry.matchedURLGroupName)
-                optionalDetailLine(
-                    labelKey: "ASR Processing",
-                    value: formattedDuration(entry.transcriptionProcessingDurationSeconds)
-                )
-                optionalDetailLine(
-                    labelKey: "LLM Duration",
-                    value: formattedDuration(entry.llmDurationSeconds)
-                )
-
-                if let whisperWordTimings = entry.whisperWordTimings,
-                   !whisperWordTimings.isEmpty {
-                    Divider()
-                        .padding(.vertical, 2)
-                    Text("Whisper Timestamps")
-                        .font(.headline)
-
-                    ForEach(Array(whisperWordTimings.enumerated()), id: \.offset) { _, timing in
-                        detailLine(
-                            labelKey: LocalizedStringKey(timeRangeLabel(for: timing)),
-                            value: timing.word
-                        )
-                    }
-                }
-
-                if let meetingSegments = entry.meetingSegments,
-                   !meetingSegments.isEmpty {
-                    Divider()
-                        .padding(.vertical, 2)
-                    Text("Meeting Segments")
-                        .font(.headline)
-
-                    ForEach(meetingSegments) { segment in
-                        detailLine(
-                            labelKey: LocalizedStringKey(
-                                "\(MeetingTranscriptFormatter.timestampString(for: segment.startSeconds)) · \(segment.speaker.displayTitle)"
-                            ),
-                            value: segment.text
-                        )
-                    }
-                }
-
-                if hasDictionaryActivity {
-                    Divider()
-                        .padding(.vertical, 2)
-                    Text("Dictionary")
-                        .font(.headline)
-
-                    if !entry.dictionaryHitTerms.isEmpty {
-                        termSection(title: "Matched dictionary terms", values: entry.dictionaryHitTerms)
-                    }
-                    if !entry.dictionaryCorrectedTerms.isEmpty {
-                        termSection(title: "Corrected terms", values: entry.dictionaryCorrectedTerms)
-                    }
-                }
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 8)
-            .frame(width: 360, alignment: .leading)
-        }
-        .frame(maxHeight: 460)
-    }
-
-    private func termSection(title: LocalizedStringKey, values: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            ForEach(values, id: \.self) { value in
-                Text(value)
-                    .font(.subheadline)
-            }
-        }
-    }
-
-    private func detailLine(labelKey: LocalizedStringKey, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(labelKey)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.subheadline)
-        }
-    }
-
-    @ViewBuilder
-    private func optionalDetailLine(labelKey: LocalizedStringKey, value: String?) -> some View {
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmed.isEmpty {
-            detailLine(labelKey: labelKey, value: trimmed)
-        }
-    }
-
-    private func formattedDuration(_ seconds: TimeInterval?) -> String? {
-        guard let seconds else { return nil }
-        if seconds < 1 {
-            let format = NSLocalizedString("%d ms", comment: "")
-            return String(format: format, locale: locale, Int(seconds * 1000))
-        }
-        if seconds < 60 {
-            let format = NSLocalizedString("%.1f s", comment: "")
-            return String(format: format, locale: locale, seconds)
-        }
-        let minutes = Int(seconds) / 60
-        let remain = Int(seconds) % 60
-        let format = NSLocalizedString("%dm %ds", comment: "")
-        return String(format: format, locale: locale, minutes, remain)
-    }
-
-    private func timeRangeLabel(for timing: WhisperHistoryWordTiming) -> String {
-        String(
-            format: NSLocalizedString("%.2fs → %.2fs", comment: ""),
+        TranscriptionDetailContentView(
+            entry: entry,
             locale: locale,
-            timing.startSeconds,
-            timing.endSeconds
+            style: .popover
         )
+        .frame(maxHeight: 460)
     }
 }

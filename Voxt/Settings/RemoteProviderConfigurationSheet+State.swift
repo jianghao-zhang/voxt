@@ -39,6 +39,7 @@ extension RemoteProviderConfigurationSheet {
             apiKey: isDoubaoASRTest ? "" : apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
             appID: appID.trimmingCharacters(in: .whitespacesAndNewlines),
             accessToken: accessToken.trimmingCharacters(in: .whitespacesAndNewlines),
+            searchEnabled: (llmProviderForPicker?.supportsHostedSearch == true) ? searchEnabled : false,
             openAIChunkPseudoRealtimeEnabled: isOpenAIASRTest ? openAIChunkPseudoRealtimeEnabled : false,
             doubaoDictionaryMode: doubaoDictionaryMode,
             doubaoEnableRequestHotwords: doubaoEnableRequestHotwords,
@@ -120,6 +121,10 @@ extension RemoteProviderConfigurationSheet {
 
     var llmProviderForPicker: RemoteLLMProvider? {
         RemoteProviderConfigurationPolicy.llmProvider(for: testTarget)
+    }
+
+    var showsSearchSection: Bool {
+        llmProviderForPicker?.supportsHostedSearch == true
     }
 
     func configureModelSelection() {

@@ -78,13 +78,14 @@ extension AppDelegate {
     }
 
     private struct AppendHistoryStage: SessionFinalizeStage {
-        let append: (String, TimeInterval?, [String], [String], [DictionarySuggestionSnapshot]) -> UUID?
+        let append: (String, String?, TimeInterval?, [String], [String], [DictionarySuggestionSnapshot]) -> UUID?
 
         var name: String { "appendHistory" }
 
         func run(context: inout SessionFinalizeContext) {
             context.historyEntryID = append(
                 context.outputText,
+                context.rewriteAnswerPayload?.trimmedTitle,
                 context.llmDurationSeconds,
                 Self.uniqueTerms(from: context.dictionaryMatches),
                 Self.deduplicatedTerms(context.dictionaryCorrectedTerms),
@@ -152,14 +153,17 @@ extension AppDelegate {
                 DeliverOutputStage(deliver: { [weak self] context in
                     self?.deliverCommittedOutput(context)
                 }),
-                AppendHistoryStage(append: { [weak self] value, duration, hitTerms, correctedTerms, suggestions in
-                    self?.appendHistoryIfNeeded(
+                AppendHistoryStage(append: { [weak self] value, displayTitle, duration, hitTerms, correctedTerms, suggestions in
+                    let historyEntryID = self?.appendHistoryIfNeeded(
                         text: value,
+                        displayTitle: displayTitle,
                         llmDurationSeconds: duration,
                         dictionaryHitTerms: hitTerms,
                         dictionaryCorrectedTerms: correctedTerms,
                         dictionarySuggestedTerms: suggestions
                     )
+                    self?.overlayState.latestHistoryEntryID = historyEntryID
+                    return historyEntryID
                 }),
                 PersistDictionaryEvidenceStage(persist: { [weak self] candidates, suggestions, historyEntryID in
                     self?.persistDictionaryEvidence(
@@ -334,8 +338,12 @@ extension AppDelegate {
         case .typeText:
             typeText(context.outputText)
         case .answerOverlay:
-            let payload = resolvedAnswerPayload(for: context)
-            presentRewriteAnswerOverlay(title: payload.title, content: payload.content)
+            if overlayState.isRewriteConversationActive, context.rewriteAnswerPayload == nil {
+                presentRewriteConversationAnswerOverlay(content: context.outputText)
+            } else {
+                let payload = resolvedAnswerPayload(for: context)
+                presentRewriteAnswerOverlay(title: payload.title, content: payload.content)
+            }
         }
     }
 
@@ -394,6 +402,29 @@ extension AppDelegate {
     }
 
     private func presentRewriteAnswerOverlay(title: String, content: String) {
+        let resolvedPayload = normalizedRewriteAnswerPayload(
+            RewriteAnswerPayload(title: title, content: content)
+        )
+        let trimmedContent = resolvedPayload.trimmedContent
+        guard !trimmedContent.isEmpty else { return }
+
+        if autoCopyWhenNoFocusedInput {
+            writeTextToPasteboard(trimmedContent)
+        }
+
+        configureRewriteAnswerOverlayInjectionHandler()
+        let canInjectIntoFocusedInput = resolvedCanInjectIntoFocusedInputForRewriteAnswer(logResult: true)
+        overlayState.presentAnswer(
+            title: resolvedPayload.trimmedTitle.isEmpty
+                ? String(localized: "AI Answer")
+                : resolvedPayload.trimmedTitle,
+            content: trimmedContent,
+            canInject: canInjectIntoFocusedInput
+        )
+        overlayWindow.show(state: overlayState, position: overlayPosition)
+    }
+
+    private func presentRewriteConversationAnswerOverlay(content: String) {
         let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedContent.isEmpty else { return }
 
@@ -401,28 +432,55 @@ extension AppDelegate {
             writeTextToPasteboard(trimmedContent)
         }
 
-        overlayWindow.onRequestInject = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.injectAnswerOverlayContent()
-            }
-        }
-        let liveHasWritableFocusedInput = hasWritableFocusedTextInput()
-        let hasFallbackInjectTarget = rewriteSessionFallbackInjectBundleID != nil
-        let canInjectIntoFocusedInput =
-            rewriteSessionHadWritableFocusedInput ||
-            liveHasWritableFocusedInput ||
-            hasFallbackInjectTarget
-        VoxtLog.info(
-            "Rewrite answer overlay inject check. sessionHadWritableFocusedInput=\(rewriteSessionHadWritableFocusedInput), liveHasWritableFocusedInput=\(liveHasWritableFocusedInput), fallbackBundleID=\(rewriteSessionFallbackInjectBundleID ?? "nil"), canInject=\(canInjectIntoFocusedInput)"
-        )
-        overlayState.presentAnswer(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? String(localized: "AI Answer")
-                : title,
+        configureRewriteAnswerOverlayInjectionHandler()
+        let canInjectIntoFocusedInput = resolvedCanInjectIntoFocusedInputForRewriteAnswer(logResult: true)
+        overlayState.presentConversationAnswer(
             content: trimmedContent,
             canInject: canInjectIntoFocusedInput
         )
         overlayWindow.show(state: overlayState, position: overlayPosition)
+    }
+
+    func presentRewriteAnswerStreamingPreview(rawText: String) {
+        let previewPayload = RewriteAnswerPayloadParser.preview(from: rawText) ?? RewriteAnswerPayload(
+            title: String(localized: "AI Answer"),
+            content: rawText
+        )
+        guard !previewPayload.trimmedTitle.isEmpty || !previewPayload.trimmedContent.isEmpty else { return }
+
+        configureRewriteAnswerOverlayInjectionHandler()
+        let canInjectIntoFocusedInput =
+            overlayState.latestCompletedAnswerPayload != nil
+                ? resolvedCanInjectIntoFocusedInputForRewriteAnswer(logResult: false)
+                : false
+
+        overlayState.presentStreamingAnswer(
+            title: previewPayload.title,
+            content: previewPayload.content,
+            canInject: canInjectIntoFocusedInput
+        )
+        overlayWindow.show(state: overlayState, position: overlayPosition)
+    }
+
+    func presentRewriteConversationStreamingPreview(content: String) {
+        let normalizedContent = RewriteAnswerContentNormalizer.normalizePlainTextStreamingPreview(content)
+        guard !normalizedContent.isEmpty else { return }
+
+        configureRewriteAnswerOverlayInjectionHandler()
+        let canInjectIntoFocusedInput =
+            overlayState.latestCompletedAnswerPayload != nil
+                ? resolvedCanInjectIntoFocusedInputForRewriteAnswer(logResult: false)
+                : false
+
+        overlayState.presentStreamingConversationAnswer(
+            content: normalizedContent,
+            canInject: canInjectIntoFocusedInput
+        )
+        overlayWindow.show(state: overlayState, position: overlayPosition)
+    }
+
+    private func normalizedRewriteAnswerPayload(_ payload: RewriteAnswerPayload) -> RewriteAnswerPayload {
+        RewriteAnswerPayloadParser.normalize(payload)
     }
 
     func dismissAnswerOverlay() {
@@ -435,145 +493,46 @@ extension AppDelegate {
     }
 
     func injectAnswerOverlayContent() {
-        let trimmed = overlayState.answerContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = overlayState.latestCompletedAnswerPayload?.trimmedContent ?? ""
         guard !trimmed.isEmpty else { return }
         guard overlayState.canInjectAnswer else { return }
         VoxtLog.info("Rewrite answer inject requested. chars=\(trimmed.count), canInject=\(overlayState.canInjectAnswer)")
         typeText(trimmed)
     }
 
-    func extractRewriteAnswerPayload(from text: String) -> RewriteAnswerPayload? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        let candidateStrings = [trimmed, strippedCodeFencePayload(from: trimmed)]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        for candidate in candidateStrings {
-            if let payload = decodeRewriteAnswerPayload(from: candidate) {
-                return payload
-            }
-
-            if let objectRange = candidate.firstIndex(of: "{").flatMap({ start in
-                candidate.lastIndex(of: "}").map { start...$0 }
-            }) {
-                let objectString = String(candidate[objectRange])
-                if let payload = decodeRewriteAnswerPayload(from: objectString) {
-                    return payload
-                }
-            }
+    func showCurrentTranscriptionDetailWindow() {
+        guard let historyEntryID = overlayState.latestHistoryEntryID else {
+            VoxtLog.warning("Transcription detail open skipped: latest history entry ID was unavailable.")
+            return
         }
-
-        return nil
+        showTranscriptionDetailWindow(for: historyEntryID)
     }
 
-    private func decodeRewriteAnswerPayload(from text: String) -> RewriteAnswerPayload? {
-        guard let data = text.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data)
-        else {
-            return decodeLooseRewriteAnswerPayload(from: text)
-        }
-
-        if let dict = object as? [String: Any] {
-            return rewriteAnswerPayload(from: dict)
-        }
-
-        if let string = object as? String {
-            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, trimmed != text else {
-                return decodeLooseRewriteAnswerPayload(from: text)
+    private func configureRewriteAnswerOverlayInjectionHandler() {
+        overlayWindow.onRequestInject = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.injectAnswerOverlayContent()
             }
-            return decodeRewriteAnswerPayload(from: trimmed) ?? decodeLooseRewriteAnswerPayload(from: trimmed)
         }
-
-        return decodeLooseRewriteAnswerPayload(from: text)
     }
 
-    private func rewriteAnswerPayload(from object: [String: Any]) -> RewriteAnswerPayload? {
-        let titleKeys = ["title", "heading", "summary"]
-        let contentKeys = ["content", "answer", "body", "text"]
-
-        let title = titleKeys
-            .compactMap { object[$0] }
-            .map { String(describing: $0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first(where: { !$0.isEmpty }) ?? ""
-
-        let content = contentKeys
-            .compactMap { object[$0] }
-            .map { String(describing: $0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first(where: { !$0.isEmpty }) ?? ""
-
-        guard !content.isEmpty else {
-            return decodeLooseRewriteAnswerPayload(
-                from: object
-                    .map { "\($0.key): \($0.value)" }
-                    .joined(separator: "\n")
+    private func resolvedCanInjectIntoFocusedInputForRewriteAnswer(logResult: Bool) -> Bool {
+        let liveHasWritableFocusedInput = hasWritableFocusedTextInput()
+        let hasFallbackInjectTarget = rewriteSessionFallbackInjectBundleID != nil
+        let canInjectIntoFocusedInput =
+            rewriteSessionHadWritableFocusedInput ||
+            liveHasWritableFocusedInput ||
+            hasFallbackInjectTarget
+        if logResult {
+            VoxtLog.info(
+                "Rewrite answer overlay inject check. sessionHadWritableFocusedInput=\(rewriteSessionHadWritableFocusedInput), liveHasWritableFocusedInput=\(liveHasWritableFocusedInput), fallbackBundleID=\(rewriteSessionFallbackInjectBundleID ?? "nil"), canInject=\(canInjectIntoFocusedInput)"
             )
         }
-        return RewriteAnswerPayload(
-            title: title.isEmpty ? String(localized: "AI Answer") : title,
-            content: content
-        )
+        return canInjectIntoFocusedInput
     }
 
-    private func decodeLooseRewriteAnswerPayload(from text: String) -> RewriteAnswerPayload? {
-        let normalized = text
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return nil }
-
-        let title = firstMatch(
-            in: normalized,
-            patterns: [
-                #"(?is)(?:^|\n)\s*["']?title["']?\s*[:：]\s*["']?(.+?)["']?(?=\n\s*["']?(?:content|answer|body|text)["']?\s*[:：]|\n{2,}|$)"#,
-                #"(?is)(?:^|\n)\s*["']?(?:heading|summary)["']?\s*[:：]\s*["']?(.+?)["']?(?=\n\s*["']?(?:content|answer|body|text)["']?\s*[:：]|\n{2,}|$)"#
-            ]
-        )
-
-        let content = firstMatch(
-            in: normalized,
-            patterns: [
-                #"(?is)(?:^|\n)\s*["']?(?:content|answer|body|text)["']?\s*[:：]\s*["']?([\s\S]+?)["']?\s*$"#
-            ]
-        )
-
-        guard let content, !content.isEmpty else { return nil }
-        return RewriteAnswerPayload(
-            title: (title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-                ? title!.trimmingCharacters(in: .whitespacesAndNewlines)
-                : String(localized: "AI Answer")),
-            content: content.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
-    }
-
-    private func firstMatch(in text: String, patterns: [String]) -> String? {
-        let searchRange = NSRange(text.startIndex..<text.endIndex, in: text)
-        for pattern in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
-            guard let match = regex.firstMatch(in: text, options: [], range: searchRange),
-                  match.numberOfRanges > 1,
-                  let range = Range(match.range(at: 1), in: text)
-            else {
-                continue
-            }
-            let value = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
-    private func strippedCodeFencePayload(from text: String) -> String? {
-        guard text.hasPrefix("```"), text.hasSuffix("```") else { return nil }
-        var lines = text.components(separatedBy: .newlines)
-        guard !lines.isEmpty else { return nil }
-        lines.removeFirst()
-        if !lines.isEmpty, lines.last == "```" {
-            lines.removeLast()
-        }
-        return lines.joined(separator: "\n")
+    func extractRewriteAnswerPayload(from text: String) -> RewriteAnswerPayload? {
+        RewriteAnswerPayloadParser.extract(from: text)
     }
 
     private func emptyRewriteAnswerPlaceholderTitle(from text: String) -> String? {

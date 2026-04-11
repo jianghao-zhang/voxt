@@ -43,6 +43,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
     let meetingAudioRelativePath: String?
     let meetingSummary: MeetingSummarySnapshot?
     let meetingSummaryChatMessages: [MeetingSummaryChatMessage]?
+    let displayTitle: String?
+    let transcriptionChatMessages: [MeetingSummaryChatMessage]?
     let dictionaryHitTerms: [String]
     let dictionaryCorrectedTerms: [String]
     let dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
@@ -75,6 +77,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         case meetingAudioRelativePath
         case meetingSummary
         case meetingSummaryChatMessages
+        case displayTitle
+        case transcriptionChatMessages
         case dictionaryHitTerms
         case dictionaryCorrectedTerms
         case dictionarySuggestedTerms
@@ -108,6 +112,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         meetingAudioRelativePath: String? = nil,
         meetingSummary: MeetingSummarySnapshot? = nil,
         meetingSummaryChatMessages: [MeetingSummaryChatMessage]? = nil,
+        displayTitle: String? = nil,
+        transcriptionChatMessages: [MeetingSummaryChatMessage]? = nil,
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
         dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
@@ -139,6 +145,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         self.meetingAudioRelativePath = meetingAudioRelativePath
         self.meetingSummary = meetingSummary
         self.meetingSummaryChatMessages = meetingSummaryChatMessages
+        self.displayTitle = displayTitle
+        self.transcriptionChatMessages = transcriptionChatMessages
         self.dictionaryHitTerms = dictionaryHitTerms
         self.dictionaryCorrectedTerms = dictionaryCorrectedTerms
         self.dictionarySuggestedTerms = dictionarySuggestedTerms
@@ -175,6 +183,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         meetingAudioRelativePath = try container.decodeIfPresent(String.self, forKey: .meetingAudioRelativePath)
         meetingSummary = try container.decodeIfPresent(MeetingSummarySnapshot.self, forKey: .meetingSummary)
         meetingSummaryChatMessages = try container.decodeIfPresent([MeetingSummaryChatMessage].self, forKey: .meetingSummaryChatMessages)
+        displayTitle = try container.decodeIfPresent(String.self, forKey: .displayTitle)
+        transcriptionChatMessages = try container.decodeIfPresent([MeetingSummaryChatMessage].self, forKey: .transcriptionChatMessages)
         dictionaryHitTerms = try container.decodeIfPresent([String].self, forKey: .dictionaryHitTerms) ?? []
         dictionaryCorrectedTerms = try container.decodeIfPresent([String].self, forKey: .dictionaryCorrectedTerms) ?? []
         dictionarySuggestedTerms = try container.decodeIfPresent([DictionarySuggestionSnapshot].self, forKey: .dictionarySuggestedTerms) ?? []
@@ -274,6 +284,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         meetingSegments: [MeetingTranscriptSegment]? = nil,
         meetingAudioRelativePath: String? = nil,
         meetingSummary: MeetingSummarySnapshot? = nil,
+        displayTitle: String? = nil,
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
         dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
@@ -308,6 +319,7 @@ final class TranscriptionHistoryStore: ObservableObject {
             meetingSegments: meetingSegments,
             meetingAudioRelativePath: meetingAudioRelativePath,
             meetingSummary: meetingSummary,
+            displayTitle: displayTitle,
             dictionaryHitTerms: dictionaryHitTerms,
             dictionaryCorrectedTerms: dictionaryCorrectedTerms,
             dictionarySuggestedTerms: dictionarySuggestedTerms
@@ -397,6 +409,15 @@ final class TranscriptionHistoryStore: ObservableObject {
     func updateMeetingSummaryChatMessages(_ messages: [MeetingSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
         guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
         allEntries[index] = allEntries[index].updatingMeetingSummaryChatMessages(messages)
+        entries = Array(allEntries.prefix(loadedCount))
+        persist()
+        return allEntries[index]
+    }
+
+    @discardableResult
+    func updateTranscriptionChatMessages(_ messages: [MeetingSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
+        guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
+        allEntries[index] = allEntries[index].updatingTranscriptionChatMessages(messages)
         entries = Array(allEntries.prefix(loadedCount))
         persist()
         return allEntries[index]
@@ -514,6 +535,8 @@ private extension TranscriptionHistoryEntry {
             meetingAudioRelativePath: meetingAudioRelativePath,
             meetingSummary: meetingSummary,
             meetingSummaryChatMessages: meetingSummaryChatMessages,
+            displayTitle: displayTitle,
+            transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
             dictionaryCorrectedTerms: dictionaryCorrectedTerms,
             dictionarySuggestedTerms: dictionarySuggestedTerms
@@ -549,6 +572,8 @@ private extension TranscriptionHistoryEntry {
             meetingAudioRelativePath: meetingAudioRelativePath,
             meetingSummary: meetingSummary,
             meetingSummaryChatMessages: meetingSummaryChatMessages,
+            displayTitle: displayTitle,
+            transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
             dictionaryCorrectedTerms: dictionaryCorrectedTerms,
             dictionarySuggestedTerms: dictionarySuggestedTerms
@@ -584,6 +609,45 @@ private extension TranscriptionHistoryEntry {
             meetingAudioRelativePath: meetingAudioRelativePath,
             meetingSummary: meetingSummary,
             meetingSummaryChatMessages: meetingSummaryChatMessages,
+            displayTitle: displayTitle,
+            transcriptionChatMessages: transcriptionChatMessages,
+            dictionaryHitTerms: dictionaryHitTerms,
+            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
+            dictionarySuggestedTerms: dictionarySuggestedTerms
+        )
+    }
+
+    func updatingTranscriptionChatMessages(_ transcriptionChatMessages: [MeetingSummaryChatMessage]) -> TranscriptionHistoryEntry {
+        TranscriptionHistoryEntry(
+            id: id,
+            text: text,
+            createdAt: createdAt,
+            transcriptionEngine: transcriptionEngine,
+            transcriptionModel: transcriptionModel,
+            enhancementMode: enhancementMode,
+            enhancementModel: enhancementModel,
+            kind: kind,
+            isTranslation: isTranslation,
+            audioDurationSeconds: audioDurationSeconds,
+            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
+            llmDurationSeconds: llmDurationSeconds,
+            focusedAppName: focusedAppName,
+            matchedGroupID: matchedGroupID,
+            matchedAppGroupName: matchedAppGroupName,
+            matchedURLGroupName: matchedURLGroupName,
+            remoteASRProvider: remoteASRProvider,
+            remoteASRModel: remoteASRModel,
+            remoteASREndpoint: remoteASREndpoint,
+            remoteLLMProvider: remoteLLMProvider,
+            remoteLLMModel: remoteLLMModel,
+            remoteLLMEndpoint: remoteLLMEndpoint,
+            whisperWordTimings: whisperWordTimings,
+            meetingSegments: meetingSegments,
+            meetingAudioRelativePath: meetingAudioRelativePath,
+            meetingSummary: meetingSummary,
+            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            displayTitle: displayTitle,
+            transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
             dictionaryCorrectedTerms: dictionaryCorrectedTerms,
             dictionarySuggestedTerms: dictionarySuggestedTerms

@@ -203,7 +203,8 @@ class CustomLLMModelManager: ObservableObject {
         sourceText: String,
         dictatedPrompt: String,
         systemPrompt: String,
-        modelRepo: String
+        modelRepo: String,
+        onPartialText: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
         let instruction = dictatedPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let source = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -212,7 +213,8 @@ class CustomLLMModelManager: ObservableObject {
             sourceText: source,
             dictatedPrompt: instruction,
             instructions: systemPrompt,
-            modelRepo: modelRepo
+            modelRepo: modelRepo,
+            onPartialText: onPartialText
         )
         return result.isEmpty ? sourceText : result
     }
@@ -235,7 +237,8 @@ class CustomLLMModelManager: ObservableObject {
         sourceText: String,
         dictatedPrompt: String,
         instructions: String,
-        modelRepo: String
+        modelRepo: String,
+        onPartialText: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
         let request = CustomLLMRequestPlanBuilder.rewrite(
             sourceText: sourceText,
@@ -244,7 +247,7 @@ class CustomLLMModelManager: ObservableObject {
             repo: modelRepo,
             structuredOutputPrompt: structuredOutputPrompt(taskInstruction:input:)
         )
-        return try await runLocalPromptRequest(request)
+        return try await runLocalPromptRequest(request, onPartialText: onPartialText)
     }
 
     private func generationParameters(for kind: CustomLLMTaskKind, inputLength: Int) -> GenerateParameters {
@@ -258,7 +261,10 @@ class CustomLLMModelManager: ObservableObject {
         )
     }
 
-    private func runLocalPromptRequest(_ request: CustomLLMRequestPlan) async throws -> String {
+    private func runLocalPromptRequest(
+        _ request: CustomLLMRequestPlan,
+        onPartialText: (@Sendable (String) -> Void)? = nil
+    ) async throws -> String {
         return try await withActiveInference {
             guard isModelDownloaded(repo: request.repo) else {
                 throw NSError(
@@ -283,7 +289,20 @@ class CustomLLMModelManager: ObservableObject {
             VoxtLog.llm(startLogMessage(for: request, params: params, behavior: behavior))
             VoxtLog.llm(contentLogMessage(for: request))
 
-            let response = try await session.respond(to: request.prompt)
+            let response: String
+            if let onPartialText {
+                var aggregated = ""
+                for try await chunk in session.streamResponse(to: request.prompt) {
+                    aggregated += chunk
+                    let preview = CustomLLMOutputSanitizer.normalizeResultText(aggregated)
+                    if !preview.isEmpty {
+                        onPartialText(preview)
+                    }
+                }
+                response = aggregated
+            } else {
+                response = try await session.respond(to: request.prompt)
+            }
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
             let cleaned = extractResultText(response)
 
@@ -1179,7 +1198,7 @@ enum CustomLLMRequestPlanBuilder {
         dictatedPrompt: String,
         instructions: String,
         repo: String,
-        structuredOutputPrompt: (String, String) -> String
+        structuredOutputPrompt _: (String, String) -> String
     ) -> CustomLLMRequestPlan {
         let combinedInput = """
         Spoken instruction:
@@ -1188,21 +1207,17 @@ enum CustomLLMRequestPlanBuilder {
         Selected source text:
         \(sourceText)
         """
-        let prompt = structuredOutputPrompt(
-            "Produce the final text to insert according to the instructions.",
-            combinedInput
-        )
         return CustomLLMRequestPlan(
             kind: .rewrite,
             repo: repo,
             instructions: instructions,
-            prompt: prompt,
+            prompt: combinedInput,
             inputCharacterCount: combinedInput.count,
             logMode: nil,
             contentLogSections: [
                 CustomLLMLogSection(label: "system_prompt", content: instructions),
                 CustomLLMLogSection(label: "input", content: combinedInput),
-                CustomLLMLogSection(label: "request_content", content: prompt)
+                CustomLLMLogSection(label: "request_content", content: combinedInput)
             ],
             resultFallback: ""
         )

@@ -598,6 +598,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.injectAnswerOverlayContent()
             }
         }
+        overlayWindow.onRequestContinue = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.continueRewriteConversation()
+            }
+        }
+        overlayWindow.onRequestConversationRecordToggle = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.toggleRewriteConversationRecording()
+            }
+        }
+        overlayWindow.onRequestDetail = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.showCurrentTranscriptionDetailWindow()
+            }
+        }
         overlayWindow.onRequestSessionTranslationTargetPickerToggle = { [weak self] in
             Task { @MainActor [weak self] in
                 self?.toggleSessionTranslationTargetPicker()
@@ -862,23 +877,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         globalEscapeKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return }
             Task { @MainActor [weak self] in
-                self?.handleEscapeKeyEvent(event)
+                self?.handleOverlayShortcutEvent(event)
             }
         }
         localEscapeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleEscapeKeyEvent(event)
-            return event
+            return self?.handleOverlayShortcutEvent(event, shouldConsume: true) ?? event
         }
     }
 
-    private func handleEscapeKeyEvent(_ event: NSEvent) {
-        guard event.keyCode == UInt16(kVK_Escape) else { return }
+    private func handleOverlayShortcutEvent(_ event: NSEvent, shouldConsume: Bool = false) -> NSEvent? {
+        if shouldHandleAnswerOverlaySpaceShortcut(event),
+           overlayWindow.handleAnswerSpaceShortcut() {
+            return shouldConsume ? nil : event
+        }
+
+        guard event.keyCode == UInt16(kVK_Escape) else { return event }
         guard UserDefaults.standard.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true else {
-            return
+            return event
         }
         if overlayState.displayMode == .answer {
             dismissAnswerOverlay()
-            return
+            return shouldConsume ? nil : event
         }
         if meetingSessionCoordinator.isActive {
             if meetingSessionCoordinator.overlayState.isCloseConfirmationPresented {
@@ -886,12 +905,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 requestMeetingSessionCloseConfirmation()
             }
-            return
+            return shouldConsume ? nil : event
         }
-        guard HotkeyPreference.loadTriggerMode() == .tap else { return }
-        guard isSessionActive else { return }
-        guard !isSelectedTextTranslationFlow else { return }
+        guard HotkeyPreference.loadTriggerMode() == .tap else { return event }
+        guard isSessionActive else { return event }
+        guard !isSelectedTextTranslationFlow else { return event }
         cancelActiveRecordingSession()
+        return shouldConsume ? nil : event
+    }
+
+    private func shouldHandleAnswerOverlaySpaceShortcut(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return false }
+        guard event.keyCode == UInt16(kVK_Space) else { return false }
+        guard !event.isARepeat else { return false }
+        let modifiers = event.modifierFlags.intersection(.hotkeyRelevant)
+        guard modifiers.isEmpty else { return false }
+        return overlayState.answerSpaceShortcutAction != nil
     }
 
     private func shouldIgnoreTapStop() -> Bool {

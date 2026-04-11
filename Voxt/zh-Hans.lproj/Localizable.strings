@@ -1043,6 +1043,16 @@
 "Choose Rewrite LLM" = "选择转写 LLM";
 "Choose Transcription ASR" = "选择转录 ASR";
 "Choose Transcription LLM" = "选择转录 LLM";
+"Ask about this saved result" = "围绕这条已保存结果继续提问";
+"Copy" = "复制";
+"Generating answer…" = "正在生成回答…";
+"Using Apple Intelligence for follow-up." = "使用 Apple Intelligence 进行追问。";
+"Enable an enhancement model to ask follow-up questions." = "请先启用增强模型后再进行追问。";
+"Apple Intelligence is currently unavailable." = "Apple Intelligence 当前不可用。";
+"The selected local model is not downloaded yet." = "当前选择的本地模型尚未下载。";
+"The selected remote model is not configured yet." = "当前选择的远端模型尚未配置。";
+"No saved transcription result is available yet." = "当前还没有可用的已保存转写结果。";
+"Unable to generate answer." = "无法生成回答。";
 "Choose Translation ASR" = "选择翻译 ASR";
 "Choose Translation Model" = "选择翻译模型";
 "Choose the ASR model that feeds the translation pipeline." = "选择为翻译流程提供语音识别结果的 ASR 模型。";
@@ -1163,3 +1173,7 @@
 "Syncing..." = "同步中...";
 "e.g. voxt-corrections" = "例如 voxt-corrections";
 "e.g. voxt-hotwords" = "例如 voxt-hotwords";
+"Rewrite Mode" = "转写模式";
+"Summary Mode" = "摘要模式";
+"The selected translation model does not support follow-up questions yet." = "当前选择的翻译模型暂不支持继续追问。";
+"Translation Mode" = "翻译模式";

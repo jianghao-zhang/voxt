@@ -148,6 +148,36 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertEqual(resolved.model, RemoteLLMProvider.anthropic.suggestedModel)
         XCTAssertEqual(resolved.meetingModel, "")
         XCTAssertEqual(resolved.endpoint, "")
+        XCTAssertFalse(resolved.searchEnabled)
+    }
+
+    func testResolvedAliyunLLMConfigurationDefaultsSearchToEnabled() {
+        let resolved = RemoteModelConfigurationStore.resolvedLLMConfiguration(
+            provider: .aliyunBailian,
+            stored: [:]
+        )
+
+        XCTAssertTrue(resolved.searchEnabled)
+    }
+
+    func testDecodeLegacyAliyunLLMConfigurationDefaultsSearchToEnabled() throws {
+        let legacyJSON = """
+        [
+          {
+            "providerID": "aliyunBailian",
+            "model": "qwen-plus-latest",
+            "meetingModel": "",
+            "endpoint": "",
+            "apiKey": "",
+            "appID": "",
+            "accessToken": ""
+          }
+        ]
+        """
+
+        let loaded = RemoteModelConfigurationStore.loadConfigurations(from: legacyJSON)
+
+        XCTAssertEqual(loaded["aliyunBailian"]?.searchEnabled, true)
     }
 
     func testAliyunMeetingFileTranscriptionUsesAsyncEndpoints() {

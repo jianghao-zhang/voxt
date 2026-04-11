@@ -5,6 +5,21 @@ import AVFoundation
 import Speech
 
 extension AppDelegate {
+    func continueRewriteConversation() {
+        guard overlayState.canContinueRewriteAnswer else { return }
+        overlayState.beginRewriteConversationIfNeeded()
+        beginRecording(outputMode: .rewrite)
+    }
+
+    func toggleRewriteConversationRecording() {
+        guard overlayState.isRewriteConversationActive else { return }
+        if isSessionActive {
+            endRecording()
+        } else {
+            beginRecording(outputMode: .rewrite)
+        }
+    }
+
     func beginRecording(outputMode: SessionOutputMode) {
         guard !meetingSessionCoordinator.isActive else {
             showOverlayStatus(
@@ -15,6 +30,7 @@ extension AppDelegate {
         }
         guard !isSessionActive else { return }
         prepareLegacySettingsForSession(outputMode: outputMode)
+        synchronizeRuntimeASRStateForSession(outputMode: outputMode)
         let startDecision = RecordingStartPlanner.resolve(
             selectedEngine: transcriptionEngine,
             mlxModelState: mlxModelManager.state,
@@ -48,7 +64,10 @@ extension AppDelegate {
         let sessionTargetBundleID = fallbackInjectBundleID(from: frontmostBundleID)
         sessionTargetApplicationBundleID = sessionTargetBundleID
         sessionTargetApplicationPID = sessionTargetBundleID == nil ? nil : frontmostApplication?.processIdentifier
-        rewriteSessionHadWritableFocusedInput = outputMode == .rewrite ? hasWritableFocusedTextInput() : false
+        let isContinuingRewriteConversation = outputMode == .rewrite && overlayState.isRewriteConversationActive
+        rewriteSessionHadWritableFocusedInput = isContinuingRewriteConversation
+            ? false
+            : (outputMode == .rewrite ? hasWritableFocusedTextInput() : false)
         rewriteSessionFallbackInjectBundleID = outputMode == .rewrite ? sessionTargetBundleID : nil
         resetVoiceEndCommandState()
 
@@ -65,9 +84,26 @@ extension AppDelegate {
         }
 
         applyPreferredInputDevice()
-        overlayState.reset()
-        overlayState.statusMessage = ""
-        overlayState.presentRecording(iconMode: overlayIconMode(for: outputMode))
+        if isContinuingRewriteConversation {
+            overlayState.clearPendingConversationUserPrompt()
+            overlayState.statusMessage = ""
+            overlayState.sessionIconMode = .rewrite
+            overlayState.latestHistoryEntryID = nil
+            overlayState.answerTitle = ""
+            overlayState.answerContent = ""
+            overlayState.isStreamingAnswer = false
+            overlayState.isRecording = false
+            overlayState.isEnhancing = false
+            overlayState.isRequesting = false
+            overlayState.isCompleting = false
+            overlayState.audioLevel = 0
+            overlayState.transcribedText = ""
+            overlayState.displayMode = .answer
+        } else {
+            overlayState.reset()
+            overlayState.statusMessage = ""
+            overlayState.presentRecording(iconMode: overlayIconMode(for: outputMode))
+        }
         if outputMode == .translation {
             prepareMicrophoneTranslationSessionState()
         }
@@ -216,7 +252,7 @@ extension AppDelegate {
 
         VoxtLog.info("Transcription result received. characters=\(text.count), output=\(sessionOutputMode == .translation ? "translation" : "transcription")")
         VoxtLog.info("Transcription result output mode resolved as \(sessionOutputLabel(for: sessionOutputMode)).", verbose: true)
-        VoxtLog.info("Enhancement mode=\(enhancementMode.rawValue), appEnhancementEnabled=\(appEnhancementEnabled)")
+        VoxtLog.info("Session text model routing: \(sessionTextModelRoutingDescription())")
 
         if sessionOutputMode == .translation {
             if sessionUsesWhisperDirectTranslation {
@@ -243,6 +279,47 @@ extension AppDelegate {
             return "translation"
         case .rewrite:
             return "rewrite"
+        }
+    }
+
+    private func sessionTextModelRoutingDescription() -> String {
+        switch sessionOutputMode {
+        case .transcription:
+            guard transcriptionFeatureSettings.llmEnabled else {
+                return "transcription: none"
+            }
+            switch transcriptionFeatureSettings.llmSelectionID.textSelection {
+            case .appleIntelligence:
+                return "transcription: apple-intelligence"
+            case .localLLM(let repo):
+                return "transcription: local-llm(\(repo))"
+            case .remoteLLM(let provider):
+                return "transcription: remote-llm(\(provider.rawValue))"
+            case .none:
+                return "transcription: none"
+            }
+        case .translation:
+            switch translationFeatureSettings.modelSelectionID.translationSelection {
+            case .whisperDirectTranslate:
+                return "translation: whisper-direct-translate"
+            case .localLLM(let repo):
+                return "translation: local-llm(\(repo))"
+            case .remoteLLM(let provider):
+                return "translation: remote-llm(\(provider.rawValue))"
+            case .none:
+                return "translation: none"
+            }
+        case .rewrite:
+            switch rewriteFeatureSettings.llmSelectionID.textSelection {
+            case .appleIntelligence:
+                return "rewrite: apple-intelligence"
+            case .localLLM(let repo):
+                return "rewrite: local-llm(\(repo))"
+            case .remoteLLM(let provider):
+                return "rewrite: remote-llm(\(provider.rawValue))"
+            case .none:
+                return "rewrite: none"
+            }
         }
     }
 

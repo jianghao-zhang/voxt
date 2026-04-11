@@ -1,19 +1,6 @@
 import Foundation
 
 extension AppDelegate {
-    private struct EnhanceStage: SessionPipelineStage {
-        let useAppBranchPrompt: Bool
-        let transform: @MainActor (String, Bool) async throws -> String
-
-        var name: String { "enhance" }
-
-        func run(context: SessionPipelineContext) async throws -> SessionPipelineContext {
-            var next = context
-            next.workingText = try await transform(context.workingText, useAppBranchPrompt)
-            return next
-        }
-    }
-
     private struct TranslateStage: SessionPipelineStage {
         let targetLanguage: TranslationTargetLanguage
         let transform: @MainActor (String, TranslationTargetLanguage) async throws -> String
@@ -70,7 +57,6 @@ extension AppDelegate {
         return try await runTranslationPipeline(
             text: trimmed,
             targetLanguage: translationTargetLanguage,
-            includeEnhancement: false,
             allowStrictRetry: true
         )
     }
@@ -83,6 +69,7 @@ extension AppDelegate {
         return try await runRewritePipeline(
             dictatedText: trimmedPrompt,
             selectedSourceText: trimmedSource,
+            conversationHistory: [],
             structuredAnswerOutput: trimmedSource.isEmpty
         )
     }
@@ -95,10 +82,10 @@ extension AppDelegate {
             isSelectedTextTranslation: false
         )
         VoxtLog.info(
-            "Translation flow started. inputChars=\(text.count), targetLanguage=\(targetLanguage.instructionName), enhancementMode=\(enhancementMode.rawValue), provider=\(resolution.provider.rawValue)"
+            "Translation flow started. inputChars=\(text.count), targetLanguage=\(targetLanguage.instructionName), translationModelProvider=\(translationModelProvider.rawValue), resolvedProvider=\(resolution.provider.rawValue)"
         )
         setEnhancingState(true)
-        Task {
+        _Concurrency.Task<Void, Never> {
             defer {
                 self.setEnhancingState(false)
                 if self.shouldHandleCallbacks(for: sessionID) {
@@ -108,11 +95,10 @@ extension AppDelegate {
 
             let llmStartedAt = Date()
             do {
-                // Translation mode pipeline: enhance -> translate.
+                // Translation mode pipeline: translate only.
                 let translated = try await self.runTranslationPipeline(
                     text: text,
                     targetLanguage: targetLanguage,
-                    includeEnhancement: true,
                     allowStrictRetry: false
                 )
                 guard self.shouldHandleCallbacks(for: sessionID) else { return }
@@ -240,15 +226,43 @@ extension AppDelegate {
 
     func processRewriteTranscription(_ text: String, sessionID: UUID) {
         guard shouldHandleCallbacks(for: sessionID) else { return }
-        let selectedSourceText = selectedTextFromSystemSelection()?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        rewriteSessionHasSelectedSourceText = !selectedSourceText.isEmpty
-        let prefersStructuredAnswerOutput = shouldUseStructuredRewriteAnswerOutput(
-            hasSelectedSourceText: rewriteSessionHasSelectedSourceText
-        )
+        let isConversationContinuation = overlayState.isRewriteConversationActive
+        let selectedSourceText: String
+        let conversationHistory: [RewriteConversationPromptTurn]
+        let prefersStructuredAnswerOutput: Bool
+        let previousConversationResponseID: String?
+
+        if isConversationContinuation {
+            selectedSourceText = ""
+            conversationHistory = overlayState.rewriteConversationPromptHistory
+            rewriteSessionHasSelectedSourceText = false
+            prefersStructuredAnswerOutput = false
+            previousConversationResponseID = overlayState.rewriteConversationRemoteResponseID
+            overlayState.stageConversationUserPrompt(text)
+        } else {
+            selectedSourceText = selectedTextFromSystemSelection()?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            rewriteSessionHasSelectedSourceText = !selectedSourceText.isEmpty
+            conversationHistory = []
+            prefersStructuredAnswerOutput = shouldUseStructuredRewriteAnswerOutput(
+                hasSelectedSourceText: rewriteSessionHasSelectedSourceText
+            )
+            previousConversationResponseID = nil
+        }
         VoxtLog.info(
-            "Rewrite flow started. promptChars=\(text.count), selectedSourceChars=\(selectedSourceText.count), enhancementMode=\(enhancementMode.rawValue), structuredAnswerOutput=\(prefersStructuredAnswerOutput)"
+            "Rewrite flow started. promptChars=\(text.count), selectedSourceChars=\(selectedSourceText.count), rewriteModelProvider=\(rewriteModelProvider.rawValue), structuredAnswerOutput=\(prefersStructuredAnswerOutput), conversationHistoryTurns=\(conversationHistory.count)"
         )
         setEnhancingState(true)
+        let progressHandler: (@Sendable (String) -> Void)? = if isConversationContinuation {
+            { [weak self] partialOutput in
+                Task { @MainActor [weak self] in
+                    guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
+                    self.presentRewriteConversationStreamingPreview(content: partialOutput)
+                }
+            }
+        } else {
+            nil
+        }
+
         Task {
             defer {
                 self.setEnhancingState(false)
@@ -258,32 +272,111 @@ extension AppDelegate {
             }
 
             let llmStartedAt = Date()
+            var latestConversationResponseID: String?
             do {
                 var rewritten = try await self.runRewritePipeline(
                     dictatedText: text,
                     selectedSourceText: selectedSourceText,
-                    structuredAnswerOutput: prefersStructuredAnswerOutput
+                    conversationHistory: conversationHistory,
+                    structuredAnswerOutput: prefersStructuredAnswerOutput,
+                    previousConversationResponseID: previousConversationResponseID,
+                    onProgress: progressHandler,
+                    onResponseID: { responseID in
+                        latestConversationResponseID = responseID
+                    }
                 )
                 if prefersStructuredAnswerOutput,
-                   self.shouldRetryStructuredRewriteAnswer(for: rewritten) {
+                   self.shouldRetryStructuredRewriteAnswer(for: rewritten, dictatedPrompt: text) {
                     VoxtLog.warning("Rewrite structured answer was missing usable content; retrying in direct-answer mode.")
                     if let retried = try? await self.rewriteText(
                         dictatedPrompt: text,
                         sourceText: "",
+                        conversationHistory: conversationHistory,
                         structuredAnswerOutput: true,
-                        forceNonEmptyAnswer: true
+                        forceNonEmptyAnswer: true,
+                        previousConversationResponseID: previousConversationResponseID,
+                        onProgress: nil,
+                        onResponseID: { responseID in
+                            latestConversationResponseID = responseID
+                        }
                     ) {
                         rewritten = retried
                     }
                 }
+                if !prefersStructuredAnswerOutput {
+                    let normalized = RewriteAnswerContentNormalizer.normalizePlainTextAnswer(rewritten)
+                    if normalized != rewritten.trimmingCharacters(in: .whitespacesAndNewlines) {
+                        VoxtLog.warning(
+                            """
+                            Rewrite plain-text answer normalized before delivery.
+                            [raw]
+                            \(VoxtLog.llmPreview(rewritten))
+                            [normalized]
+                            \(VoxtLog.llmPreview(normalized))
+                            """
+                        )
+                    }
+                    rewritten = normalized
+                }
+                if prefersStructuredAnswerOutput,
+                   self.shouldRetryStructuredRewriteAnswer(for: rewritten, dictatedPrompt: text) {
+                    VoxtLog.warning("Rewrite structured answer still unusable after retry; substituting empty-answer placeholder.")
+                    rewritten = self.rewriteUnavailableFallbackText(
+                        dictatedPrompt: text,
+                        sourceText: selectedSourceText,
+                        structuredAnswerOutput: true
+                    )
+                }
+                if !prefersStructuredAnswerOutput,
+                   RewriteAnswerContentNormalizer.isUnusablePlainTextAnswer(rewritten, dictatedPrompt: text) {
+                    VoxtLog.warning("Rewrite plain-text answer was empty or unusable; retrying with stricter non-empty guidance.")
+                    if let retried = try? await self.rewriteText(
+                        dictatedPrompt: text,
+                        sourceText: selectedSourceText,
+                        conversationHistory: conversationHistory,
+                        structuredAnswerOutput: false,
+                        forceNonEmptyAnswer: true,
+                        previousConversationResponseID: previousConversationResponseID,
+                        onProgress: progressHandler,
+                        onResponseID: { responseID in
+                            latestConversationResponseID = responseID
+                        }
+                    ) {
+                        rewritten = RewriteAnswerContentNormalizer.normalizePlainTextAnswer(retried)
+                    }
+                }
+                if !prefersStructuredAnswerOutput,
+                   RewriteAnswerContentNormalizer.isUnusablePlainTextAnswer(rewritten, dictatedPrompt: text) {
+                    VoxtLog.warning("Rewrite plain-text answer remained unusable after retry; substituting fallback text.")
+                    rewritten = self.rewriteUnavailableFallbackText(
+                        dictatedPrompt: text,
+                        sourceText: selectedSourceText,
+                        structuredAnswerOutput: false
+                    )
+                }
                 guard self.shouldHandleCallbacks(for: sessionID) else { return }
+                if isConversationContinuation, let latestConversationResponseID {
+                    self.overlayState.rewriteConversationRemoteResponseID = latestConversationResponseID
+                }
+                if isConversationContinuation,
+                   !self.overlayState.isStreamingAnswer,
+                   !rewritten.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    await self.presentRewriteConversationPseudoStreamingPreview(
+                        content: rewritten,
+                        sessionID: sessionID
+                    )
+                }
                 let llmDuration = Date().timeIntervalSince(llmStartedAt)
                 VoxtLog.info("Rewrite flow succeeded. outputChars=\(rewritten.count), llmDurationSec=\(String(format: "%.3f", llmDuration))")
                 self.commitTranscription(rewritten, llmDurationSeconds: llmDuration)
             } catch {
                 guard self.shouldHandleCallbacks(for: sessionID) else { return }
-                VoxtLog.warning("Rewrite flow failed, using enhanced prompt fallback: \(error)")
-                let fallback = (try? await self.enhanceTextIfNeeded(text, useAppBranchPrompt: true)) ?? text
+                VoxtLog.warning("Rewrite flow failed, using rewrite fallback: \(error)")
+                let fallback = self.rewriteUnavailableFallbackText(
+                    dictatedPrompt: text,
+                    sourceText: selectedSourceText,
+                    structuredAnswerOutput: prefersStructuredAnswerOutput
+                )
                 self.commitTranscription(fallback, llmDurationSeconds: nil)
             }
         }
@@ -317,70 +410,6 @@ extension AppDelegate {
             stored: remoteLLMConfigurations
         )
         return (provider, configuration)
-    }
-
-    private func enhanceTextIfNeeded(_ text: String, useAppBranchPrompt: Bool = true) async throws -> String {
-        let promptResolution: EnhancementPromptResolution
-        if useAppBranchPrompt {
-            promptResolution = resolvedEnhancementPrompt(rawTranscription: text)
-        } else {
-            promptResolution = EnhancementPromptResolution(
-                content: resolveGlobalEnhancementPromptTemplate(
-                    resolvedGlobalEnhancementPrompt(),
-                    rawTranscription: text
-                ),
-                delivery: .systemPrompt
-            )
-        }
-        if !useAppBranchPrompt {
-            VoxtLog.info("Enhancement prompt source: global/default (translation flow)")
-        }
-        if promptResolution.delivery == .skipEnhancement {
-            return text
-        }
-
-        switch enhancementMode {
-        case .off:
-            return text
-        case .appleIntelligence:
-            guard let enhancer else { return text }
-            if #available(macOS 26.0, *) {
-                switch promptResolution.delivery {
-                case .systemPrompt:
-                    return try await enhancer.enhance(text, systemPrompt: promptResolution.content)
-                case .userMessage:
-                    return try await enhancer.enhance(userPrompt: promptResolution.content)
-                case .skipEnhancement:
-                    return text
-                }
-            }
-            return text
-        case .customLLM:
-            guard customLLMManager.isModelDownloaded(repo: customLLMManager.currentModelRepo) else { return text }
-            switch promptResolution.delivery {
-            case .systemPrompt:
-                return try await customLLMManager.enhance(text, systemPrompt: promptResolution.content)
-            case .userMessage:
-                return try await customLLMManager.enhance(userPrompt: promptResolution.content)
-            case .skipEnhancement:
-                return text
-            }
-        case .remoteLLM:
-            let context = resolvedRemoteLLMContext(forTranslation: false)
-            switch promptResolution.delivery {
-            case .systemPrompt:
-                return try await RemoteLLMRuntimeClient().enhance(
-                    text: text,
-                    systemPrompt: promptResolution.content,
-                    provider: context.provider,
-                    configuration: context.configuration
-                )
-            case .userMessage:
-                return try await RemoteLLMRuntimeClient().enhance(userPrompt: promptResolution.content, provider: context.provider, configuration: context.configuration)
-            case .skipEnhancement:
-                return text
-            }
-        }
     }
 
     private func translateText(_ text: String, targetLanguage: TranslationTargetLanguage) async throws -> String {
@@ -441,22 +470,69 @@ extension AppDelegate {
     private func rewriteText(
         dictatedPrompt: String,
         sourceText: String,
+        conversationHistory: [RewriteConversationPromptTurn],
         structuredAnswerOutput: Bool,
-        forceNonEmptyAnswer: Bool = false
+        forceNonEmptyAnswer: Bool = false,
+        previousConversationResponseID: String? = nil,
+        onProgress: (@Sendable (String) -> Void)? = nil,
+        onResponseID: ((String) -> Void)? = nil
     ) async throws -> String {
-        let directAnswerMode = structuredAnswerOutput && sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let resolvedPrompt = resolvedRewritePrompt(
-            dictatedPrompt: dictatedPrompt,
-            sourceText: sourceText,
-            structuredAnswerOutput: structuredAnswerOutput,
-            directAnswerMode: directAnswerMode,
-            forceNonEmptyAnswer: forceNonEmptyAnswer
-        )
-        let rewriteRepo = rewriteCustomLLMRepo
+        let directAnswerMode = sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let modelProvider = rewriteModelProvider
+        let remoteContext = rewriteModelProvider == .remoteLLM ? resolvedRemoteLLMContext(forRewrite: true) : nil
+        let runtimeClient = RemoteLLMRuntimeClient()
+        let shouldUseProviderManagedConversation =
+            (remoteContext.map {
+                runtimeClient.shouldUseAliyunResponsesAPI(
+                    provider: $0.provider,
+                    configuration: $0.configuration,
+                    sourceText: sourceText,
+                    wantsStreaming: onProgress != nil
+                )
+            } ?? false) &&
+            directAnswerMode &&
+            !structuredAnswerOutput
+        let shouldUseChatMessageConversation =
+            modelProvider == .remoteLLM &&
+            directAnswerMode &&
+            !structuredAnswerOutput &&
+            !conversationHistory.isEmpty &&
+            !shouldUseProviderManagedConversation
+        if shouldUseChatMessageConversation {
+            let latestTurn = conversationHistory.last
+            VoxtLog.info(
+                """
+                Rewrite continue conversation context prepared. turns=\(conversationHistory.count), latestTitle=\(VoxtLog.llmPreview(latestTurn?.resultTitle ?? "")), latestContent=\(VoxtLog.llmPreview(latestTurn?.resultContent ?? "")), currentPrompt=\(VoxtLog.llmPreview(dictatedPrompt))
+                """
+            )
+        }
+        let resolvedPrompt = shouldUseChatMessageConversation
+            ? resolvedRewriteConversationPrompt(forceNonEmptyAnswer: forceNonEmptyAnswer)
+            : resolvedRewritePrompt(
+                dictatedPrompt: dictatedPrompt,
+                sourceText: sourceText,
+                conversationHistory: shouldUseProviderManagedConversation ? [] : conversationHistory,
+                structuredAnswerOutput: structuredAnswerOutput,
+                directAnswerMode: directAnswerMode,
+                forceNonEmptyAnswer: forceNonEmptyAnswer
+            )
+        let rewriteRepo = rewriteCustomLLMRepo
         VoxtLog.llm(
             "Rewrite request. promptChars=\(resolvedPrompt.count), dictatedChars=\(dictatedPrompt.count), sourceChars=\(sourceText.count), provider=\(modelProvider.rawValue), rewriteRepo=\(rewriteRepo), structuredAnswerOutput=\(structuredAnswerOutput), directAnswerMode=\(directAnswerMode), forceNonEmptyAnswer=\(forceNonEmptyAnswer)"
         )
+        if shouldUseProviderManagedConversation, let remoteContext {
+            VoxtLog.info(
+                "Rewrite continue using Aliyun Responses API. provider=\(remoteContext.provider.rawValue), endpoint=\(remoteContext.configuration.endpoint)"
+            )
+        } else if modelProvider == .remoteLLM,
+                  directAnswerMode,
+                  !structuredAnswerOutput,
+                  onProgress != nil,
+                  let remoteContext {
+            VoxtLog.info(
+                "Rewrite continue using chat completions stream. provider=\(remoteContext.provider.rawValue), endpoint=\(remoteContext.configuration.endpoint)"
+            )
+        }
 
         switch modelProvider {
         case .customLLM:
@@ -466,30 +542,43 @@ extension AppDelegate {
                     String(localized: "Custom LLM model is not installed. Open Settings > Model to install it."),
                     clearAfter: 2.5
                 )
-                return dictatedPrompt
+                return rewriteUnavailableFallbackText(
+                    dictatedPrompt: dictatedPrompt,
+                    sourceText: sourceText,
+                    structuredAnswerOutput: structuredAnswerOutput
+                )
             }
             return try await customLLMManager.rewrite(
                 sourceText: sourceText,
                 dictatedPrompt: dictatedPrompt,
                 systemPrompt: resolvedPrompt,
-                modelRepo: rewriteRepo
+                modelRepo: rewriteRepo,
+                onPartialText: onProgress
             )
         case .remoteLLM:
-            let context = resolvedRemoteLLMContext(forRewrite: true)
+            let context = remoteContext ?? resolvedRemoteLLMContext(forRewrite: true)
             guard context.configuration.hasUsableModel else {
                 VoxtLog.warning("Rewrite provider remoteLLM unavailable: no configured model.")
                 showOverlayStatus(
                     String(localized: "No configured remote LLM model yet. Configure a provider in Settings > Model."),
                     clearAfter: 2.5
                 )
-                return dictatedPrompt
+                return rewriteUnavailableFallbackText(
+                    dictatedPrompt: dictatedPrompt,
+                    sourceText: sourceText,
+                    structuredAnswerOutput: structuredAnswerOutput
+                )
             }
-            return try await RemoteLLMRuntimeClient().rewrite(
+            return try await runtimeClient.rewrite(
                 sourceText: sourceText,
                 dictatedPrompt: dictatedPrompt,
                 systemPrompt: resolvedPrompt,
                 provider: context.provider,
-                configuration: context.configuration
+                configuration: context.configuration,
+                conversationHistory: (shouldUseProviderManagedConversation || shouldUseChatMessageConversation) ? conversationHistory : [],
+                previousResponseID: shouldUseProviderManagedConversation ? previousConversationResponseID : nil,
+                onPartialText: onProgress,
+                onResponseID: onResponseID
             )
         }
     }
@@ -677,6 +766,7 @@ extension AppDelegate {
     private func resolvedRewritePrompt(
         dictatedPrompt: String,
         sourceText: String,
+        conversationHistory: [RewriteConversationPromptTurn],
         structuredAnswerOutput: Bool,
         directAnswerMode: Bool,
         forceNonEmptyAnswer: Bool
@@ -685,6 +775,7 @@ extension AppDelegate {
             systemPrompt: rewriteSystemPrompt,
             dictatedPrompt: dictatedPrompt,
             sourceText: sourceText,
+            conversationHistory: conversationHistory,
             structuredAnswerOutput: structuredAnswerOutput,
             directAnswerMode: directAnswerMode,
             forceNonEmptyAnswer: forceNonEmptyAnswer
@@ -695,11 +786,50 @@ extension AppDelegate {
         )
     }
 
-    private func shouldRetryStructuredRewriteAnswer(for text: String) -> Bool {
+    private func resolvedRewriteConversationPrompt(forceNonEmptyAnswer: Bool) -> String {
+        let retryConstraint = forceNonEmptyAnswer
+            ? """
+            Retry rule:
+            - A previous answer was empty, quoted-empty, or otherwise unusable.
+            - This time, you must return a non-empty plain-text answer.
+            - Do not return surrounding quotes.
+            """
+            : ""
+
+        let base = """
+        You are Voxt's follow-up voice conversation assistant.
+
+        The previous conversation is provided as chat messages.
+        Respond to the latest user message directly based on that conversation.
+
+        Rules:
+        1. Treat the latest user message as a follow-up to the previous assistant reply.
+        2. If the user omits context with a short follow-up like “那大同呢”, infer the missing subject from the conversation history.
+        3. Return plain text only.
+        4. Do not return JSON, field names, markdown, or surrounding quotes.
+        5. Do not return an empty string.
+        """
+
+        let prompt = [base, retryConstraint]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+
+        return appendDictionaryRewriteGlossary(to: prompt, sourceText: "")
+    }
+
+    private func shouldRetryStructuredRewriteAnswer(for text: String, dictatedPrompt: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return true }
         if let payload = extractRewriteAnswerPayload(from: trimmed) {
-            return payload.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let normalizedContent = payload.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedPrompt = dictatedPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            return normalizedContent.isEmpty || normalizedContent.caseInsensitiveCompare(normalizedPrompt) == .orderedSame
+        }
+
+        let normalizedPrompt = dictatedPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.caseInsensitiveCompare(normalizedPrompt) == .orderedSame {
+            return true
         }
 
         let lowered = trimmed.lowercased()
@@ -710,6 +840,40 @@ extension AppDelegate {
             lowered.contains("title:") ||
             lowered.contains("content:")
         return looksStructuredStub
+    }
+
+    private func rewriteUnavailableFallbackText(
+        dictatedPrompt: String,
+        sourceText: String,
+        structuredAnswerOutput: Bool
+    ) -> String {
+        if structuredAnswerOutput {
+            return serializedRewriteAnswerPayload(
+                RewriteAnswerPayload(
+                    title: String(localized: "AI Answer"),
+                    content: String(localized: "Unable to generate answer.")
+                )
+            ) ?? #"{"title":"AI Answer","content":"Unable to generate answer."}"#
+        }
+
+        let trimmedSource = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSource.isEmpty {
+            return sourceText
+        }
+
+        return String(localized: "Unable to generate answer.")
+    }
+
+    private func serializedRewriteAnswerPayload(_ payload: RewriteAnswerPayload) -> String? {
+        let object: [String: String] = [
+            "title": payload.title,
+            "content": payload.content
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: object),
+              let text = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return text
     }
 
     private func processSelectedTextTranslation(_ text: String) {
@@ -726,7 +890,6 @@ extension AppDelegate {
                 let translated = try await self.runTranslationPipeline(
                     text: text,
                     targetLanguage: self.translationTargetLanguage,
-                    includeEnhancement: false,
                     allowStrictRetry: true
                 )
                 let llmDuration = Date().timeIntervalSince(llmStartedAt)
@@ -747,22 +910,9 @@ extension AppDelegate {
     private func runTranslationPipeline(
         text: String,
         targetLanguage: TranslationTargetLanguage,
-        includeEnhancement: Bool,
         allowStrictRetry: Bool
     ) async throws -> String {
         var stages: [any SessionPipelineStage] = []
-
-        if includeEnhancement {
-            stages.append(
-                EnhanceStage(
-                    useAppBranchPrompt: true,
-                    transform: { [weak self] value, useAppBranchPrompt in
-                        guard let self else { return value }
-                        return try await self.enhanceTextIfNeeded(value, useAppBranchPrompt: useAppBranchPrompt)
-                    }
-                )
-            )
-        }
 
         stages.append(
             TranslateStage(
@@ -803,24 +953,25 @@ extension AppDelegate {
     private func runRewritePipeline(
         dictatedText: String,
         selectedSourceText: String,
-        structuredAnswerOutput: Bool
+        conversationHistory: [RewriteConversationPromptTurn],
+        structuredAnswerOutput: Bool,
+        previousConversationResponseID: String? = nil,
+        onProgress: (@Sendable (String) -> Void)? = nil,
+        onResponseID: ((String) -> Void)? = nil
     ) async throws -> String {
         let stages: [any SessionPipelineStage] = [
-            EnhanceStage(
-                useAppBranchPrompt: true,
-                transform: { [weak self] value, useAppBranchPrompt in
-                    guard let self else { return value }
-                    return try await self.enhanceTextIfNeeded(value, useAppBranchPrompt: useAppBranchPrompt)
-                }
-            ),
             RewriteStage(
                 sourceText: selectedSourceText,
-                transform: { [weak self] enhancedPrompt, sourceText in
-                    guard let self else { return enhancedPrompt }
+                transform: { [weak self] dictatedPrompt, sourceText in
+                    guard let self else { return dictatedPrompt }
                     return try await self.rewriteText(
-                        dictatedPrompt: enhancedPrompt,
+                        dictatedPrompt: dictatedPrompt,
                         sourceText: sourceText,
-                        structuredAnswerOutput: structuredAnswerOutput
+                        conversationHistory: conversationHistory,
+                        structuredAnswerOutput: structuredAnswerOutput,
+                        previousConversationResponseID: previousConversationResponseID,
+                        onProgress: onProgress,
+                        onResponseID: onResponseID
                     )
                 }
             )
@@ -830,6 +981,42 @@ extension AppDelegate {
         let initial = SessionPipelineContext(originalText: dictatedText, workingText: dictatedText)
         let result = try await runner.run(initial: initial)
         return result.workingText
+    }
+
+    private func presentRewriteConversationPseudoStreamingPreview(
+        content: String,
+        sessionID: UUID
+    ) async {
+        let normalized = RewriteAnswerContentNormalizer.normalizePlainTextAnswer(content)
+        guard !normalized.isEmpty else { return }
+
+        let characters = Array(normalized)
+        let chunkSize: Int
+        switch characters.count {
+        case 0..<48:
+            chunkSize = 2
+        case 48..<160:
+            chunkSize = 4
+        case 160..<360:
+            chunkSize = 8
+        default:
+            chunkSize = 12
+        }
+
+        var rendered = ""
+        var index = 0
+        while index < characters.count {
+            guard shouldHandleCallbacks(for: sessionID) else { return }
+            let upperBound = min(index + chunkSize, characters.count)
+            rendered += String(characters[index..<upperBound])
+            presentRewriteConversationStreamingPreview(content: rendered)
+            index = upperBound
+            do {
+                try await Task.sleep(for: .milliseconds(18))
+            } catch {
+                return
+            }
+        }
     }
 
     private func looksUntranslated(source: String, result: String) -> Bool {

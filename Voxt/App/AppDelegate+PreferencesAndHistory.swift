@@ -3,6 +3,14 @@ import AppKit
 import CoreAudio
 
 extension AppDelegate {
+    private struct HistoryTextModelMetadata {
+        let modeTitle: String
+        let modelTitle: String
+        let remoteProviderTitle: String?
+        let remoteModelTitle: String?
+        let remoteEndpoint: String?
+    }
+
     private var defaults: UserDefaults {
         .standard
     }
@@ -245,6 +253,7 @@ extension AppDelegate {
 
     func appendHistoryIfNeeded(
         text: String,
+        displayTitle: String? = nil,
         llmDurationSeconds: TimeInterval?,
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
@@ -254,6 +263,7 @@ extension AppDelegate {
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
+        let trimmedDisplayTitle = displayTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let transcriptionModel: String
         switch transcriptionEngine {
@@ -274,23 +284,8 @@ extension AppDelegate {
             }
         }
 
-        let enhancementModel: String
-        switch enhancementMode {
-        case .off:
-            enhancementModel = "None"
-        case .appleIntelligence:
-            enhancementModel = "Apple Intelligence (Foundation Models)"
-        case .customLLM:
-            let repo = customLLMManager.currentModelRepo
-            enhancementModel = "\(customLLMManager.displayTitle(for: repo)) (\(repo))"
-        case .remoteLLM:
-            let provider = remoteLLMSelectedProvider
-            if let config = remoteLLMConfigurations[provider.rawValue], config.hasUsableModel {
-                enhancementModel = "\(provider.title) (\(config.model))"
-            } else {
-                enhancementModel = provider.title
-            }
-        }
+        let historyKind = resolvedHistoryKind()
+        let textModelMetadata = resolvedHistoryTextModelMetadata(for: historyKind)
 
         let now = Date()
         let audioDuration = resolvedDuration(from: recordingStartedAt, to: recordingStoppedAt ?? now)
@@ -315,28 +310,13 @@ extension AppDelegate {
             remoteASREndpointInfo = nil
         }
 
-        let remoteLLMProviderInfo: String?
-        let remoteLLMModelInfo: String?
-        let remoteLLMEndpointInfo: String?
-        if enhancementMode == .remoteLLM {
-            let provider = remoteLLMSelectedProvider
-            let config = remoteLLMConfigurations[provider.rawValue]
-            remoteLLMProviderInfo = provider.title
-            remoteLLMModelInfo = config?.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? config?.model : nil
-            remoteLLMEndpointInfo = historyDisplayEndpoint(config?.endpoint)
-        } else {
-            remoteLLMProviderInfo = nil
-            remoteLLMModelInfo = nil
-            remoteLLMEndpointInfo = nil
-        }
-
         let entryID = historyStore.append(
             text: trimmed,
             transcriptionEngine: transcriptionEngine.title,
             transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode.title,
-            enhancementModel: enhancementModel,
-            kind: resolvedHistoryKind(),
+            enhancementMode: textModelMetadata.modeTitle,
+            enhancementModel: textModelMetadata.modelTitle,
+            kind: historyKind,
             isTranslation: sessionOutputMode == .translation,
             audioDurationSeconds: audioDuration,
             transcriptionProcessingDurationSeconds: processingDuration,
@@ -348,12 +328,13 @@ extension AppDelegate {
             remoteASRProvider: remoteASRProviderInfo,
             remoteASRModel: remoteASRModelInfo,
             remoteASREndpoint: remoteASREndpointInfo,
-            remoteLLMProvider: remoteLLMProviderInfo,
-            remoteLLMModel: remoteLLMModelInfo,
-            remoteLLMEndpoint: remoteLLMEndpointInfo,
+            remoteLLMProvider: textModelMetadata.remoteProviderTitle,
+            remoteLLMModel: textModelMetadata.remoteModelTitle,
+            remoteLLMEndpoint: textModelMetadata.remoteEndpoint,
             whisperWordTimings: transcriptionEngine == .whisperKit && whisperTimestampsEnabled
                 ? whisperTranscriber?.latestWordTimings
                 : nil,
+            displayTitle: trimmedDisplayTitle?.isEmpty == false ? trimmedDisplayTitle : nil,
             dictionaryHitTerms: dictionaryHitTerms,
             dictionaryCorrectedTerms: dictionaryCorrectedTerms,
             dictionarySuggestedTerms: dictionarySuggestedTerms
@@ -371,6 +352,117 @@ extension AppDelegate {
 
     private func resolvedHistoryKind() -> TranscriptionHistoryKind {
         HistoryValueResolver.resolvedKind(for: sessionOutputMode)
+    }
+
+    private func resolvedHistoryTextModelMetadata(for kind: TranscriptionHistoryKind) -> HistoryTextModelMetadata {
+        switch kind {
+        case .normal:
+            guard transcriptionFeatureSettings.llmEnabled else {
+                return HistoryTextModelMetadata(
+                    modeTitle: EnhancementMode.off.title,
+                    modelTitle: "None",
+                    remoteProviderTitle: nil,
+                    remoteModelTitle: nil,
+                    remoteEndpoint: nil
+                )
+            }
+            return resolvedHistoryTextModelMetadata(for: transcriptionFeatureSettings.llmSelectionID.textSelection)
+        case .translation:
+            return resolvedTranslationHistoryTextModelMetadata()
+        case .rewrite:
+            return resolvedHistoryTextModelMetadata(for: rewriteFeatureSettings.llmSelectionID.textSelection)
+        case .meeting:
+            return resolvedHistoryTextModelMetadata(for: meetingFeatureSettings.summaryModelSelectionID.textSelection)
+        }
+    }
+
+    private func resolvedTranslationHistoryTextModelMetadata() -> HistoryTextModelMetadata {
+        switch translationFeatureSettings.modelSelectionID.translationSelection {
+        case .whisperDirectTranslate:
+            let whisperTitle = TranslationModelProvider.whisperKit.title
+            return HistoryTextModelMetadata(
+                modeTitle: whisperTitle,
+                modelTitle: whisperTitle,
+                remoteProviderTitle: nil,
+                remoteModelTitle: nil,
+                remoteEndpoint: nil
+            )
+        case .localLLM(let repo):
+            return HistoryTextModelMetadata(
+                modeTitle: TranslationModelProvider.customLLM.title,
+                modelTitle: "\(customLLMManager.displayTitle(for: repo)) (\(repo))",
+                remoteProviderTitle: nil,
+                remoteModelTitle: nil,
+                remoteEndpoint: nil
+            )
+        case .remoteLLM(let provider):
+            return resolvedRemoteHistoryTextModelMetadata(
+                provider: provider,
+                modeTitle: TranslationModelProvider.remoteLLM.title
+            )
+        case .none:
+            return HistoryTextModelMetadata(
+                modeTitle: EnhancementMode.off.title,
+                modelTitle: "None",
+                remoteProviderTitle: nil,
+                remoteModelTitle: nil,
+                remoteEndpoint: nil
+            )
+        }
+    }
+
+    private func resolvedHistoryTextModelMetadata(
+        for selection: FeatureModelSelectionID.TextSelection?
+    ) -> HistoryTextModelMetadata {
+        switch selection {
+        case .appleIntelligence:
+            return HistoryTextModelMetadata(
+                modeTitle: EnhancementMode.appleIntelligence.title,
+                modelTitle: "Apple Intelligence (Foundation Models)",
+                remoteProviderTitle: nil,
+                remoteModelTitle: nil,
+                remoteEndpoint: nil
+            )
+        case .localLLM(let repo):
+            return HistoryTextModelMetadata(
+                modeTitle: EnhancementMode.customLLM.title,
+                modelTitle: "\(customLLMManager.displayTitle(for: repo)) (\(repo))",
+                remoteProviderTitle: nil,
+                remoteModelTitle: nil,
+                remoteEndpoint: nil
+            )
+        case .remoteLLM(let provider):
+            return resolvedRemoteHistoryTextModelMetadata(
+                provider: provider,
+                modeTitle: EnhancementMode.remoteLLM.title
+            )
+        case .none:
+            return HistoryTextModelMetadata(
+                modeTitle: EnhancementMode.off.title,
+                modelTitle: "None",
+                remoteProviderTitle: nil,
+                remoteModelTitle: nil,
+                remoteEndpoint: nil
+            )
+        }
+    }
+
+    private func resolvedRemoteHistoryTextModelMetadata(
+        provider: RemoteLLMProvider,
+        modeTitle: String
+    ) -> HistoryTextModelMetadata {
+        let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
+            provider: provider,
+            stored: remoteLLMConfigurations
+        )
+        let trimmedModel = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return HistoryTextModelMetadata(
+            modeTitle: modeTitle,
+            modelTitle: trimmedModel.isEmpty ? provider.title : "\(provider.title) (\(trimmedModel))",
+            remoteProviderTitle: provider.title,
+            remoteModelTitle: trimmedModel.isEmpty ? nil : trimmedModel,
+            remoteEndpoint: historyDisplayEndpoint(configuration.endpoint)
+        )
     }
 
     private func resolvedDuration(from start: Date?, to end: Date?) -> TimeInterval? {

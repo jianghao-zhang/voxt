@@ -8,6 +8,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     var apiKey: String
     var appID: String
     var accessToken: String
+    var searchEnabled: Bool
     var openAIChunkPseudoRealtimeEnabled: Bool
     var doubaoDictionaryMode: String
     var doubaoEnableRequestHotwords: Bool
@@ -42,6 +43,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         apiKey: String,
         appID: String = "",
         accessToken: String = "",
+        searchEnabled: Bool = false,
         openAIChunkPseudoRealtimeEnabled: Bool = false,
         doubaoDictionaryMode: String = DoubaoDictionaryMode.requestScoped.rawValue,
         doubaoEnableRequestHotwords: Bool = true,
@@ -54,6 +56,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         self.apiKey = apiKey
         self.appID = appID
         self.accessToken = accessToken
+        self.searchEnabled = searchEnabled
         self.openAIChunkPseudoRealtimeEnabled = openAIChunkPseudoRealtimeEnabled
         self.doubaoDictionaryMode = doubaoDictionaryMode
         self.doubaoEnableRequestHotwords = doubaoEnableRequestHotwords
@@ -68,6 +71,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         case apiKey
         case appID
         case accessToken
+        case searchEnabled
         case openAIChunkPseudoRealtimeEnabled
         case doubaoDictionaryMode
         case doubaoEnableRequestHotwords
@@ -83,6 +87,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
         appID = try container.decodeIfPresent(String.self, forKey: .appID) ?? ""
         accessToken = try container.decodeIfPresent(String.self, forKey: .accessToken) ?? ""
+        let defaultSearchEnabled = RemoteLLMProvider(rawValue: providerID)?.defaultSearchEnabled ?? false
+        searchEnabled = try container.decodeIfPresent(Bool.self, forKey: .searchEnabled) ?? defaultSearchEnabled
         openAIChunkPseudoRealtimeEnabled = try container.decodeIfPresent(Bool.self, forKey: .openAIChunkPseudoRealtimeEnabled) ?? false
         doubaoDictionaryMode = try container.decodeIfPresent(String.self, forKey: .doubaoDictionaryMode) ?? DoubaoDictionaryMode.requestScoped.rawValue
         doubaoEnableRequestHotwords = try container.decodeIfPresent(Bool.self, forKey: .doubaoEnableRequestHotwords) ?? true
@@ -174,14 +180,19 @@ enum RemoteModelConfigurationStore {
         stored: [String: RemoteProviderConfiguration]
     ) -> RemoteProviderConfiguration {
         if let existing = stored[provider.rawValue] {
-            return existing
+            var normalized = existing
+            if !provider.supportsHostedSearch {
+                normalized.searchEnabled = false
+            }
+            return normalized
         }
         return RemoteProviderConfiguration(
             providerID: provider.rawValue,
             model: provider.suggestedModel,
             meetingModel: "",
             endpoint: "",
-            apiKey: ""
+            apiKey: "",
+            searchEnabled: provider.defaultSearchEnabled
         )
     }
 

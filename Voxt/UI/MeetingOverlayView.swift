@@ -141,7 +141,8 @@ private struct MeetingOverlayCard: View {
 
                     AnswerHeaderActionButton(
                         accessibilityLabel: state.isPaused ? String(localized: "Resume") : String(localized: "Pause"),
-                        action: onTogglePause
+                        action: onTogglePause,
+                        isEnabled: true
                     ) {
                         Image(systemName: state.isPaused ? "play.fill" : "pause.fill")
                             .font(.system(size: 11, weight: .semibold))
@@ -150,7 +151,8 @@ private struct MeetingOverlayCard: View {
 
                     AnswerHeaderActionButton(
                         accessibilityLabel: String(localized: "Detail"),
-                        action: onShowDetail
+                        action: onShowDetail,
+                        isEnabled: true
                     ) {
                         Image(systemName: "list.bullet.rectangle")
                             .font(.system(size: 12, weight: .semibold))
@@ -159,7 +161,8 @@ private struct MeetingOverlayCard: View {
 
                     AnswerHeaderActionButton(
                         accessibilityLabel: String(localized: "Collapse"),
-                        action: onToggleCollapse
+                        action: onToggleCollapse,
+                        isEnabled: true
                     ) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 11, weight: .semibold))
@@ -168,7 +171,8 @@ private struct MeetingOverlayCard: View {
                 } else {
                     AnswerHeaderActionButton(
                         accessibilityLabel: state.isPaused ? String(localized: "Resume") : String(localized: "Pause"),
-                        action: onTogglePause
+                        action: onTogglePause,
+                        isEnabled: true
                     ) {
                         Image(systemName: state.isPaused ? "play.fill" : "pause.fill")
                             .font(.system(size: 11, weight: .semibold))
@@ -177,7 +181,8 @@ private struct MeetingOverlayCard: View {
 
                     AnswerHeaderActionButton(
                         accessibilityLabel: String(localized: "Expand"),
-                        action: onToggleCollapse
+                        action: onToggleCollapse,
+                        isEnabled: true
                     ) {
                         Image(systemName: "arrow.down.left.and.arrow.up.right")
                             .font(.system(size: 11, weight: .semibold))
@@ -187,7 +192,8 @@ private struct MeetingOverlayCard: View {
 
                 AnswerHeaderActionButton(
                     accessibilityLabel: String(localized: "Close"),
-                    action: onClose
+                    action: onClose,
+                    isEnabled: true
                 ) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .semibold))

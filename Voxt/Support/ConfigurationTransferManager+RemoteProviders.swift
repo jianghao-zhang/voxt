@@ -8,6 +8,7 @@ struct SanitizedRemoteProviderConfiguration: Codable {
     var apiKey: String
     var appID: String
     var accessToken: String
+    var searchEnabled: Bool
     var openAIChunkPseudoRealtimeEnabled: Bool
     var doubaoDictionaryMode: String
     var doubaoEnableRequestHotwords: Bool
@@ -21,6 +22,7 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         case apiKey
         case appID
         case accessToken
+        case searchEnabled
         case openAIChunkPseudoRealtimeEnabled
         case doubaoDictionaryMode
         case doubaoEnableRequestHotwords
@@ -35,6 +37,7 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         apiKey: String,
         appID: String,
         accessToken: String,
+        searchEnabled: Bool,
         openAIChunkPseudoRealtimeEnabled: Bool,
         doubaoDictionaryMode: String,
         doubaoEnableRequestHotwords: Bool,
@@ -47,6 +50,7 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         self.apiKey = apiKey
         self.appID = appID
         self.accessToken = accessToken
+        self.searchEnabled = searchEnabled
         self.openAIChunkPseudoRealtimeEnabled = openAIChunkPseudoRealtimeEnabled
         self.doubaoDictionaryMode = doubaoDictionaryMode
         self.doubaoEnableRequestHotwords = doubaoEnableRequestHotwords
@@ -62,6 +66,8 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
         appID = try container.decodeIfPresent(String.self, forKey: .appID) ?? ""
         accessToken = try container.decodeIfPresent(String.self, forKey: .accessToken) ?? ""
+        let defaultSearchEnabled = RemoteLLMProvider(rawValue: providerID)?.defaultSearchEnabled ?? false
+        searchEnabled = try container.decodeIfPresent(Bool.self, forKey: .searchEnabled) ?? defaultSearchEnabled
         openAIChunkPseudoRealtimeEnabled = try container.decodeIfPresent(Bool.self, forKey: .openAIChunkPseudoRealtimeEnabled) ?? false
         doubaoDictionaryMode = try container.decodeIfPresent(String.self, forKey: .doubaoDictionaryMode) ?? DoubaoDictionaryMode.requestScoped.rawValue
         doubaoEnableRequestHotwords = try container.decodeIfPresent(Bool.self, forKey: .doubaoEnableRequestHotwords) ?? true
@@ -81,6 +87,7 @@ extension ConfigurationTransferManager {
                 apiKey: sanitizeSensitive($0.apiKey),
                 appID: sanitizeSensitive($0.appID),
                 accessToken: sanitizeSensitive($0.accessToken),
+                searchEnabled: $0.searchEnabled,
                 openAIChunkPseudoRealtimeEnabled: $0.openAIChunkPseudoRealtimeEnabled,
                 doubaoDictionaryMode: $0.doubaoDictionaryMode,
                 doubaoEnableRequestHotwords: $0.doubaoEnableRequestHotwords,
@@ -101,6 +108,7 @@ extension ConfigurationTransferManager {
                     apiKey: resolveImportedSensitive(item.apiKey),
                     appID: resolveImportedSensitive(item.appID),
                     accessToken: resolveImportedSensitive(item.accessToken),
+                    searchEnabled: item.searchEnabled,
                     openAIChunkPseudoRealtimeEnabled: item.openAIChunkPseudoRealtimeEnabled,
                     doubaoDictionaryMode: item.doubaoDictionaryMode,
                     doubaoEnableRequestHotwords: item.doubaoEnableRequestHotwords,
