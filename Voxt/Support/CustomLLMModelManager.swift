@@ -1198,7 +1198,7 @@ enum CustomLLMRequestPlanBuilder {
         dictatedPrompt: String,
         instructions: String,
         repo: String,
-        structuredOutputPrompt _: (String, String) -> String
+        structuredOutputPrompt: (String, String) -> String
     ) -> CustomLLMRequestPlan {
         let combinedInput = """
         Spoken instruction:
@@ -1207,17 +1207,21 @@ enum CustomLLMRequestPlanBuilder {
         Selected source text:
         \(sourceText)
         """
+        let prompt = structuredOutputPrompt(
+            "Produce the final text to insert according to the instructions.",
+            combinedInput
+        )
         return CustomLLMRequestPlan(
             kind: .rewrite,
             repo: repo,
             instructions: instructions,
-            prompt: combinedInput,
+            prompt: prompt,
             inputCharacterCount: combinedInput.count,
             logMode: nil,
             contentLogSections: [
                 CustomLLMLogSection(label: "system_prompt", content: instructions),
                 CustomLLMLogSection(label: "input", content: combinedInput),
-                CustomLLMLogSection(label: "request_content", content: combinedInput)
+                CustomLLMLogSection(label: "request_content", content: prompt)
             ],
             resultFallback: ""
         )

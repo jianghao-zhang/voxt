@@ -58,6 +58,13 @@ class OverlayState: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    deinit {
+        // Keep an explicit deinit here. On macOS 26 test hosts, the synthesized
+        // teardown path intermittently trips a malloc crash while destroying this
+        // ObservableObject's @Published storage. An explicit deinit stabilizes
+        // the generated destruction path without changing runtime behavior.
+    }
+
     /// Binds to a SpeechTranscriber's published properties.
     func bind(to transcriber: SpeechTranscriber) {
         bind(

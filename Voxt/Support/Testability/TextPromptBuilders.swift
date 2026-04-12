@@ -118,10 +118,9 @@ struct RewritePromptBuilder {
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
 
-        let promptWithHistory = [basePrompt, conversationSection]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n\n")
+        let promptSections = [basePrompt, conversationSection]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let promptWithHistory = promptSections.joined(separator: "\n\n")
 
         return extraConstraints.isEmpty ? promptWithHistory : "\(promptWithHistory)\n\n\(extraConstraints)"
     }
