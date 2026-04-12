@@ -434,6 +434,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         HotkeyPreference.registerDefaults()
         HotkeyPreference.migrateDefaultsIfNeeded()
         Self.migrateLegacyNetworkProxyPreferenceIfNeeded()
+        RemoteModelConfigurationStore.migrateLegacyLLMEndpoints()
         RemoteModelConfigurationStore.migrateLegacyStoredSecrets()
         VoxtNetworkSession.migrateLegacyProxyCredentials()
         super.init()
@@ -1015,6 +1016,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleTranslationHotkeyDown() {
+        VoxtLog.info(
+            "Translation hotkey invoked. mode=\(HotkeyPreference.loadTriggerMode().rawValue), isSessionActive=\(isSessionActive), isMeetingActive=\(meetingSessionCoordinator.isActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
+        )
         let triggerMode = HotkeyPreference.loadTriggerMode()
         VoxtLog.hotkey(
             "Hotkey callback translationDown. mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
@@ -1033,6 +1037,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             performHotkeyAction(action)
         }
         guard !meetingSessionCoordinator.isActive else {
+            VoxtLog.info("Translation hotkey blocked because Meeting Notes is active.")
             showOverlayStatus(
                 String(localized: "Meeting Notes is currently active. Close it before starting another recording."),
                 clearAfter: 2.2
@@ -1040,6 +1045,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         guard !isSessionActive else {
+            VoxtLog.info("Translation hotkey ignored because a session is already active.")
             VoxtLog.hotkey("Translation down ignored: session already active.")
             return
         }
@@ -1052,6 +1058,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        VoxtLog.info("Translation hotkey dispatching microphone translation start.")
         for action in actions {
             guard action != .cancelPendingTranscriptionStart else { continue }
             performHotkeyAction(action)
@@ -1080,6 +1087,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleRewriteHotkeyDown() {
+        VoxtLog.info(
+            "Rewrite hotkey invoked. mode=\(HotkeyPreference.loadTriggerMode().rawValue), isSessionActive=\(isSessionActive), isMeetingActive=\(meetingSessionCoordinator.isActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
+        )
         let triggerMode = HotkeyPreference.loadTriggerMode()
         VoxtLog.hotkey(
             "Hotkey callback rewriteDown. mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputModeLabel), pendingStart=\(pendingTranscriptionStartTask != nil)",
@@ -1094,10 +1104,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
+            VoxtLog.info("Rewrite hotkey ignored because a session is already active.")
             VoxtLog.hotkey("Rewrite down ignored: session already active.")
             return
         }
 
+        VoxtLog.info("Rewrite hotkey dispatching rewrite recording start.")
         beginRecording(outputMode: .rewrite)
     }
 

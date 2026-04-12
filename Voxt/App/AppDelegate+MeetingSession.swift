@@ -4,6 +4,9 @@ import AVFoundation
 
 extension AppDelegate {
     func handleMeetingHotkeyDown() {
+        VoxtLog.info(
+            "Meeting hotkey invoked. isMeetingActive=\(meetingSessionCoordinator.isActive), isSessionActive=\(isSessionActive)"
+        )
         VoxtLog.hotkey(
             "Hotkey callback meetingDown. isMeetingActive=\(meetingSessionCoordinator.isActive), isSessionActive=\(isSessionActive)"
         )
@@ -192,6 +195,7 @@ extension AppDelegate {
     }
 
     private func startMeetingSession() async {
+        VoxtLog.info("Meeting session start requested.")
         guard preflightPermissionsForMeeting() else { return }
         pendingMeetingSessionCompletionDisposition = .save
 
@@ -234,6 +238,7 @@ extension AppDelegate {
         synchronizeRuntimeASRStateForMeeting()
 
         if isSessionActive {
+            VoxtLog.info("Meeting start blocked because another recording session is active.")
             showOverlayStatus(
                 String(localized: "Finish the current recording before starting Meeting Notes."),
                 clearAfter: 2.2
@@ -261,6 +266,7 @@ extension AppDelegate {
         }
 
         if AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
+            VoxtLog.warning("Meeting start blocked: microphone permission not granted.")
             showOverlayReminder(
                 String(localized: "Microphone permission is required. Enable it in Settings > Permissions.")
             )
@@ -268,6 +274,7 @@ extension AppDelegate {
         }
 
         if SystemAudioCapturePermission.authorizationStatus() != .authorized {
+            VoxtLog.warning("Meeting start blocked: system audio recording permission not granted.")
             showOverlayReminder(
                 String(localized: "System Audio Recording permission is required for Meeting Notes. Enable it in Settings > Permissions.")
             )
@@ -275,6 +282,7 @@ extension AppDelegate {
         }
 
         if !AccessibilityPermissionManager.isTrusted() {
+            VoxtLog.warning("Meeting start proceeding without accessibility trust. Some injection shortcuts may be unavailable.")
             showOverlayStatus(
                 String(localized: "Please enable required permissions in Settings > Permissions."),
                 clearAfter: 2.2

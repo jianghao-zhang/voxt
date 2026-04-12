@@ -177,6 +177,117 @@ final class HotkeyManagerTests: XCTestCase {
         XCTAssertEqual(translationDownCount, 1)
     }
 
+    func testDefaultTranslationModifierTapEmitsDedicatedCallback() async {
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        var translationDownCount = 0
+        manager.onKeyDown = { transcriptionDownCount += 1 }
+        let callbackExpectation = expectation(description: "translation callback")
+        manager.onTranslationKeyDown = {
+            translationDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Shift),
+            flags: .maskShift
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: combinedFlags(.maskShift, .maskSecondaryFn)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskShift
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Shift),
+            flags: []
+        )
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+
+        XCTAssertEqual(transcriptionDownCount, 0)
+        XCTAssertEqual(translationDownCount, 1)
+    }
+
+    func testDefaultRewriteModifierTapEmitsDedicatedCallback() async {
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        var rewriteDownCount = 0
+        manager.onKeyDown = { transcriptionDownCount += 1 }
+        let callbackExpectation = expectation(description: "rewrite callback")
+        manager.onRewriteKeyDown = {
+            rewriteDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Control),
+            flags: .maskControl
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: combinedFlags(.maskControl, .maskSecondaryFn)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskControl
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Control),
+            flags: []
+        )
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+
+        XCTAssertEqual(transcriptionDownCount, 0)
+        XCTAssertEqual(rewriteDownCount, 1)
+    }
+
+    func testDefaultMeetingModifierTapEmitsDedicatedCallback() async {
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        var meetingDownCount = 0
+        manager.onKeyDown = { transcriptionDownCount += 1 }
+        let callbackExpectation = expectation(description: "meeting callback")
+        manager.onMeetingKeyDown = {
+            meetingDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Option),
+            flags: .maskAlternate
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: combinedFlags(.maskAlternate, .maskSecondaryFn)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskAlternate
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Option),
+            flags: []
+        )
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+
+        XCTAssertEqual(transcriptionDownCount, 0)
+        XCTAssertEqual(meetingDownCount, 1)
+    }
+
     func testIdleGapRecoveryClearsStaleChordStateBeforeFnRelease() async {
         let manager = makeManager()
         var transcriptionDownCount = 0

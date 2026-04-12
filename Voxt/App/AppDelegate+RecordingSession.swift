@@ -21,14 +21,25 @@ extension AppDelegate {
     }
 
     func beginRecording(outputMode: SessionOutputMode) {
+        VoxtLog.info(
+            "Begin recording requested. output=\(sessionOutputLabel(for: outputMode)), isSessionActive=\(isSessionActive), isMeetingActive=\(meetingSessionCoordinator.isActive)"
+        )
         guard !meetingSessionCoordinator.isActive else {
+            VoxtLog.info(
+                "Begin recording ignored because Meeting Notes is active. output=\(sessionOutputLabel(for: outputMode))"
+            )
             showOverlayStatus(
                 String(localized: "Meeting Notes is currently active. Close it before starting another recording."),
                 clearAfter: 2.2
             )
             return
         }
-        guard !isSessionActive else { return }
+        guard !isSessionActive else {
+            VoxtLog.info(
+                "Begin recording ignored because a session is already active. output=\(sessionOutputLabel(for: outputMode)), activeOutput=\(sessionOutputLabel(for: sessionOutputMode))"
+            )
+            return
+        }
         prepareLegacySettingsForSession(outputMode: outputMode)
         synchronizeRuntimeASRStateForSession(outputMode: outputMode)
         let startDecision = RecordingStartPlanner.resolve(
@@ -43,7 +54,12 @@ extension AppDelegate {
             }
             return
         }
-        guard preflightPermissionsForRecording(engine: recordingEngine) else { return }
+        guard preflightPermissionsForRecording(engine: recordingEngine) else {
+            VoxtLog.info(
+                "Begin recording blocked by preflight permissions. output=\(sessionOutputLabel(for: outputMode)), engine=\(recordingEngine.rawValue)"
+            )
+            return
+        }
 
         cancelPendingFinishTasks()
         overlayState.isCompleting = false
@@ -179,6 +195,9 @@ extension AppDelegate {
             guard !Task.isCancelled else { return }
             guard self.isSessionActive else { return }
             VoxtLog.warning("Stop recording fallback triggered; forcing session finish.")
+            if self.transcriptionEngine == .remote {
+                self.remoteASRTranscriber.discardPendingSessionOutput()
+            }
             self.finishSession(after: 0)
         }
     }
@@ -268,6 +287,7 @@ extension AppDelegate {
             return
         }
 
+        VoxtLog.info("Transcription flow dispatch: standard. characters=\(text.count), enhancementMode=\(enhancementMode.rawValue)")
         processStandardTranscription(text, sessionID: sessionID)
     }
 
@@ -348,11 +368,16 @@ extension AppDelegate {
         runPauseEnhancementIfNeeded()
     }
 
-    func finishSession(after delay: TimeInterval = 0) {
+    func finishSession(after delay: TimeInterval? = nil) {
         cancelSessionControlTasks()
 
-        let resolvedDelay = delay > 0 ? delay : sessionFinishDelay
+        let resolvedDelay = delay ?? sessionFinishDelay
+        VoxtLog.info("Finish session scheduled. delayMs=\(Int(resolvedDelay * 1000)), displayMode=\(overlayState.displayMode), isRecording=\(overlayState.isRecording), isEnhancing=\(overlayState.isEnhancing), isRequesting=\(overlayState.isRequesting)")
         overlayState.isCompleting = resolvedDelay > 0
+        if overlayState.displayMode != .answer {
+            overlayState.isEnhancing = false
+            overlayState.isRequesting = false
+        }
         pendingSessionFinishTask = Task { [weak self] in
             guard let self else { return }
 
@@ -365,6 +390,7 @@ extension AppDelegate {
             }
 
             guard !Task.isCancelled else { return }
+            VoxtLog.info("Finish session executing now. displayMode=\(self.overlayState.displayMode)")
             self.executeSessionEndPipeline()
         }
     }
@@ -607,6 +633,9 @@ extension AppDelegate {
     private func resetSessionAfterFailedStart() {
         cancelSessionControlTasks()
         systemAudioMuteController.restoreSystemAudioIfNeeded()
+        if transcriptionEngine == .remote {
+            remoteASRTranscriber.discardPendingSessionOutput()
+        }
         isSessionActive = false
         isSessionCancellationRequested = false
         didCommitSessionOutput = false
@@ -651,6 +680,7 @@ extension AppDelegate {
         }
 
         if !AccessibilityPermissionManager.isTrusted() {
+            VoxtLog.warning("Recording start proceeding without accessibility trust. Injection may be unavailable.")
             showOverlayStatus(
                 String(localized: "Please enable required permissions in Settings > Permissions."),
                 clearAfter: 2.2
