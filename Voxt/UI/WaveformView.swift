@@ -101,7 +101,7 @@ struct WaveformView: View {
     private var cornerRadius: CGFloat { CGFloat(min(max(overlayCardCornerRadius, 0), 40)) }
     private var cardOpacity: Double { Double(min(max(overlayCardOpacity, 0), 100)) / 100.0 }
     private var textOverflows: Bool { displayText.count > 38 }
-    private var showsLoadingSpinner: Bool { isEnhancing || isRequesting }
+    private var showsLoadingSpinner: Bool { !isCompleting && (isEnhancing || isRequesting) }
     private var showsInitializationIcon: Bool { isModelInitializing && !showsLoadingSpinner }
     private var showsSessionTranslationLanguagePill: Bool {
         Self.shouldShowSessionTranslationLanguagePill(

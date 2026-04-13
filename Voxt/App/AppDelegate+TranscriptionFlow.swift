@@ -17,12 +17,15 @@ extension AppDelegate {
 
     func processStandardTranscription(_ text: String, sessionID: UUID) {
         guard shouldHandleCallbacks(for: sessionID) else { return }
+        VoxtLog.info("Standard transcription flow entered. characters=\(text.count), enhancementMode=\(enhancementMode.rawValue)")
         switch enhancementMode {
         case .off:
             setEnhancingState(false)
             overlayState.transcribedText = text
-            commitTranscription(text, llmDurationSeconds: nil)
-            finishSession()
+            VoxtLog.info("Standard transcription committing raw text immediately. characters=\(text.count)")
+            commitTranscription(text, llmDurationSeconds: nil) { [weak self] in
+                self?.finishSession(after: 0)
+            }
 
         case .customLLM:
             guard customLLMManager.isModelDownloaded(repo: customLLMManager.currentModelRepo) else {
@@ -33,8 +36,10 @@ extension AppDelegate {
                 )
                 setEnhancingState(false)
                 overlayState.transcribedText = text
-                commitTranscription(text, llmDurationSeconds: nil)
-                finishSession()
+                VoxtLog.info("Standard transcription falling back to raw text because custom model is unavailable. characters=\(text.count)")
+                commitTranscription(text, llmDurationSeconds: nil) { [weak self] in
+                    self?.finishSession(after: 0)
+                }
                 return
             }
             runStandardTranscriptionPipelineAsync(text, sessionID: sessionID)
@@ -64,14 +69,16 @@ extension AppDelegate {
                 let llmDuration = Date().timeIntervalSince(llmStartedAt)
                 VoxtLog.info("Enhancement completed. mode=\(self.enhancementMode.rawValue), inputChars=\(text.count), outputChars=\(enhanced.count), llmDurationSec=\(String(format: "%.3f", llmDuration))")
                 self.overlayState.transcribedText = enhanced
-                self.commitTranscription(enhanced, llmDurationSeconds: llmDuration)
-                self.finishSession(after: 1.5)
+                self.commitTranscription(enhanced, llmDurationSeconds: llmDuration) { [weak self] in
+                    self?.finishSession(after: 0)
+                }
             } catch {
                 guard self.shouldHandleCallbacks(for: sessionID) else { return }
                 VoxtLog.warning("Standard transcription pipeline enhancement failed, using raw text: \(error)")
                 self.overlayState.transcribedText = text
-                self.commitTranscription(text, llmDurationSeconds: nil)
-                self.finishSession(after: 1.5)
+                self.commitTranscription(text, llmDurationSeconds: nil) { [weak self] in
+                    self?.finishSession(after: 0)
+                }
             }
         }
     }

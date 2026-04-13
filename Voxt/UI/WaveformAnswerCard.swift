@@ -26,6 +26,7 @@ struct WaveformAnswerCard: View {
     @State private var isScrolledToConversationBottom = true
     @State private var wasScrolledToConversationBottom = true
     @State private var hasUnreadConversationMessages = false
+    @State private var pendingScrollRequestToken = UUID()
 
     private let conversationBottomAnchorID = "rewrite-conversation-bottom-anchor"
 
@@ -177,7 +178,7 @@ struct WaveformAnswerCard: View {
             ScrollViewReader { proxy in
                 ZStack(alignment: .bottomTrailing) {
                     ScrollView(.vertical, showsIndicators: true) {
-                        VStack(alignment: .leading, spacing: 14) {
+                        LazyVStack(alignment: .leading, spacing: 14) {
                             ForEach(conversationTurns) { turn in
                                 if !turn.userPromptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                     HStack {
@@ -271,22 +272,30 @@ struct WaveformAnswerCard: View {
                     }
                     .onChange(of: conversationTurns.count) { oldValue, newValue in
                         guard newValue > oldValue else { return }
-                        handleConversationMessagesUpdate(using: proxy)
+                        handleConversationMessagesUpdate(using: proxy, animated: true)
                     }
                     .onChange(of: isProcessing) { oldValue, newValue in
                         guard newValue, newValue != oldValue else { return }
-                        handleConversationMessagesUpdate(using: proxy, forceScroll: true)
+                        handleConversationMessagesUpdate(using: proxy, forceScroll: true, animated: true)
                     }
                     .onChange(of: streamingDraftPayload?.content ?? "") { _, _ in
-                        handleConversationMessagesUpdate(using: proxy)
+                        handleConversationMessagesUpdate(using: proxy, animated: false)
                     }
                     .onChange(of: streamingDraftPayload?.trimmedTitle ?? "") { oldValue, newValue in
                         guard oldValue != newValue else { return }
-                        handleConversationMessagesUpdate(using: proxy, forceScroll: !newValue.isEmpty && oldValue.isEmpty)
+                        handleConversationMessagesUpdate(
+                            using: proxy,
+                            forceScroll: !newValue.isEmpty && oldValue.isEmpty,
+                            animated: oldValue.isEmpty && !newValue.isEmpty
+                        )
                     }
                     .onChange(of: streamingUserPromptText ?? "") { oldValue, newValue in
                         guard oldValue != newValue else { return }
-                        handleConversationMessagesUpdate(using: proxy, forceScroll: !newValue.isEmpty && oldValue.isEmpty)
+                        handleConversationMessagesUpdate(
+                            using: proxy,
+                            forceScroll: !newValue.isEmpty && oldValue.isEmpty,
+                            animated: oldValue.isEmpty && !newValue.isEmpty
+                        )
                     }
 
                     if hasUnreadConversationMessages {
@@ -322,18 +331,29 @@ struct WaveformAnswerCard: View {
         .frame(maxWidth: .infinity, maxHeight: 220, alignment: .topLeading)
     }
 
-    private func handleConversationMessagesUpdate(using proxy: ScrollViewProxy, forceScroll: Bool = false) {
+    private func handleConversationMessagesUpdate(
+        using proxy: ScrollViewProxy,
+        forceScroll: Bool = false,
+        animated: Bool = false
+    ) {
         if forceScroll || isScrolledToConversationBottom || wasScrolledToConversationBottom {
             hasUnreadConversationMessages = false
-            scrollConversationToBottom(using: proxy)
+            scrollConversationToBottom(using: proxy, animated: animated)
         } else {
             hasUnreadConversationMessages = true
         }
     }
 
-    private func scrollConversationToBottom(using proxy: ScrollViewProxy) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            withAnimation(.easeOut(duration: 0.18)) {
+    private func scrollConversationToBottom(using proxy: ScrollViewProxy, animated: Bool = true) {
+        let token = UUID()
+        pendingScrollRequestToken = token
+        DispatchQueue.main.async {
+            guard token == pendingScrollRequestToken else { return }
+            if animated {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    proxy.scrollTo(conversationBottomAnchorID, anchor: .bottom)
+                }
+            } else {
                 proxy.scrollTo(conversationBottomAnchorID, anchor: .bottom)
             }
         }

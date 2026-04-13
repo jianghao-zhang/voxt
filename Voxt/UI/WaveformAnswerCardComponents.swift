@@ -41,11 +41,17 @@ struct RewriteConversationBubble: View {
                     .foregroundStyle(.white.opacity(isUser ? 0.7 : (isStreaming ? 0.54 : 0.64)))
             }
 
-            Text(content)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white.opacity(isStreaming ? 0.84 : 0.92))
-                .frame(maxWidth: .infinity, alignment: alignment)
-                .textSelection(.enabled)
+            Group {
+                if isStreaming {
+                    Text(content)
+                } else {
+                    Text(content)
+                        .textSelection(.enabled)
+                }
+            }
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.white.opacity(isStreaming ? 0.84 : 0.92))
+            .frame(maxWidth: .infinity, alignment: alignment)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

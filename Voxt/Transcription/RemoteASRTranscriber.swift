@@ -33,6 +33,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     private var preferredInputDeviceID: AudioDeviceID?
     private let streamingFinalWaitTimeout: TimeInterval = 20
     private var lastPresentedRuntimeErrorMessage = ""
+    private var recordingGenerationID = UUID()
 
     func setPreferredInputDevice(_ deviceID: AudioDeviceID?) {
         preferredInputDeviceID = deviceID
@@ -44,6 +45,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
     func startRecording() {
         guard !isRecording else { return }
+        recordingGenerationID = UUID()
         cleanupActiveUploadTask()
         cleanupDoubaoStreamingState()
         cleanupAliyunStreamingState()
@@ -107,11 +109,12 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             aliyunQwenStreamingContext != nil
         guard isRecording || hasPendingRealtimeSession || recorder != nil else { return }
         stopRequested = true
+        let generationID = recordingGenerationID
 
         if activeProvider == .doubaoASR, let context = doubaoStreamingContext {
             isRequesting = true
             stopDoubaoStreaming(context)
-            scheduleStreamingCompletion {
+            scheduleStreamingCompletion(generationID: generationID) {
                 let finalText = await self.resolveStreamingResult(
                     warningMessage: "Doubao final result wait failed"
                 ) {
@@ -128,7 +131,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         if activeProvider == .aliyunBailianASR, let context = aliyunStreamingContext {
             isRequesting = true
             stopAliyunFunStreaming(context)
-            scheduleStreamingCompletion {
+            scheduleStreamingCompletion(generationID: generationID) {
                 await self.resolveStreamingResult(
                     warningMessage: "Aliyun fun final result wait failed"
                 ) {
@@ -143,7 +146,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         if activeProvider == .aliyunBailianASR, let context = aliyunQwenStreamingContext {
             isRequesting = true
             stopAliyunQwenStreaming(context)
-            scheduleStreamingCompletion {
+            scheduleStreamingCompletion(generationID: generationID) {
                 await self.resolveStreamingResult(
                     warningMessage: "Aliyun qwen realtime final result wait failed"
                 ) {
@@ -156,7 +159,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
 
         guard let fileURL = stopFileRecordingCapture() else {
-            finish(with: transcribedText)
+            finish(with: transcribedText, generationID: generationID)
             return
         }
 
@@ -166,14 +169,16 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             do {
                 let result = try await self.transcribeRecordedAudio(fileURL: fileURL)
                 await MainActor.run {
+                    guard self.isCurrentGeneration(generationID) else { return }
                     self.transcribedText = result
-                    self.finish(with: result)
+                    self.finish(with: result, generationID: generationID)
                 }
             } catch {
                 await MainActor.run {
+                    guard self.isCurrentGeneration(generationID) else { return }
                     VoxtLog.error("Remote ASR transcription failed: \(error.localizedDescription)")
                     self.notifyRuntimeFailure(error)
-                    self.finish(with: self.transcribedText)
+                    self.finish(with: self.transcribedText, generationID: generationID)
                 }
             }
             try? FileManager.default.removeItem(at: fileURL)
@@ -280,14 +285,16 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     }
 
     private func scheduleStreamingCompletion(
+        generationID: UUID,
         result: @escaping @Sendable () async -> String
     ) {
         transcribeTask = Task { [weak self] in
             guard let self else { return }
             let finalText = await result()
             await MainActor.run {
+                guard self.isCurrentGeneration(generationID) else { return }
                 self.transcribedText = finalText
-                self.finish(with: finalText)
+                self.finish(with: finalText, generationID: generationID)
             }
         }
     }
@@ -774,7 +781,8 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             session: managedSocket.session,
             ws: ws,
             taskID: taskID,
-            responseState: responseState
+            responseState: responseState,
+            generationID: recordingGenerationID
         )
         aliyunStreamingContext = context
         receiveAliyunFunMessages(context)
@@ -811,6 +819,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             case .success(let message):
                 Task { @MainActor [weak self] in
                     guard let self else { return }
+                    guard self.isCurrentGeneration(context.generationID),
+                          self.aliyunStreamingContext === context
+                    else { return }
                     do {
                         if case .string(let text) = message {
                             try await self.handleAliyunFunMessage(text, context: context)
@@ -827,6 +838,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 }
             case .failure(let error):
                 Task {
+                    guard await MainActor.run(body: { [weak self] in
+                        guard let self else { return false }
+                        return self.isCurrentGeneration(context.generationID) && self.aliyunStreamingContext === context
+                    }) else { return }
                     await context.responseState.markCompletedWithError(error)
                 }
             }
@@ -987,7 +1002,8 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         let context = AliyunQwenStreamingContext(
             session: managedSocket.session,
             ws: ws,
-            responseState: responseState
+            responseState: responseState,
+            generationID: recordingGenerationID
         )
         aliyunQwenStreamingContext = context
         receiveAliyunQwenMessages(context)
@@ -1007,6 +1023,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             case .success(let message):
                 Task { @MainActor [weak self] in
                     guard let self else { return }
+                    guard self.isCurrentGeneration(context.generationID),
+                          self.aliyunQwenStreamingContext === context
+                    else { return }
                     do {
                         if case .string(let text) = message {
                             try await self.handleAliyunQwenMessage(text, context: context)
@@ -1023,6 +1042,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 }
             case .failure(let error):
                 Task {
+                    guard await MainActor.run(body: { [weak self] in
+                        guard let self else { return false }
+                        return self.isCurrentGeneration(context.generationID) && self.aliyunQwenStreamingContext === context
+                    }) else { return }
                     await context.responseState.markCompletedWithError(error)
                 }
             }
@@ -1325,7 +1348,8 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 Task { @MainActor [weak self] in
                     self?.notifyRuntimeFailure(error)
                 }
-            }
+            },
+            generationID: recordingGenerationID
         )
         doubaoStreamingContext = context
         receiveDoubaoMessages(context, endpoint: endpoint, resourceID: resourceID, appID: appID, accessToken: accessToken)
@@ -1447,6 +1471,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             case .success(let message):
                 Task { @MainActor [weak self] in
                     guard let self else { return }
+                    guard self.isCurrentGeneration(context.generationID),
+                          self.doubaoStreamingContext === context
+                    else { return }
                     do {
                         if case .data(let payloadData) = message,
                            let parsed = try self.parseDoubaoServerPacket(payloadData) {
@@ -1492,6 +1519,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 }
             case .failure(let error):
                 Task { @MainActor in
+                    guard self.isCurrentGeneration(context.generationID),
+                          self.doubaoStreamingContext === context
+                    else { return }
                     let nsError = error as NSError
                     if self.isBenignDoubaoSocketError(nsError) {
                         context.isClosed = true
@@ -2600,6 +2630,17 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         isRequesting = false
     }
 
+    func discardPendingSessionOutput() {
+        recordingGenerationID = UUID()
+        cleanupActiveUploadTask()
+        cleanupRecorderState()
+        cleanupDoubaoStreamingState()
+        cleanupAliyunStreamingState()
+        activeProvider = nil
+        stopRequested = false
+        lastPresentedRuntimeErrorMessage = ""
+    }
+
     private func startOpenAIPreviewLoop(configuration: RemoteProviderConfiguration) {
         stopOpenAIPreviewLoop()
         openAIPreviewLastText = ""
@@ -2691,7 +2732,8 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
     }
 
-    private func finish(with text: String) {
+    private func finish(with text: String, generationID: UUID) {
+        guard isCurrentGeneration(generationID) else { return }
         cleanupActiveUploadTask()
         cleanupRecorderState()
         cleanupDoubaoStreamingState()
@@ -2699,6 +2741,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         activeProvider = nil
         lastPresentedRuntimeErrorMessage = ""
         onTranscriptionFinished?(text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func isCurrentGeneration(_ generationID: UUID) -> Bool {
+        recordingGenerationID == generationID
     }
 
     private func notifyStartFailure(_ error: Error) {
@@ -2787,13 +2833,20 @@ private final class AliyunQwenStreamingContext {
     let session: URLSession
     let ws: URLSessionWebSocketTask
     let responseState: AliyunQwenResponseState
+    let generationID: UUID
     var isClosed = false
     var didStartAudioStream = false
 
-    init(session: URLSession, ws: URLSessionWebSocketTask, responseState: AliyunQwenResponseState) {
+    init(
+        session: URLSession,
+        ws: URLSessionWebSocketTask,
+        responseState: AliyunQwenResponseState,
+        generationID: UUID
+    ) {
         self.session = session
         self.ws = ws
         self.responseState = responseState
+        self.generationID = generationID
     }
 }
 
@@ -2873,14 +2926,22 @@ private final class AliyunFunStreamingContext {
     let ws: URLSessionWebSocketTask
     let taskID: String
     let responseState: AliyunFunResponseState
+    let generationID: UUID
     var isClosed = false
     var didStartAudioStream = false
 
-    init(session: URLSession, ws: URLSessionWebSocketTask, taskID: String, responseState: AliyunFunResponseState) {
+    init(
+        session: URLSession,
+        ws: URLSessionWebSocketTask,
+        taskID: String,
+        responseState: AliyunFunResponseState,
+        generationID: UUID
+    ) {
         self.session = session
         self.ws = ws
         self.taskID = taskID
         self.responseState = responseState
+        self.generationID = generationID
     }
 }
 

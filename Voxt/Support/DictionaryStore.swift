@@ -902,6 +902,9 @@ final class DictionaryStore: ObservableObject {
 
     private let defaults = UserDefaults.standard
     private let fileManager = FileManager.default
+    private let persistenceCoordinator = AsyncJSONPersistenceCoordinator(
+        label: "com.voxt.dictionary.persistence"
+    )
 
     init() {
         reload()
@@ -1307,10 +1310,8 @@ final class DictionaryStore: ObservableObject {
 
     private func persist() {
         do {
-            let data = try JSONEncoder().encode(entries)
             let url = try dictionaryFileURL()
-            try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: [.atomic])
+            persistenceCoordinator.scheduleWrite(entries, to: url)
         } catch {
             // Keep UI responsive even if persistence fails.
         }

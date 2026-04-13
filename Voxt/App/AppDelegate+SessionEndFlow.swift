@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 extension AppDelegate {
@@ -11,7 +12,7 @@ extension AppDelegate {
 
         func run(delegate: AppDelegate) {
             guard delegate.overlayState.displayMode != .answer else { return }
-            delegate.overlayWindow.hide()
+            delegate.overlayWindow.hide(animated: false)
         }
     }
 
@@ -57,6 +58,7 @@ extension AppDelegate {
     }
 
     func executeSessionEndPipeline() {
+        VoxtLog.info("Session end pipeline started. displayMode=\(overlayState.displayMode), overlayVisible=\(overlayWindow.isVisible)")
         let stages: [any SessionEndStage] = [
             HideOverlayStage(),
             RestoreSystemAudioStage(),
@@ -66,5 +68,6 @@ extension AppDelegate {
         for stage in stages {
             stage.run(delegate: self)
         }
+        VoxtLog.info("Session end pipeline completed. overlayVisible=\(overlayWindow.isVisible)")
     }
 }

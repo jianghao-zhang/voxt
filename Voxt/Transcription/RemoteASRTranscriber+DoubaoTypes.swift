@@ -23,6 +23,7 @@ final class DoubaoStreamingContext {
     let session: URLSession
     let ws: URLSessionWebSocketTask
     let responseState: DoubaoResponseState
+    let generationID: UUID
     var isClosed = false
     var didStartAudioStream = false
     var audioPacketCount = 0
@@ -31,10 +32,16 @@ final class DoubaoStreamingContext {
     var lastAudioSequence: Int32 = 0
     var pendingPCMData = Data()
 
-    init(session: URLSession, ws: URLSessionWebSocketTask, responseState: DoubaoResponseState) {
+    init(
+        session: URLSession,
+        ws: URLSessionWebSocketTask,
+        responseState: DoubaoResponseState,
+        generationID: UUID
+    ) {
         self.session = session
         self.ws = ws
         self.responseState = responseState
+        self.generationID = generationID
     }
 }
 

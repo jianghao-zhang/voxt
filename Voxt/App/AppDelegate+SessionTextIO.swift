@@ -3,9 +3,33 @@ import AppKit
 import ApplicationServices
 
 extension AppDelegate {
+    private static let axMessagingTimeout: Float = 0.05
+
     private enum SessionOutputDelivery {
         case typeText
         case answerOverlay
+    }
+
+    private struct DictionaryResolutionPlan {
+        let matcher: DictionaryMatcher?
+        let usesConservativeEvidence: Bool
+        let automaticReplacementEnabled: Bool
+
+        func resolve(text: String) -> DictionaryCorrectionResult {
+            guard let matcher else {
+                return DictionaryCorrectionResult(text: text, candidates: [], correctedTerms: [])
+            }
+
+            if usesConservativeEvidence {
+                let candidates = matcher.recallCandidates(in: text)
+                return DictionaryCorrectionResult(text: text, candidates: candidates, correctedTerms: [])
+            }
+
+            return matcher.applyCorrections(
+                to: text,
+                automaticReplacementEnabled: automaticReplacementEnabled
+            )
+        }
     }
 
     private struct NormalizeOutputStage: SessionFinalizeStage {
@@ -94,97 +118,82 @@ extension AppDelegate {
         }
 
         private static func uniqueTerms(from candidates: [DictionaryMatchCandidate]) -> [String] {
-            var seen = Set<String>()
-            var ordered: [String] = []
-            for candidate in candidates {
-                let normalized = DictionaryStore.normalizeTerm(candidate.term)
-                guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
-                ordered.append(candidate.term)
-            }
-            return ordered
+            AppDelegate.orderedUniqueDictionaryTerms(from: candidates.map(\.term))
         }
 
         private static func deduplicatedTerms(_ values: [String]) -> [String] {
-            var seen = Set<String>()
-            var ordered: [String] = []
-            for value in values {
-                let normalized = DictionaryStore.normalizeTerm(value)
-                guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
-                ordered.append(value)
-            }
-            return ordered
+            AppDelegate.orderedUniqueDictionaryTerms(from: values)
         }
     }
 
     // MARK: - Session Text I/O
     // Keeps clipboard/AX/paste simulation logic isolated from recording orchestration.
 
-    func commitTranscription(_ text: String, llmDurationSeconds: TimeInterval?) {
+    func commitTranscription(
+        _ text: String,
+        llmDurationSeconds: TimeInterval?,
+        onDeliveryCompleted: (() -> Void)? = nil
+    ) {
         if didCommitSessionOutput {
             VoxtLog.info("Skipping duplicate commit for current session output.")
             return
         }
         didCommitSessionOutput = true
+        let sessionID = activeRecordingSessionID
+        let sessionOutputMode = sessionOutputMode
+        let userMainLanguage = userMainLanguage
+        guard shouldHandleCallbacks(for: sessionID) else { return }
 
-        let pipeline = SessionFinalizePipelineRunner(
-            stages: [
-                NormalizeOutputStage(normalize: { [weak self] value in
-                    self?.normalizedOutputText(value) ?? value
-                }),
-                RewriteAnswerExtractionStage(extract: { [weak self] value in
-                    self?.extractRewriteAnswerPayload(from: value)
-                }),
-                DictionaryCorrectionStage(correct: { [weak self] value in
-                    guard let self else {
-                        return DictionaryCorrectionResult(text: value, candidates: [], correctedTerms: [])
-                    }
-                    if self.shouldUseConservativeDictionaryEvidenceForCurrentSession() {
-                        return self.resolveDictionaryMatches(for: value)
-                    }
-                    return self.resolveDictionaryCorrection(for: value)
-                }),
-                DictionarySuggestionStage(suggest: { [weak self] value, candidates, correctedTerms in
-                    self?.previewDictionarySuggestions(
-                        for: value,
-                        candidates: candidates,
-                        correctedTerms: correctedTerms
-                    ) ?? []
-                }),
-                DeliverOutputStage(deliver: { [weak self] context in
-                    self?.deliverCommittedOutput(context)
-                }),
-                AppendHistoryStage(append: { [weak self] value, displayTitle, duration, hitTerms, correctedTerms, suggestions in
-                    let historyEntryID = self?.appendHistoryIfNeeded(
-                        text: value,
-                        displayTitle: displayTitle,
-                        llmDurationSeconds: duration,
-                        dictionaryHitTerms: hitTerms,
-                        dictionaryCorrectedTerms: correctedTerms,
-                        dictionarySuggestedTerms: suggestions
-                    )
-                    self?.overlayState.latestHistoryEntryID = historyEntryID
-                    return historyEntryID
-                }),
-                PersistDictionaryEvidenceStage(persist: { [weak self] candidates, suggestions, historyEntryID in
-                    self?.persistDictionaryEvidence(
-                        candidates: candidates,
-                        suggestions: suggestions,
-                        historyEntryID: historyEntryID
-                    )
-                })
-            ]
+        VoxtLog.info("Commit transcription entered. characters=\(text.count)")
+
+        let normalized = Self.normalizedOutputText(
+            text,
+            sessionOutputMode: sessionOutputMode,
+            userMainLanguage: userMainLanguage
         )
-        _ = pipeline.run(
-            initial: SessionFinalizeContext(
-                outputText: text,
+
+        var outputText = normalized
+        let rewriteAnswerPayload = extractRewriteAnswerPayload(from: outputText)
+        if let rewriteAnswerPayload {
+            outputText = rewriteAnswerPayload.content
+        }
+
+        VoxtLog.info(
+            "Commit transcription prepared payload. inputChars=\(text.count), outputChars=\(outputText.count), hasRewritePayload=\(rewriteAnswerPayload != nil)"
+        )
+
+        let context = SessionFinalizeContext(
+            outputText: outputText,
+            llmDurationSeconds: llmDurationSeconds,
+            dictionaryMatches: [],
+            dictionaryCorrectedTerms: [],
+            dictionarySuggestions: [],
+            historyEntryID: nil,
+            rewriteAnswerPayload: rewriteAnswerPayload
+        )
+
+        deliverCommittedOutput(context) { [weak self] in
+            guard let self else { return }
+            self.finalizeCommittedOutputPostDeliveryAsync(
+                originalText: text,
+                deliveredContext: context,
                 llmDurationSeconds: llmDurationSeconds,
-                dictionaryMatches: [],
-                dictionaryCorrectedTerms: [],
-                dictionarySuggestions: [],
-                historyEntryID: nil,
-                rewriteAnswerPayload: nil
+                sessionOutputMode: sessionOutputMode,
+                userMainLanguage: userMainLanguage
             )
-        )
+            onDeliveryCompleted?()
+        }
+    }
+
+    private static func orderedUniqueDictionaryTerms(from values: [String]) -> [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for value in values {
+            let normalized = DictionaryStore.normalizeTerm(value)
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
+            ordered.append(value)
+        }
+        return ordered
     }
 
     private func shouldUseConservativeDictionaryEvidenceForCurrentSession() -> Bool {
@@ -279,7 +288,11 @@ extension AppDelegate {
 
         cmdDown?.post(tap: .cgAnnotatedSessionEventTap)
         cmdUp?.post(tap: .cgAnnotatedSessionEventTap)
-        Thread.sleep(forTimeInterval: 0.06)
+
+        let deadline = Date().addingTimeInterval(0.06)
+        while pasteboard.changeCount == originalChangeCount, Date() < deadline {
+            _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
 
         let copiedChangeCount = pasteboard.changeCount
         guard copiedChangeCount != originalChangeCount else {
@@ -300,6 +313,18 @@ extension AppDelegate {
     }
 
     private func normalizedOutputText(_ text: String) -> String {
+        Self.normalizedOutputText(
+            text,
+            sessionOutputMode: sessionOutputMode,
+            userMainLanguage: userMainLanguage
+        )
+    }
+
+    nonisolated private static func normalizedOutputText(
+        _ text: String,
+        sessionOutputMode: SessionOutputMode,
+        userMainLanguage: UserMainLanguageOption
+    ) -> String {
         var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard value.count >= 2 else { return value }
 
@@ -321,28 +346,101 @@ extension AppDelegate {
                 value,
                 preferredMainLanguage: userMainLanguage
             )
-            if normalizedChineseScript != value {
-                VoxtLog.info(
-                    "Normalized Chinese script variant for final output. preferred=\(userMainLanguage.code), chars=\(normalizedChineseScript.count)",
-                    verbose: true
-                )
-            }
             value = normalizedChineseScript
         }
 
         return value
     }
 
-    private func deliverCommittedOutput(_ context: SessionFinalizeContext) {
+    private func deliverCommittedOutput(
+        _ context: SessionFinalizeContext,
+        completion: (() -> Void)? = nil
+    ) {
+        VoxtLog.info(
+            "Deliver committed output started. delivery=\(resolvedOutputDelivery(for: context) == .typeText ? "typeText" : "answerOverlay"), characters=\(context.outputText.count)"
+        )
         switch resolvedOutputDelivery(for: context) {
         case .typeText:
-            typeText(context.outputText)
+            beginOverlayOutputDelivery()
+            typeText(context.outputText) { [weak self] in
+                self?.endOverlayOutputDelivery()
+                completion?()
+            }
         case .answerOverlay:
             if overlayState.isRewriteConversationActive, context.rewriteAnswerPayload == nil {
                 presentRewriteConversationAnswerOverlay(content: context.outputText)
             } else {
                 let payload = resolvedAnswerPayload(for: context)
                 presentRewriteAnswerOverlay(title: payload.title, content: payload.content)
+            }
+            completion?()
+        }
+    }
+
+    private func finalizeCommittedOutputPostDeliveryAsync(
+        originalText: String,
+        deliveredContext: SessionFinalizeContext,
+        llmDurationSeconds: TimeInterval?,
+        sessionOutputMode: SessionOutputMode,
+        userMainLanguage: UserMainLanguageOption
+    ) {
+        let deliveredText = deliveredContext.outputText
+        let displayTitle = deliveredContext.rewriteAnswerPayload?.trimmedTitle
+
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+
+            let dictionaryPlan = await MainActor.run {
+                DictionaryResolutionPlan(
+                    matcher: self.dictionaryStore.makeMatcherIfEnabled(activeGroupID: self.activeDictionaryGroupID()),
+                    usesConservativeEvidence: self.shouldUseConservativeDictionaryEvidenceForCurrentSession(),
+                    automaticReplacementEnabled: UserDefaults.standard.bool(
+                        forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled
+                    )
+                )
+            }
+
+            let normalized = Self.normalizedOutputText(
+                originalText,
+                sessionOutputMode: sessionOutputMode,
+                userMainLanguage: userMainLanguage
+            )
+
+            let postProcessedSource: String
+            if let payload = RewriteAnswerPayloadParser.extract(from: normalized) {
+                postProcessedSource = payload.content
+            } else {
+                postProcessedSource = deliveredText
+            }
+
+            let dictionaryCorrection = dictionaryPlan.resolve(text: postProcessedSource)
+            let dictionarySuggestions = await MainActor.run {
+                self.previewDictionarySuggestions(
+                    for: dictionaryCorrection.text,
+                    candidates: dictionaryCorrection.candidates,
+                    correctedTerms: dictionaryCorrection.correctedTerms
+                )
+            }
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                let historyEntryID = self.appendHistoryIfNeeded(
+                    text: deliveredText,
+                    displayTitle: displayTitle,
+                    llmDurationSeconds: llmDurationSeconds,
+                    dictionaryHitTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryCorrection.candidates.map(\.term)),
+                    dictionaryCorrectedTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryCorrection.correctedTerms),
+                    dictionarySuggestedTerms: dictionarySuggestions.map(\.snapshot)
+                )
+                self.overlayState.latestHistoryEntryID = historyEntryID
+                self.persistDictionaryEvidence(
+                    candidates: dictionaryCorrection.candidates,
+                    suggestions: dictionarySuggestions,
+                    historyEntryID: historyEntryID
+                )
+                VoxtLog.info(
+                    "Deliver committed output finalized. historyEntryID=\(historyEntryID?.uuidString ?? "nil"), characters=\(deliveredText.count)"
+                )
             }
         }
     }
@@ -618,6 +716,7 @@ extension AppDelegate {
         }
 
         let systemWide = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(systemWide, Self.axMessagingTimeout)
         var focusedElementRef: CFTypeRef?
         let focusedStatus = AXUIElementCopyAttributeValue(
             systemWide,
@@ -641,6 +740,7 @@ extension AppDelegate {
         }
 
         let appElement = AXUIElementCreateApplication(appPID)
+        AXUIElementSetMessagingTimeout(appElement, Self.axMessagingTimeout)
         if let focusedAppElement = axElementAttribute(kAXFocusedUIElementAttribute as CFString, for: appElement) {
             VoxtLog.info("Focused input check: using frontmost app focused element. bundleID=\(bundleID)")
             return focusedAppElement
@@ -661,6 +761,7 @@ extension AppDelegate {
     }
 
     private func axBoolAttribute(_ attribute: CFString, for element: AXUIElement) -> Bool? {
+        AXUIElementSetMessagingTimeout(element, Self.axMessagingTimeout)
         var valueRef: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(element, attribute, &valueRef)
         guard status == .success, let valueRef else { return nil }
@@ -674,6 +775,7 @@ extension AppDelegate {
     }
 
     private func axStringAttribute(_ attribute: CFString, for element: AXUIElement) -> String? {
+        AXUIElementSetMessagingTimeout(element, Self.axMessagingTimeout)
         var valueRef: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(element, attribute, &valueRef)
         guard status == .success else { return nil }
@@ -681,6 +783,7 @@ extension AppDelegate {
     }
 
     private func axElementAttribute(_ attribute: CFString, for element: AXUIElement) -> AXUIElement? {
+        AXUIElementSetMessagingTimeout(element, Self.axMessagingTimeout)
         var valueRef: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(element, attribute, &valueRef)
         guard status == .success,
@@ -693,6 +796,7 @@ extension AppDelegate {
     }
 
     private func axElementArrayAttribute(_ attribute: CFString, for element: AXUIElement) -> [AXUIElement] {
+        AXUIElementSetMessagingTimeout(element, Self.axMessagingTimeout)
         var valueRef: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(element, attribute, &valueRef)
         guard status == .success,
@@ -794,28 +898,79 @@ extension AppDelegate {
         return false
     }
 
-    private func typeText(_ text: String) {
-        guard !text.isEmpty else { return }
+    private func typeText(_ text: String, completion: (() -> Void)? = nil) {
+        guard !text.isEmpty else {
+            completion?()
+            return
+        }
 
+        let injectionStartedAt = Date()
         let pasteboard = NSPasteboard.general
         let previous = pasteboard.string(forType: .string) ?? ""
         let accessibilityTrusted = AccessibilityPermissionManager.isTrusted()
         let keepResultInClipboard = autoCopyWhenNoFocusedInput
 
-        writeTextToPasteboard(text)
-
-        if restoreSessionTargetApplicationIfNeeded() {
-            Thread.sleep(forTimeInterval: 0.06)
-        }
-
         guard accessibilityTrusted else {
+            writeTextToPasteboard(text)
             promptForAccessibilityPermission()
             VoxtLog.warning("Accessibility permission missing. Transcription copied; paste manually after granting permission.")
+            completion?()
             return
         }
 
+        let activationRestored = restoreSessionTargetApplicationIfNeeded()
+        let activationDelay: TimeInterval = activationRestored ? 0.04 : 0
+        VoxtLog.info(
+            "Text injection prepared. characters=\(text.count), activationRestored=\(activationRestored), activationDelayMs=\(Int(activationDelay * 1000))"
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + activationDelay) { [weak self] in
+            guard let self else {
+                completion?()
+                return
+            }
+
+            self.pasteTextByShortcut(
+                text,
+                previousClipboardValue: previous,
+                keepResultInClipboard: keepResultInClipboard,
+                completion: {
+                    let elapsedMs = Int(Date().timeIntervalSince(injectionStartedAt) * 1000)
+                    VoxtLog.info("Text injection completed via paste fallback. characters=\(text.count), elapsedMs=\(elapsedMs)")
+                    completion?()
+                }
+            )
+        }
+    }
+
+    private func beginOverlayOutputDelivery() {
+        overlayState.isRequesting = true
+        overlayState.isCompleting = false
+        if overlayState.displayMode != .answer {
+            overlayState.displayMode = .processing
+        }
+    }
+
+    private func endOverlayOutputDelivery() {
+        overlayState.isRequesting = false
+    }
+
+    private func writeTextToPasteboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    private func pasteTextByShortcut(
+        _ text: String,
+        previousClipboardValue: String,
+        keepResultInClipboard: Bool,
+        completion: (() -> Void)?
+    ) {
+        writeTextToPasteboard(text)
+
         guard let source = CGEventSource(stateID: .hidSystemState) else {
-            VoxtLog.error("typeText failed: unable to create CGEventSource")
+            VoxtLog.error("typeText fallback failed: unable to create CGEventSource")
+            completion?()
             return
         }
 
@@ -826,27 +981,23 @@ extension AppDelegate {
         cmdUp?.flags = .maskCommand
 
         guard cmdDown != nil, cmdUp != nil else {
-            VoxtLog.error("typeText failed: unable to create key events")
+            VoxtLog.error("typeText fallback failed: unable to create key events")
+            completion?()
             return
         }
 
         cmdDown?.post(tap: .cgAnnotatedSessionEventTap)
         cmdUp?.post(tap: .cgAnnotatedSessionEventTap)
+        completion?()
 
-        if !keepResultInClipboard {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                pasteboard.clearContents()
-                if !previous.isEmpty {
-                    pasteboard.setString(previous, forType: .string)
-                }
+        guard !keepResultInClipboard else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            if !previousClipboardValue.isEmpty {
+                pasteboard.setString(previousClipboardValue, forType: .string)
             }
         }
-    }
-
-    private func writeTextToPasteboard(_ text: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
     }
 
     private func promptForAccessibilityPermission() {

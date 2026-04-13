@@ -466,6 +466,8 @@ class OverlayState: ObservableObject {
 
         transcribedTextPublisher
             .receive(on: RunLoop.main)
+            .removeDuplicates()
+            .throttle(for: .milliseconds(70), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] text in
                 self?.transcribedText = text
             }
@@ -607,13 +609,20 @@ class RecordingOverlayWindow: NSPanel {
         return true
     }
 
-    func hide(completion: (() -> Void)? = nil) {
+    func hide(animated: Bool = true, completion: (() -> Void)? = nil) {
         VoxtLog.info("Overlay hide requested. isVisible=\(isVisible)", verbose: true)
         observedState?.isPresented = false
         observedState?.audioLevel = 0
         removeOutsideClickMonitors()
 
         guard isVisible else {
+            orderOut(nil)
+            completion?()
+            return
+        }
+
+        guard animated else {
+            alphaValue = 0
             orderOut(nil)
             completion?()
             return

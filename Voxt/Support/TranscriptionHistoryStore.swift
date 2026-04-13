@@ -202,6 +202,9 @@ final class TranscriptionHistoryStore: ObservableObject {
 
     private let fileManager = FileManager.default
     private let defaults = UserDefaults.standard
+    private let persistenceCoordinator = AsyncJSONPersistenceCoordinator(
+        label: "com.voxt.transcription-history.persistence"
+    )
 
     init() {
         reload()
@@ -425,10 +428,8 @@ final class TranscriptionHistoryStore: ObservableObject {
 
     private func persist() {
         do {
-            let data = try JSONEncoder().encode(allEntries)
             let url = try historyFileURL()
-            try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: [.atomic])
+            persistenceCoordinator.scheduleWrite(allEntries, to: url)
         } catch {
             // Keep UI responsive even if persistence fails.
         }

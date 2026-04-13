@@ -15,6 +15,7 @@ struct TranscriptionDetailConversationView: View {
     @State private var isScrolledToBottom = true
     @State private var wasScrolledToBottom = true
     @State private var hasUnreadMessages = false
+    @State private var pendingScrollRequestToken = UUID()
 
     private let bottomAnchorID = "transcription-detail-bottom-anchor"
 
@@ -195,7 +196,10 @@ struct TranscriptionDetailConversationView: View {
     }
 
     private func scrollToBottom(using proxy: ScrollViewProxy, animated: Bool) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        let token = UUID()
+        pendingScrollRequestToken = token
+        DispatchQueue.main.async {
+            guard token == pendingScrollRequestToken else { return }
             if animated {
                 withAnimation(.easeOut(duration: 0.18)) {
                     proxy.scrollTo(bottomAnchorID, anchor: .bottom)

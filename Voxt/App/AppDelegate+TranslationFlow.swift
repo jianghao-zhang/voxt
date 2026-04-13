@@ -88,9 +88,6 @@ extension AppDelegate {
         _Concurrency.Task<Void, Never> {
             defer {
                 self.setEnhancingState(false)
-                if self.shouldHandleCallbacks(for: sessionID) {
-                    self.finishSession()
-                }
             }
 
             let llmStartedAt = Date()
@@ -107,11 +104,17 @@ extension AppDelegate {
                     VoxtLog.warning("Translation output may be untranslated. sourceChars=\(text.count), outputChars=\(translated.count)")
                 }
                 VoxtLog.info("Translation flow succeeded. outputChars=\(translated.count), llmDurationSec=\(String(format: "%.3f", llmDuration))")
-                self.commitTranscription(translated, llmDurationSeconds: llmDuration)
+                self.commitTranscription(translated, llmDurationSeconds: llmDuration) { [weak self] in
+                    guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
+                    self.finishSession(after: 0)
+                }
             } catch {
                 guard self.shouldHandleCallbacks(for: sessionID) else { return }
                 VoxtLog.warning("Translation flow failed, using raw text: \(error)")
-                self.commitTranscription(text, llmDurationSeconds: nil)
+                self.commitTranscription(text, llmDurationSeconds: nil) { [weak self] in
+                    guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
+                    self.finishSession(after: 0)
+                }
             }
         }
     }
@@ -119,8 +122,9 @@ extension AppDelegate {
     func processWhisperTranslatedTranscription(_ text: String, sessionID: UUID) {
         guard shouldHandleCallbacks(for: sessionID) else { return }
         VoxtLog.info("Whisper direct translation completed. outputChars=\(text.count)")
-        commitTranscription(text, llmDurationSeconds: nil)
-        finishSession()
+        commitTranscription(text, llmDurationSeconds: nil) { [weak self] in
+            self?.finishSession(after: 0)
+        }
     }
 
     func translateMeetingRealtimeText(_ text: String, targetLanguage: TranslationTargetLanguage) async throws -> String {
@@ -266,9 +270,6 @@ extension AppDelegate {
         Task {
             defer {
                 self.setEnhancingState(false)
-                if self.shouldHandleCallbacks(for: sessionID) {
-                    self.finishSession()
-                }
             }
 
             let llmStartedAt = Date()
@@ -368,7 +369,10 @@ extension AppDelegate {
                 }
                 let llmDuration = Date().timeIntervalSince(llmStartedAt)
                 VoxtLog.info("Rewrite flow succeeded. outputChars=\(rewritten.count), llmDurationSec=\(String(format: "%.3f", llmDuration))")
-                self.commitTranscription(rewritten, llmDurationSeconds: llmDuration)
+                self.commitTranscription(rewritten, llmDurationSeconds: llmDuration) { [weak self] in
+                    guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
+                    self.finishSession(after: 0)
+                }
             } catch {
                 guard self.shouldHandleCallbacks(for: sessionID) else { return }
                 VoxtLog.warning("Rewrite flow failed, using rewrite fallback: \(error)")
@@ -377,7 +381,10 @@ extension AppDelegate {
                     sourceText: selectedSourceText,
                     structuredAnswerOutput: prefersStructuredAnswerOutput
                 )
-                self.commitTranscription(fallback, llmDurationSeconds: nil)
+                self.commitTranscription(fallback, llmDurationSeconds: nil) { [weak self] in
+                    guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
+                    self.finishSession(after: 0)
+                }
             }
         }
     }
@@ -479,17 +486,10 @@ extension AppDelegate {
     ) async throws -> String {
         let directAnswerMode = sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let modelProvider = rewriteModelProvider
-        let remoteContext = rewriteModelProvider == .remoteLLM ? resolvedRemoteLLMContext(forRewrite: true) : nil
         let runtimeClient = RemoteLLMRuntimeClient()
+        let remoteContext = rewriteModelProvider == .remoteLLM ? resolvedRemoteLLMContext(forRewrite: true) : nil
         let shouldUseProviderManagedConversation =
-            (remoteContext.map {
-                runtimeClient.shouldUseAliyunResponsesAPI(
-                    provider: $0.provider,
-                    configuration: $0.configuration,
-                    sourceText: sourceText,
-                    wantsStreaming: onProgress != nil
-                )
-            } ?? false) &&
+            (remoteContext?.provider.usesResponsesAPI ?? false) &&
             directAnswerMode &&
             !structuredAnswerOutput
         let shouldUseChatMessageConversation =
@@ -522,7 +522,7 @@ extension AppDelegate {
         )
         if shouldUseProviderManagedConversation, let remoteContext {
             VoxtLog.info(
-                "Rewrite continue using Aliyun Responses API. provider=\(remoteContext.provider.rawValue), endpoint=\(remoteContext.configuration.endpoint)"
+                "Rewrite continue using Responses API. provider=\(remoteContext.provider.rawValue), endpoint=\(remoteContext.configuration.endpoint)"
             )
         } else if modelProvider == .remoteLLM,
                   directAnswerMode,
@@ -882,7 +882,6 @@ extension AppDelegate {
             defer {
                 self.setEnhancingState(false)
                 self.isSelectedTextTranslationFlow = false
-                self.finishSession()
             }
 
             let llmStartedAt = Date()
@@ -898,11 +897,15 @@ extension AppDelegate {
                 }
                 VoxtLog.info("Selected text translation succeeded. outputChars=\(translated.count), llmDurationSec=\(String(format: "%.3f", llmDuration))")
                 self.overlayState.transcribedText = translated
-                self.commitTranscription(translated, llmDurationSeconds: llmDuration)
+                self.commitTranscription(translated, llmDurationSeconds: llmDuration) { [weak self] in
+                    self?.finishSession(after: 0)
+                }
             } catch {
                 VoxtLog.warning("Selected text translation failed, using original selected text: \(error)")
                 self.overlayState.transcribedText = text
-                self.commitTranscription(text, llmDurationSeconds: nil)
+                self.commitTranscription(text, llmDurationSeconds: nil) { [weak self] in
+                    self?.finishSession(after: 0)
+                }
             }
         }
     }
@@ -990,18 +993,17 @@ extension AppDelegate {
         let normalized = RewriteAnswerContentNormalizer.normalizePlainTextAnswer(content)
         guard !normalized.isEmpty else { return }
 
-        let characters = Array(normalized)
-        let chunkSize: Int
-        switch characters.count {
-        case 0..<48:
-            chunkSize = 2
-        case 48..<160:
-            chunkSize = 4
-        case 160..<360:
-            chunkSize = 8
-        default:
-            chunkSize = 12
+        // Large answers should appear immediately; dozens of staged updates stall the
+        // overlay and spinner on the main thread without adding useful feedback.
+        guard normalized.count < 360 else {
+            guard shouldHandleCallbacks(for: sessionID) else { return }
+            presentRewriteConversationStreamingPreview(content: normalized)
+            return
         }
+
+        let characters = Array(normalized)
+        let stageCount = min(4, max(2, Int(ceil(Double(characters.count) / 96.0))))
+        let chunkSize = max(24, Int(ceil(Double(characters.count) / Double(stageCount))))
 
         var rendered = ""
         var index = 0
@@ -1011,8 +1013,9 @@ extension AppDelegate {
             rendered += String(characters[index..<upperBound])
             presentRewriteConversationStreamingPreview(content: rendered)
             index = upperBound
+            guard index < characters.count else { continue }
             do {
-                try await Task.sleep(for: .milliseconds(18))
+                try await Task.sleep(for: .milliseconds(45))
             } catch {
                 return
             }
