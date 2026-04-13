@@ -49,6 +49,7 @@ struct ModelSettingsView: View {
     @ObservedObject var mlxModelManager: MLXModelManager
     @ObservedObject var whisperModelManager: WhisperKitModelManager
     @ObservedObject var customLLMManager: CustomLLMModelManager
+    @ObservedObject var mainWindowState: MainWindowVisibilityState
     let missingConfigurationIssues: [ConfigurationTransferManager.MissingConfigurationIssue]
     let navigationRequest: SettingsNavigationRequest?
 
@@ -365,6 +366,7 @@ struct ModelSettingsView: View {
             pruneSelectedTags()
         }
         .onReceive(modelStateRefreshTimer) { _ in
+            guard mainWindowState.isVisible else { return }
             guard shouldPollModelState else { return }
             refreshModelInstallStateIfNeeded()
             pruneSelectedTags()

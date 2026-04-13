@@ -5,6 +5,7 @@ import CoreAudio
 import AVFoundation
 import Speech
 import Carbon
+import Combine
 
 struct VoiceEndCommandState {
     var lastDetectedCommand = false
@@ -15,6 +16,11 @@ struct VoiceEndCommandState {
 
 struct MainWindowPresentationState {
     var shouldRestoreAfterUpdate = false
+}
+
+@MainActor
+final class MainWindowVisibilityState: ObservableObject {
+    @Published var isVisible = false
 }
 
 enum SessionOutputMode {
@@ -293,6 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     var enhancer: (any TextEnhancing)?
     var mainWindowController: NSWindowController?
+    let mainWindowVisibilityState = MainWindowVisibilityState()
     private var interfaceLanguageObserver: NSObjectProtocol?
     private var updateAvailabilityObserver: NSObjectProtocol?
     private var selectedInputDeviceObserver: NSObjectProtocol?

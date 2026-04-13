@@ -19,6 +19,7 @@ struct SettingsView: View {
     @ObservedObject var dictionaryStore: DictionaryStore
     @ObservedObject var dictionarySuggestionStore: DictionarySuggestionStore
     @ObservedObject var appUpdateManager: AppUpdateManager
+    @ObservedObject var mainWindowState: MainWindowVisibilityState
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
     @AppStorage(AppPreferenceKey.muteSystemAudioWhileRecording) private var muteSystemAudioWhileRecording = false
@@ -45,6 +46,7 @@ struct SettingsView: View {
         dictionaryStore: DictionaryStore,
         dictionarySuggestionStore: DictionarySuggestionStore,
         appUpdateManager: AppUpdateManager,
+        mainWindowState: MainWindowVisibilityState,
         initialNavigationTarget: SettingsNavigationTarget = SettingsNavigationTarget(tab: .report),
         initialDisplayMode: SettingsDisplayMode = .normal
     ) {
@@ -57,6 +59,7 @@ struct SettingsView: View {
         self.dictionaryStore = dictionaryStore
         self.dictionarySuggestionStore = dictionarySuggestionStore
         self.appUpdateManager = appUpdateManager
+        self.mainWindowState = mainWindowState
         _selectedTab = State(initialValue: initialNavigationTarget.tab)
         _selectedFeatureTab = State(initialValue: initialNavigationTarget.featureTab ?? .transcription)
         _sidebarMode = State(initialValue: initialNavigationTarget.tab == .feature ? .feature : .root)
@@ -127,6 +130,13 @@ struct SettingsView: View {
             dictionarySuggestionStore.reload()
         }
         .onReceive(issueRefreshTimer) { _ in
+            guard mainWindowState.isVisible else { return }
+            refreshModelConfigurationBadge()
+        }
+        .onChange(of: mainWindowState.isVisible) { _, isVisible in
+            guard isVisible else { return }
+            refreshPermissionBadge()
+            refreshMicrophoneBadge()
             refreshModelConfigurationBadge()
         }
         .onChange(of: appEnhancementEnabled) { _, isEnabled in
@@ -314,6 +324,7 @@ struct SettingsView: View {
                     mlxModelManager: mlxModelManager,
                     whisperModelManager: whisperModelManager,
                     customLLMManager: customLLMManager,
+                    mainWindowState: mainWindowState,
                     missingConfigurationIssues: missingModelConfigurationIssues,
                     navigationRequest: navigationRequest
                 )
@@ -348,6 +359,7 @@ struct SettingsView: View {
                             mlxModelManager: mlxModelManager,
                             whisperModelManager: whisperModelManager,
                             customLLMManager: customLLMManager,
+                            mainWindowState: mainWindowState,
                             missingConfigurationIssues: missingModelConfigurationIssues,
                             navigationRequest: navigationRequest
                         )

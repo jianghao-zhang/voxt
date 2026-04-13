@@ -3,6 +3,11 @@ import AppKit
 import CoreAudio
 
 extension AppDelegate {
+    private func setMainWindowVisibility(_ isVisible: Bool) {
+        guard mainWindowVisibilityState.isVisible != isVisible else { return }
+        mainWindowVisibilityState.isVisible = isVisible
+    }
+
     private var feedbackURL: URL {
         URL(string: "https://github.com/hehehai/voxt/issues/new/choose")!
     }
@@ -310,6 +315,7 @@ extension AppDelegate {
             if !window.isVisible {
                 centerMainWindow(window)
             }
+            setMainWindowVisibility(true)
             bringWindowToFront(window)
             return
         }
@@ -331,6 +337,7 @@ extension AppDelegate {
             dictionaryStore: dictionaryStore,
             dictionarySuggestionStore: dictionarySuggestionStore,
             appUpdateManager: appUpdateManager,
+            mainWindowState: mainWindowVisibilityState,
             initialNavigationTarget: navigationRequest.target,
             initialDisplayMode: resolvedInitialDisplayMode(for: navigationRequest.target)
         )
@@ -361,6 +368,7 @@ extension AppDelegate {
         controller.shouldCascadeWindows = false
         mainWindowController = controller
         controller.showWindow(nil)
+        setMainWindowVisibility(true)
         bringWindowToFront(window)
         DispatchQueue.main.async { [weak self, weak window] in
             guard let self, let window else { return }
@@ -477,6 +485,7 @@ extension AppDelegate {
         guard shouldRestore else { return }
 
         VoxtLog.info("Temporarily hiding main window before presenting update UI.")
+        setMainWindowVisibility(false)
         window.orderOut(nil)
     }
 
@@ -486,6 +495,7 @@ extension AppDelegate {
 
         guard let window = mainWindowController?.window else { return }
         VoxtLog.info("Restoring main window after update UI finished.")
+        setMainWindowVisibility(true)
         bringWindowToFront(window)
     }
 
@@ -505,7 +515,18 @@ extension AppDelegate {
 extension AppDelegate: NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender == mainWindowController?.window else { return true }
+        setMainWindowVisibility(false)
         sender.orderOut(nil)
         return false
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        guard notification.object as? NSWindow == mainWindowController?.window else { return }
+        setMainWindowVisibility(false)
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        guard notification.object as? NSWindow == mainWindowController?.window else { return }
+        setMainWindowVisibility(true)
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct ReportSettingsView: View {
     @Environment(\.locale) private var locale
     @ObservedObject var historyStore: TranscriptionHistoryStore
+    @State private var cachedSummary: ReportSummary?
 
     private let cardColumns = [
         GridItem(.flexible(), spacing: 12),
@@ -10,6 +11,8 @@ struct ReportSettingsView: View {
     ]
 
     var body: some View {
+        let summary = cachedSummary ?? ReportSummary(entries: historyStore.allHistoryEntries, locale: locale)
+
         VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: cardColumns, spacing: 12) {
                 metricCard(
@@ -50,10 +53,13 @@ struct ReportSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var summary: ReportSummary {
-        ReportSummary(entries: historyStore.allHistoryEntries, locale: locale)
+        .onAppear(perform: refreshSummary)
+        .onReceive(historyStore.$entries) { _ in
+            refreshSummary()
+        }
+        .onChange(of: locale.identifier) { _, _ in
+            refreshSummary()
+        }
     }
 
     @ViewBuilder
@@ -121,6 +127,10 @@ struct ReportSettingsView: View {
         formatter.locale = locale
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    private func refreshSummary() {
+        cachedSummary = ReportSummary(entries: historyStore.allHistoryEntries, locale: locale)
     }
 }
 
