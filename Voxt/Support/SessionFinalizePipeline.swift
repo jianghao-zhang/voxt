@@ -4,11 +4,11 @@ struct RewriteAnswerPayload: Equatable {
     let title: String
     let content: String
 
-    var trimmedTitle: String {
+    nonisolated var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    var trimmedContent: String {
+    nonisolated var trimmedContent: String {
         content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

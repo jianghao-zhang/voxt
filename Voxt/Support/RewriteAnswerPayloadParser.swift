@@ -1,9 +1,9 @@
 import Foundation
 
 enum RewriteAnswerPayloadParser {
-    private static let fallbackTitle = String(localized: "AI Answer")
+    nonisolated private static let fallbackTitle = String(localized: "AI Answer")
 
-    static func normalize(_ payload: RewriteAnswerPayload) -> RewriteAnswerPayload {
+    nonisolated static func normalize(_ payload: RewriteAnswerPayload) -> RewriteAnswerPayload {
         let normalizedTitle = payload.trimmedTitle.isEmpty ? fallbackTitle : payload.trimmedTitle
         let normalizedContent = sanitizeStructuredCandidate(
             normalizedStreamChunkEnvelope(in: payload.trimmedContent) ?? payload.trimmedContent
@@ -25,7 +25,7 @@ enum RewriteAnswerPayloadParser {
         return RewriteAnswerPayload(title: normalizedTitle, content: normalizedContent)
     }
 
-    static func extract(
+    nonisolated static func extract(
         from text: String,
         fallbackTitle: String = String(localized: "AI Answer")
     ) -> RewriteAnswerPayload? {
@@ -54,7 +54,7 @@ enum RewriteAnswerPayloadParser {
         return nil
     }
 
-    static func preview(
+    nonisolated static func preview(
         from text: String,
         fallbackTitle: String = String(localized: "AI Answer")
     ) -> RewriteAnswerPayload? {
@@ -99,7 +99,7 @@ enum RewriteAnswerPayloadParser {
         return RewriteAnswerPayload(title: fallbackTitle, content: trimmed)
     }
 
-    private static func normalizedStreamChunkEnvelope(in text: String) -> String? {
+    nonisolated private static func normalizedStreamChunkEnvelope(in text: String) -> String? {
         let lines = text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .components(separatedBy: "\n")
@@ -165,7 +165,7 @@ enum RewriteAnswerPayloadParser {
         return matchedChunkLine && !normalized.isEmpty ? normalized : nil
     }
 
-    private static func recoveredStreamingChunkContent(fromRawLine text: String) -> String? {
+    nonisolated private static func recoveredStreamingChunkContent(fromRawLine text: String) -> String? {
         if let envelopeFragment = extractMalformedStreamingFragment(
             from: text,
             markers: [
@@ -206,7 +206,7 @@ enum RewriteAnswerPayloadParser {
         return nil
     }
 
-    private static func extractMalformedStreamingFragment(from text: String, markers: [String]) -> String? {
+    nonisolated private static func extractMalformedStreamingFragment(from text: String, markers: [String]) -> String? {
         let lowercased = text.lowercased()
         let lowercasedMarkers = markers.map { $0.lowercased() }
         let suffixes = [
@@ -248,7 +248,7 @@ enum RewriteAnswerPayloadParser {
         return nil
     }
 
-    private static func decodeStreamingJSONStringFragment(_ value: String) -> String {
+    nonisolated private static func decodeStreamingJSONStringFragment(_ value: String) -> String {
         let repairedValue = repairedMalformedStreamingFragment(value)
         let wrapped = "\"\(repairedValue)\""
         if let data = wrapped.data(using: .utf8),
@@ -264,7 +264,7 @@ enum RewriteAnswerPayloadParser {
             .replacingOccurrences(of: #"\\\\"#, with: "\\", options: .regularExpression)
     }
 
-    private static func repairedMalformedStreamingFragment(_ value: String) -> String {
+    nonisolated private static func repairedMalformedStreamingFragment(_ value: String) -> String {
         var repaired = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !repaired.isEmpty else { return "" }
 
@@ -309,7 +309,7 @@ enum RewriteAnswerPayloadParser {
         return repaired.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func hasOddUnescapedQuoteCount(_ text: String) -> Bool {
+    nonisolated private static func hasOddUnescapedQuoteCount(_ text: String) -> Bool {
         var escaping = false
         var quoteCount = 0
 
@@ -330,7 +330,7 @@ enum RewriteAnswerPayloadParser {
         return quoteCount % 2 == 1
     }
 
-    private static func looksLikeStreamingEnvelopeFragment(_ text: String) -> Bool {
+    nonisolated private static func looksLikeStreamingEnvelopeFragment(_ text: String) -> Bool {
         let lowered = text.lowercased()
         if lowered == "[done]" || lowered.hasPrefix("data: [done]") {
             return true
@@ -353,7 +353,7 @@ enum RewriteAnswerPayloadParser {
         return markers.contains(where: { lowered.contains($0) })
     }
 
-    private static func sanitizeStructuredCandidate(_ text: String) -> String {
+    nonisolated private static func sanitizeStructuredCandidate(_ text: String) -> String {
         var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return "" }
 
@@ -390,7 +390,7 @@ enum RewriteAnswerPayloadParser {
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func streamingChunkContent(from object: Any) -> String? {
+    nonisolated private static func streamingChunkContent(from object: Any) -> String? {
         guard let dict = object as? [String: Any] else { return nil }
 
         if let type = dict["type"] as? String,
@@ -431,7 +431,7 @@ enum RewriteAnswerPayloadParser {
         return nil
     }
 
-    private static func isStreamingTerminalChunk(_ object: Any) -> Bool {
+    nonisolated private static func isStreamingTerminalChunk(_ object: Any) -> Bool {
         guard let dict = object as? [String: Any] else { return false }
         if let choices = dict["choices"] as? [[String: Any]],
            let first = choices.first,
@@ -442,7 +442,7 @@ enum RewriteAnswerPayloadParser {
         return false
     }
 
-    private static func strippedCodeFencePayload(from text: String) -> String? {
+    nonisolated private static func strippedCodeFencePayload(from text: String) -> String? {
         guard text.hasPrefix("```"), let closingRange = text.range(of: "```", options: .backwards), closingRange.lowerBound > text.startIndex else {
             return nil
         }
@@ -457,7 +457,7 @@ enum RewriteAnswerPayloadParser {
         return String(inner)
     }
 
-    private static func decodeRewriteAnswerPayload(
+    nonisolated private static func decodeRewriteAnswerPayload(
         from text: String,
         fallbackTitle: String
     ) -> RewriteAnswerPayload? {
@@ -483,7 +483,7 @@ enum RewriteAnswerPayloadParser {
         return decodeLooseRewriteAnswerPayload(from: text, fallbackTitle: fallbackTitle)
     }
 
-    private static func rewriteAnswerPayload(
+    nonisolated private static func rewriteAnswerPayload(
         from object: [String: Any],
         fallbackTitle: String
     ) -> RewriteAnswerPayload? {
@@ -510,7 +510,7 @@ enum RewriteAnswerPayloadParser {
         return RewriteAnswerPayload(title: title, content: content)
     }
 
-    private static func decodeLooseRewriteAnswerPayload(
+    nonisolated private static func decodeLooseRewriteAnswerPayload(
         from text: String,
         fallbackTitle: String
     ) -> RewriteAnswerPayload? {
@@ -549,7 +549,7 @@ enum RewriteAnswerPayloadParser {
         )
     }
 
-    private static func firstMatch(in text: String, patterns: [String]) -> String? {
+    nonisolated private static func firstMatch(in text: String, patterns: [String]) -> String? {
         let searchRange = NSRange(text.startIndex..<text.endIndex, in: text)
         for pattern in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
@@ -568,7 +568,7 @@ enum RewriteAnswerPayloadParser {
         return nil
     }
 
-    private static func normalizeJSONFragment(_ value: String) -> String {
+    nonisolated private static func normalizeJSONFragment(_ value: String) -> String {
         var normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return "" }
 

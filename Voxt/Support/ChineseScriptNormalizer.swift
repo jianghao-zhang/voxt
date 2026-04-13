@@ -1,7 +1,7 @@
 import Foundation
 
 enum ChineseScriptNormalizer {
-    static func normalize(_ text: String, preferredMainLanguage: UserMainLanguageOption) -> String {
+    nonisolated static func normalize(_ text: String, preferredMainLanguage: UserMainLanguageOption) -> String {
         guard preferredMainLanguage.isChinese else { return text }
 
         let transformID = preferredMainLanguage.isTraditionalChinese

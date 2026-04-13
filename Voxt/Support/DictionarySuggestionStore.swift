@@ -8,9 +8,9 @@ enum DictionarySuggestionSourceContext: String, Codable {
 }
 
 enum DictionaryHistoryScanPromptLanguageSupport {
-    static let noneValue = "None"
+    nonisolated static let noneValue = "None"
 
-    static func otherLanguagesPromptValue(from codes: [String]) -> String {
+    nonisolated static func otherLanguagesPromptValue(from codes: [String]) -> String {
         let options = Array(codes.dropFirst())
             .compactMap(UserMainLanguageOption.option(for:))
         guard !options.isEmpty else { return noneValue }
@@ -501,7 +501,7 @@ enum DictionaryHistoryScanCandidateValidator {
         }
     }
 
-    private static func isLatinLetter(_ character: Character) -> Bool {
+    nonisolated private static func isLatinLetter(_ character: Character) -> Bool {
         character.unicodeScalars.contains { scalar in
             (65...90).contains(scalar.value) || (97...122).contains(scalar.value)
         }

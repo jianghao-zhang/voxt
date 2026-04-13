@@ -601,9 +601,9 @@ struct UserMainLanguageOption: Identifiable, Hashable {
         return haystack.contains(normalizedQuery)
     }
 
-    static let fallbackCode = "en"
+    nonisolated static let fallbackCode = "en"
 
-    static let all: [UserMainLanguageOption] = [
+    nonisolated static let all: [UserMainLanguageOption] = [
         .init(code: "af", promptName: "Afrikaans", aliases: []),
         .init(code: "am", promptName: "Amharic", aliases: []),
         .init(code: "ar", promptName: "Arabic", aliases: []),
@@ -703,7 +703,7 @@ struct UserMainLanguageOption: Identifiable, Hashable {
         .init(code: "zh-hant", promptName: "Traditional Chinese", aliases: ["Chinese", "Mandarin", "Chinese (Traditional)", "Traditional Chinese", "zh-TW", "zh-HK"])
     ]
 
-    static func option(for code: String) -> UserMainLanguageOption? {
+    nonisolated static func option(for code: String) -> UserMainLanguageOption? {
         let normalized = normalizedCode(for: code)
         return all.first { $0.code == normalized }
     }
@@ -757,11 +757,11 @@ struct UserMainLanguageOption: Identifiable, Hashable {
         return option(for: fallbackCode) ?? all[0]
     }
 
-    var isChinese: Bool {
+    nonisolated var isChinese: Bool {
         code == "zh-hans" || code == "zh-hant"
     }
 
-    var isTraditionalChinese: Bool {
+    nonisolated var isTraditionalChinese: Bool {
         code == "zh-hant"
     }
 
@@ -774,7 +774,7 @@ struct UserMainLanguageOption: Identifiable, Hashable {
         }
     }
 
-    private static func normalizedCode(for rawValue: String) -> String {
+    nonisolated private static func normalizedCode(for rawValue: String) -> String {
         let normalized = rawValue
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()

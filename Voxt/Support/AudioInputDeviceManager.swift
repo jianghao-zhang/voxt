@@ -170,18 +170,20 @@ enum AudioInputDeviceManager {
             mElement: kAudioObjectPropertyElementMain
         )
 
-        var unmanagedUID: CFString?
-        var dataSize = UInt32(MemoryLayout<CFString?>.size)
-        let status = AudioObjectGetPropertyData(
-            deviceID,
-            &propertyAddress,
-            0,
-            nil,
-            &dataSize,
-            &unmanagedUID
-        )
+        var unmanagedUID: Unmanaged<CFString>?
+        var dataSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        let status = withUnsafeMutablePointer(to: &unmanagedUID) { pointer in
+            AudioObjectGetPropertyData(
+                deviceID,
+                &propertyAddress,
+                0,
+                nil,
+                &dataSize,
+                pointer
+            )
+        }
         guard status == noErr, let unmanagedUID else { return nil }
-        return unmanagedUID as String
+        return unmanagedUID.takeUnretainedValue() as String
     }
 }
 

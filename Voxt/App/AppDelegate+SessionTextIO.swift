@@ -341,7 +341,10 @@ extension AppDelegate {
             value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        if sessionOutputMode != .translation {
+        switch sessionOutputMode {
+        case .translation:
+            break
+        case .transcription, .rewrite:
             let normalizedChineseScript = ChineseScriptNormalizer.normalize(
                 value,
                 preferredMainLanguage: userMainLanguage
@@ -413,7 +416,9 @@ extension AppDelegate {
                 postProcessedSource = deliveredText
             }
 
-            let dictionaryCorrection = dictionaryPlan.resolve(text: postProcessedSource)
+            let dictionaryCorrection = await MainActor.run {
+                dictionaryPlan.resolve(text: postProcessedSource)
+            }
             let dictionarySuggestions = await MainActor.run {
                 self.previewDictionarySuggestions(
                     for: dictionaryCorrection.text,
