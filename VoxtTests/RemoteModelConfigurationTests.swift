@@ -151,6 +151,15 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertFalse(resolved.searchEnabled)
     }
 
+    func testResponsesProviderCapabilitiesAreConfiguredPerProvider() {
+        XCTAssertTrue(RemoteLLMProvider.aliyunBailian.usesResponsesAPI)
+        XCTAssertTrue(RemoteLLMProvider.volcengine.usesResponsesAPI)
+        XCTAssertTrue(RemoteLLMProvider.aliyunBailian.supportsHostedSearch)
+        XCTAssertTrue(RemoteLLMProvider.volcengine.supportsHostedSearch)
+        XCTAssertTrue(RemoteLLMProvider.aliyunBailian.defaultSearchEnabled)
+        XCTAssertFalse(RemoteLLMProvider.volcengine.defaultSearchEnabled)
+    }
+
     func testResolvedAliyunLLMConfigurationDefaultsSearchToEnabled() {
         let resolved = RemoteModelConfigurationStore.resolvedLLMConfiguration(
             provider: .aliyunBailian,
@@ -158,6 +167,15 @@ final class RemoteModelConfigurationTests: XCTestCase {
         )
 
         XCTAssertTrue(resolved.searchEnabled)
+    }
+
+    func testResolvedVolcengineLLMConfigurationDefaultsSearchToDisabled() {
+        let resolved = RemoteModelConfigurationStore.resolvedLLMConfiguration(
+            provider: .volcengine,
+            stored: [:]
+        )
+
+        XCTAssertFalse(resolved.searchEnabled)
     }
 
     func testDecodeLegacyAliyunLLMConfigurationDefaultsSearchToEnabled() throws {
@@ -178,6 +196,119 @@ final class RemoteModelConfigurationTests: XCTestCase {
         let loaded = RemoteModelConfigurationStore.loadConfigurations(from: legacyJSON)
 
         XCTAssertEqual(loaded["aliyunBailian"]?.searchEnabled, true)
+    }
+
+    func testDecodeLegacyVolcengineLLMConfigurationDefaultsSearchToDisabled() throws {
+        let legacyJSON = """
+        [
+          {
+            "providerID": "volcengine",
+            "model": "doubao-1-5-pro",
+            "meetingModel": "",
+            "endpoint": "",
+            "apiKey": "",
+            "appID": "",
+            "accessToken": ""
+          }
+        ]
+        """
+
+        let loaded = RemoteModelConfigurationStore.loadConfigurations(from: legacyJSON)
+
+        XCTAssertEqual(loaded["volcengine"]?.searchEnabled, false)
+    }
+
+    func testDecodeLegacyAliyunEndpointMigratesToResponsesURL() {
+        let legacyJSON = """
+        [
+          {
+            "providerID": "aliyunBailian",
+            "model": "qwen-plus-latest",
+            "meetingModel": "",
+            "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            "apiKey": "",
+            "appID": "",
+            "accessToken": ""
+          }
+        ]
+        """
+
+        let loaded = RemoteModelConfigurationStore.loadConfigurations(from: legacyJSON)
+
+        XCTAssertEqual(
+            loaded["aliyunBailian"]?.endpoint,
+            "https://dashscope.aliyuncs.com/compatible-mode/v1/responses"
+        )
+    }
+
+    func testDecodeLegacyVolcengineEndpointMigratesToResponsesURL() {
+        let legacyJSON = """
+        [
+          {
+            "providerID": "volcengine",
+            "model": "doubao-1-5-pro",
+            "meetingModel": "",
+            "endpoint": "https://ark.cn-beijing.volces.com/api/v3/models",
+            "apiKey": "",
+            "appID": "",
+            "accessToken": ""
+          }
+        ]
+        """
+
+        let loaded = RemoteModelConfigurationStore.loadConfigurations(from: legacyJSON)
+
+        XCTAssertEqual(
+            loaded["volcengine"]?.endpoint,
+            "https://ark.cn-beijing.volces.com/api/v3/responses"
+        )
+    }
+
+    func testMigrateLegacyLLMEndpointsRewritesPersistedLegacyURLs() {
+        let suiteName = "RemoteModelConfigurationTests.migrateLegacyLLMEndpoints.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(
+            """
+            [
+              {
+                "providerID": "aliyunBailian",
+                "model": "qwen-plus-latest",
+                "meetingModel": "",
+                "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+                "apiKey": "",
+                "appID": "",
+                "accessToken": ""
+              },
+              {
+                "providerID": "volcengine",
+                "model": "doubao-1-5-pro",
+                "meetingModel": "",
+                "endpoint": "https://ark.cn-beijing.volces.com/api/v3/models",
+                "apiKey": "",
+                "appID": "",
+                "accessToken": ""
+              }
+            ]
+            """,
+            forKey: AppPreferenceKey.remoteLLMProviderConfigurations
+        )
+
+        RemoteModelConfigurationStore.migrateLegacyLLMEndpoints(defaults: defaults)
+
+        let migrated = RemoteModelConfigurationStore.loadConfigurations(
+            from: defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? ""
+        )
+
+        XCTAssertEqual(
+            migrated["aliyunBailian"]?.endpoint,
+            "https://dashscope.aliyuncs.com/compatible-mode/v1/responses"
+        )
+        XCTAssertEqual(
+            migrated["volcengine"]?.endpoint,
+            "https://ark.cn-beijing.volces.com/api/v3/responses"
+        )
     }
 
     func testAliyunMeetingFileTranscriptionUsesAsyncEndpoints() {

@@ -3,7 +3,7 @@ import SwiftUI
 extension RemoteProviderConfigurationSheet {
     var modelSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Model")
+            Text(AppLocalization.localizedString("Model"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             SettingsMenuPicker(
@@ -14,10 +14,10 @@ extension RemoteProviderConfigurationSheet {
             )
 
             if llmProviderForPicker != nil && resolvedSelectionForPicker == customModelOptionID {
-                Text("Custom Model ID (Optional)")
+                Text(AppLocalization.localizedString("Custom Model ID (Optional)"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                TextField("e.g. doubao-seed-2-0-pro-260215", text: $customModelID)
+                TextField(AppLocalization.localizedString("e.g. doubao-seed-2-0-pro-260215"), text: $customModelID)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
             }
@@ -27,10 +27,10 @@ extension RemoteProviderConfigurationSheet {
     var endpointAndKeySection: some View {
         Group {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Endpoint (Optional)")
+                Text(AppLocalization.localizedString("Endpoint (Optional)"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                TextField("https://...", text: $endpoint)
+                TextField(AppLocalization.localizedString("https://..."), text: $endpoint)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
                 if !endpointPresets.isEmpty {
@@ -43,7 +43,7 @@ extension RemoteProviderConfigurationSheet {
                             }
                         } label: {
                             HStack(spacing: 5) {
-                                Text("Apply Preset")
+                                Text(AppLocalization.localizedString("Apply Preset"))
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 10, weight: .semibold))
                             }
@@ -51,7 +51,7 @@ extension RemoteProviderConfigurationSheet {
                         .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 30))
 
                         if !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Button("Clear") {
+                            Button(AppLocalization.localizedString("Clear")) {
                                 endpoint = ""
                             }
                             .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 30))
@@ -59,26 +59,29 @@ extension RemoteProviderConfigurationSheet {
 
                         Spacer()
                     }
-                    Text("Aliyun API keys are region-specific; use the matching endpoint.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 }
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("API Key")
+                Text(AppLocalization.localizedString("API Key"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                SecureField("Paste API key", text: $apiKey)
+                SecureField(AppLocalization.localizedString("Paste API key"), text: $apiKey)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
+            }
+
+            if let endpointPresetHintText {
+                Text(endpointPresetHintText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     var meetingModelSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Meeting ASR")
+            Text(AppLocalization.localizedString("Meeting ASR"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             SettingsMenuPicker(
@@ -89,15 +92,15 @@ extension RemoteProviderConfigurationSheet {
             )
 
             if resolvedMeetingSelectionForPicker == customModelOptionID {
-                Text("Custom Meeting Model ID")
+                Text(AppLocalization.localizedString("Custom Meeting Model ID"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                TextField("e.g. qwen3-asr-flash-filetrans", text: $customMeetingModelID)
+                TextField(AppLocalization.localizedString("e.g. qwen3-asr-flash-filetrans"), text: $customMeetingModelID)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
             }
 
-            Text("Used only for Meeting Notes transcription.")
+            Text(AppLocalization.localizedString("Used only for Meeting Notes transcription."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -106,19 +109,19 @@ extension RemoteProviderConfigurationSheet {
     var doubaoCredentialsSection: some View {
         Group {
             VStack(alignment: .leading, spacing: 8) {
-                Text("App ID")
+                Text(AppLocalization.localizedString("App ID"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                TextField("App ID", text: $appID)
+                TextField(AppLocalization.localizedString("App ID"), text: $appID)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Access Token")
+                Text(AppLocalization.localizedString("Access Token"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                SecureField("Paste access token", text: $accessToken)
+                SecureField(AppLocalization.localizedString("Paste access token"), text: $accessToken)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
             }
@@ -135,9 +138,9 @@ extension RemoteProviderConfigurationSheet {
 
     var openAIChunkSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Chunk Pseudo Realtime Preview", isOn: $openAIChunkPseudoRealtimeEnabled)
+            Toggle(AppLocalization.localizedString("Chunk Pseudo Realtime Preview"), isOn: $openAIChunkPseudoRealtimeEnabled)
                 .toggleStyle(.switch)
-            Text("Enable segmented OpenAI ASR preview during recording. This roughly doubles usage.")
+            Text(AppLocalization.localizedString("Enable segmented OpenAI ASR preview during recording. This roughly doubles usage."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -145,7 +148,7 @@ extension RemoteProviderConfigurationSheet {
 
     var searchSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Search", isOn: $searchEnabled)
+            Toggle(AppLocalization.localizedString("Search"), isOn: $searchEnabled)
                 .toggleStyle(.switch)
 
             if let provider = llmProviderForPicker {
@@ -163,27 +166,27 @@ extension RemoteProviderConfigurationSheet {
                 ProgressView()
                     .controlSize(.small)
             }
-            Button("Test") {
+            Button(AppLocalization.localizedString("Test")) {
                 testConnection()
             }
             .buttonStyle(SettingsPillButtonStyle())
             .disabled(isTestingConnection)
 
             if showsMeetingASRSection {
-                Button("Test Meeting ASR") {
+                Button(AppLocalization.localizedString("Test Meeting ASR")) {
                     testMeetingConnection()
                 }
                 .buttonStyle(SettingsPillButtonStyle())
                 .disabled(isTestingConnection)
             }
         } trailing: {
-            Button("Cancel") {
+            Button(AppLocalization.localizedString("Cancel")) {
                 dismiss()
             }
             .buttonStyle(SettingsPillButtonStyle())
             .keyboardShortcut(.cancelAction)
 
-            Button("Save") {
+            Button(AppLocalization.localizedString("Save")) {
                 onSave(currentConfigurationSnapshot)
                 dismiss()
             }

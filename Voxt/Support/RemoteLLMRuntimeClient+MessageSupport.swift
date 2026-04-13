@@ -75,14 +75,15 @@ extension RemoteLLMRuntimeClient {
         """
     }
 
-    func makeAliyunResponsesRequest(
+    func makeResponsesRequest(
+        provider: RemoteLLMProvider,
         endpointValue: String,
         model: String,
         systemPrompt: String,
-        dictatedPrompt: String,
+        inputPayload: Any,
         configuration: RemoteProviderConfiguration,
-        conversationHistory: [RewriteConversationPromptTurn],
         previousResponseID: String?,
+        tuning: RemoteLLMRuntimeClient.GenerationTuning,
         streamingEnabled: Bool
     ) throws -> URLRequest {
         guard let url = URL(string: endpointValue) else {
@@ -95,7 +96,7 @@ extension RemoteLLMRuntimeClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = requestTimeoutInterval(for: RemoteLLMProvider.aliyunBailian)
+        request.timeoutInterval = requestTimeoutInterval(for: provider)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream, application/json", forHTTPHeaderField: "Accept")
 
@@ -106,7 +107,10 @@ extension RemoteLLMRuntimeClient {
 
         var payload: [String: Any] = [
             "model": model,
-            "stream": streamingEnabled
+            "stream": streamingEnabled,
+            "max_output_tokens": tuning.maxTokens,
+            "temperature": tuning.temperature,
+            "top_p": tuning.topP
         ]
 
         let trimmedSystemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -117,20 +121,12 @@ extension RemoteLLMRuntimeClient {
         let trimmedPreviousResponseID = previousResponseID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedPreviousResponseID.isEmpty {
             payload["previous_response_id"] = trimmedPreviousResponseID
-            payload["input"] = [
-                [
-                    "role": "user",
-                    "content": dictatedPrompt
-                ]
-            ]
+            payload["input"] = inputPayload
         } else {
-            payload["input"] = aliyunResponsesInputMessages(
-                dictatedPrompt: dictatedPrompt,
-                conversationHistory: conversationHistory
-            )
+            payload["input"] = inputPayload
         }
 
-        if configuration.searchEnabled && RemoteLLMProvider.aliyunBailian.supportsHostedSearch {
+        if configuration.searchEnabled && provider.supportsHostedSearch {
             payload["tools"] = [
                 [
                     "type": "web_search"
@@ -167,8 +163,6 @@ extension RemoteLLMRuntimeClient {
         guard configuration.searchEnabled, provider.supportsHostedSearch else { return }
 
         switch provider {
-        case .aliyunBailian:
-            payload["enable_search"] = true
         case .zai:
             payload["tools"] = [
                 [
@@ -184,8 +178,8 @@ extension RemoteLLMRuntimeClient {
         }
     }
 
-    func aliyunResponsesInputMessages(
-        dictatedPrompt: String,
+    func responsesInputMessages(
+        currentUserInput: String,
         conversationHistory: [RewriteConversationPromptTurn]
     ) -> [[String: Any]] {
         var messages: [[String: Any]] = []
@@ -213,17 +207,19 @@ extension RemoteLLMRuntimeClient {
 
         messages.append([
             "role": "user",
-            "content": dictatedPrompt
+            "content": currentUserInput
         ])
         return messages
     }
 
-    func aliyunResponsesStreamingDelta(from object: [String: Any]) -> String? {
+    func responsesStreamingDelta(from object: [String: Any]) -> String? {
         if let type = object["type"] as? String {
             if type == "response.output_text.delta", let delta = object["delta"] as? String, !delta.isEmpty {
                 return delta
             }
-            if type == "response.output_text", let text = object["text"] as? String, !text.isEmpty {
+            if (type == "response.output_text" || type == "response.output_text.done"),
+               let text = object["text"] as? String,
+               !text.isEmpty {
                 return text
             }
             if type == "response.completed",
@@ -243,7 +239,7 @@ extension RemoteLLMRuntimeClient {
         return nil
     }
 
-    func aliyunResponsesResponseID(from object: [String: Any]) -> String? {
+    func responsesResponseID(from object: [String: Any]) -> String? {
         if let response = object["response"] as? [String: Any],
            let id = response["id"] as? String,
            !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -261,7 +257,7 @@ extension RemoteLLMRuntimeClient {
         return nil
     }
 
-    func aliyunResponsesErrorMessage(from object: [String: Any]) -> String? {
+    func responsesErrorMessage(from object: [String: Any]) -> String? {
         if let type = object["type"] as? String,
            type == "error" || type == "response.failed" {
             if let error = object["error"] as? [String: Any],

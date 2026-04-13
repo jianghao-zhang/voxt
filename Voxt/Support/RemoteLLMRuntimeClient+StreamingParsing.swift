@@ -3,6 +3,27 @@ import Foundation
 extension RemoteLLMRuntimeClient {
     func extractPrimaryText(from object: Any) -> String? {
         if let dict = object as? [String: Any] {
+            if let outputText = dict["output_text"] as? String,
+               !outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return outputText
+            }
+            if let response = dict["response"] {
+                return extractPrimaryText(from: response)
+            }
+            if let output = dict["output"] as? [[String: Any]] {
+                for item in output {
+                    if let content = item["content"] as? [[String: Any]] {
+                        for block in content {
+                            let type = (block["type"] as? String)?.lowercased()
+                            if (type == "output_text" || type == "text"),
+                               let text = block["text"] as? String,
+                               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                return text
+                            }
+                        }
+                    }
+                }
+            }
             if let choices = dict["choices"] as? [[String: Any]],
                let first = choices.first {
                 if let message = first["message"] as? [String: Any] {
@@ -16,7 +37,10 @@ extension RemoteLLMRuntimeClient {
             }
             if let contentArray = dict["content"] as? [[String: Any]] {
                 for item in contentArray {
-                    if let text = item["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let type = (item["type"] as? String)?.lowercased()
+                    if (type == nil || type == "text" || type == "output_text"),
+                       let text = item["text"] as? String,
+                       !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         return text
                     }
                 }
@@ -47,6 +71,19 @@ extension RemoteLLMRuntimeClient {
 
     func extractStreamingDelta(from object: Any) -> String? {
         guard let dict = object as? [String: Any] else { return nil }
+
+        if let type = dict["type"] as? String {
+            if type == "response.output_text.delta",
+               let delta = dict["delta"] as? String,
+               !delta.isEmpty {
+                return delta
+            }
+            if (type == "response.output_text" || type == "response.output_text.done"),
+               let text = dict["text"] as? String,
+               !text.isEmpty {
+                return text
+            }
+        }
 
         if let type = dict["type"] as? String,
            type == "content_block_delta",

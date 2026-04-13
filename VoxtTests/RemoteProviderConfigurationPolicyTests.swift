@@ -56,5 +56,34 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
         XCTAssertTrue(qwenPresets.allSatisfy { $0.url.contains("/realtime") })
         XCTAssertTrue(funPresets.allSatisfy { $0.url.contains("/inference") })
     }
-}
 
+    func testAliyunLLMEndpointPresetsUseResponsesAPI() {
+        let presets = RemoteProviderConfigurationPolicy.endpointPresets(
+            target: .llm(.aliyunBailian),
+            resolvedModel: "qwen-plus"
+        )
+
+        XCTAssertEqual(
+            presets.map(\.url),
+            [
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/responses",
+                "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/responses",
+                "https://dashscope-us.aliyuncs.com/compatible-mode/v1/responses"
+            ]
+        )
+    }
+
+    func testVolcengineLLMEndpointPresetsUseResponsesAPI() {
+        let presets = RemoteProviderConfigurationPolicy.endpointPresets(
+            target: .llm(.volcengine),
+            resolvedModel: "doubao-1-5-pro"
+        )
+
+        XCTAssertEqual(
+            presets.map(\.url),
+            [
+                "https://ark.cn-beijing.volces.com/api/v3/responses"
+            ]
+        )
+    }
+}

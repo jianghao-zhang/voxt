@@ -676,6 +676,13 @@ struct RemoteProviderConnectivityTester {
             if !configuration.apiKey.isEmpty {
                 headers["Authorization"] = "Bearer \(configuration.apiKey)"
             }
+            if provider.usesResponsesAPI {
+                return try await testResponsesReachability(
+                    endpoint: endpoint,
+                    headers: headers,
+                    model: model
+                )
+            }
             return try await testOpenAICompatibleReachability(
                 provider: provider,
                 endpoint: endpoint,
@@ -716,6 +723,18 @@ struct RemoteProviderConnectivityTester {
                 "stream": false
             ]
         }
+        return try await testJSONPOSTReachability(endpoint: endpoint, headers: headers, body: body)
+    }
+
+    private func testResponsesReachability(
+        endpoint: String,
+        headers: [String: String],
+        model: String
+    ) async throws -> String {
+        let body: [String: Any] = [
+            "model": model,
+            "input": "ping"
+        ]
         return try await testJSONPOSTReachability(endpoint: endpoint, headers: headers, body: body)
     }
 
@@ -1483,106 +1502,15 @@ struct RemoteProviderConnectivityTester {
     }
 
     private func providerDefaultTestEndpoint(_ provider: RemoteLLMProvider) -> String {
-        switch provider {
-        case .anthropic:
-            return "https://api.anthropic.com/v1/messages"
-        case .google:
-            return "https://generativelanguage.googleapis.com/v1beta/models"
-        case .openAI:
-            return "https://api.openai.com/v1/models"
-        case .ollama:
-            return "http://127.0.0.1:11434/api/chat"
-        case .deepseek:
-            return "https://api.deepseek.com/v1/models"
-        case .openrouter:
-            return "https://openrouter.ai/api/v1/models"
-        case .grok:
-            return "https://api.x.ai/v1/models"
-        case .zai:
-            return "https://open.bigmodel.cn/api/paas/v4/models"
-        case .volcengine:
-            return "https://ark.cn-beijing.volces.com/api/v3/models"
-        case .kimi:
-            return "https://api.moonshot.cn/v1/models"
-        case .lmStudio:
-            return "http://127.0.0.1:1234/v1/models"
-        case .minimax:
-            return "https://api.minimax.chat/v1/text/chatcompletion_v2"
-        case .aliyunBailian:
-            return "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
-        }
+        RemoteLLMRuntimeClient().providerDefaultEndpoint(provider)
     }
 
     private func resolvedLLMTestEndpoint(provider: RemoteLLMProvider, endpoint: String, model: String) -> String {
-        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        let base = trimmed.isEmpty ? providerDefaultTestEndpoint(provider) : trimmed
-        guard let url = URL(string: base) else { return base }
-        let path = url.path.lowercased()
-
-        switch provider {
-        case .anthropic:
-            if path.hasSuffix("/v1/messages") { return base }
-            if path.hasSuffix("/v1/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/messages")
-            }
-            if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/messages") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/v1/messages") }
-            return base
-        case .google:
-            if path.contains(":generatecontent") { return base }
-            if path.hasSuffix("/v1beta/models") || path.hasSuffix("/v1/models") || path.hasSuffix("/models") {
-                return appendingPath(base, suffix: "/\(model):generateContent")
-            }
-            if path.hasSuffix("/v1beta") || path.hasSuffix("/v1") {
-                return appendingPath(base, suffix: "/models/\(model):generateContent")
-            }
-            if path.isEmpty || path == "/" {
-                return appendingPath(base, suffix: "/v1beta/models/\(model):generateContent")
-            }
-            return base
-        case .minimax:
-            if path.hasSuffix("/v1/text/chatcompletion_v2") || path.hasSuffix("/text/chatcompletion_v2") {
-                return base
-            }
-            if path.hasSuffix("/v1/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/text/chatcompletion_v2")
-            }
-            if path.hasSuffix("/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/models", newSuffix: "/text/chatcompletion_v2")
-            }
-            if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/text/chatcompletion_v2") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/v1/text/chatcompletion_v2") }
-            return base
-        case .ollama:
-            if path.hasSuffix("/api/chat") || path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
-                return base
-            }
-            if path.hasSuffix("/api/tags") {
-                return replacingPathSuffix(in: base, oldSuffix: "/api/tags", newSuffix: "/api/chat")
-            }
-            if path.hasSuffix("/v1/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/chat/completions")
-            }
-            if path.hasSuffix("/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/models", newSuffix: "/chat/completions")
-            }
-            if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/api/chat") }
-            return base
-        case .openAI, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio, .aliyunBailian:
-            if path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
-                return base
-            }
-            if path.hasSuffix("/v1/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/chat/completions")
-            }
-            if path.hasSuffix("/models") {
-                return replacingPathSuffix(in: base, oldSuffix: "/models", newSuffix: "/chat/completions")
-            }
-            if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/v1/chat/completions") }
-            return base
-        }
+        RemoteLLMRuntimeClient().resolvedLLMEndpoint(
+            provider: provider,
+            endpoint: endpoint,
+            model: model
+        )
     }
 
     private func replacingPathSuffix(in value: String, oldSuffix: String, newSuffix: String) -> String {

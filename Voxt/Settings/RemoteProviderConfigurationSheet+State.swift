@@ -8,7 +8,7 @@ extension RemoteProviderConfigurationSheet {
                 llmProvider.basicModelOptions +
                 llmProvider.advancedModelOptions
             ).map { SettingsMenuOption(value: $0.id, title: $0.title) } + [
-                SettingsMenuOption(value: customModelOptionID, title: "Custom...")
+                SettingsMenuOption(value: customModelOptionID, title: AppLocalization.localizedString("Custom..."))
             ]
         }
         return providerModelOptions.map { SettingsMenuOption(value: $0.id, title: $0.title) }
@@ -16,18 +16,18 @@ extension RemoteProviderConfigurationSheet {
 
     var providerModelSelectedTitle: String {
         providerModelMenuOptions.first(where: { $0.value == resolvedSelectionForPicker })?.title
-            ?? "Custom..."
+            ?? AppLocalization.localizedString("Custom...")
     }
 
     var meetingModelMenuOptions: [SettingsMenuOption<String>] {
         meetingModelOptions.map { SettingsMenuOption(value: $0.id, title: $0.title) } + [
-            SettingsMenuOption(value: customModelOptionID, title: "Custom...")
+            SettingsMenuOption(value: customModelOptionID, title: AppLocalization.localizedString("Custom..."))
         ]
     }
 
     var meetingModelSelectedTitle: String {
         meetingModelMenuOptions.first(where: { $0.value == resolvedMeetingSelectionForPicker })?.title
-            ?? "Custom..."
+            ?? AppLocalization.localizedString("Custom...")
     }
 
     var currentConfigurationSnapshot: RemoteProviderConfiguration {
@@ -200,6 +200,20 @@ extension RemoteProviderConfigurationSheet {
             target: testTarget,
             resolvedModel: resolvedModelValue()
         )
+    }
+
+    var endpointPresetHintText: String? {
+        guard !endpointPresets.isEmpty else { return nil }
+        guard let provider = llmProviderForPicker else { return nil }
+
+        switch provider {
+        case .aliyunBailian:
+            return AppLocalization.localizedString("Aliyun API keys are region-specific; use the matching endpoint.")
+        case .volcengine:
+            return AppLocalization.localizedString("Volcengine models should use the Responses endpoint in the same region as the API key.")
+        default:
+            return nil
+        }
     }
 
     func testConnection() {

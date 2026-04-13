@@ -8,7 +8,7 @@ struct RemoteLLMRuntimeClient {
         let emittedChunkCount: Int
     }
 
-    private struct AliyunResponsesStreamingResult {
+    private struct ResponsesStreamingResult {
         let text: String
         let responseID: String?
     }
@@ -19,10 +19,37 @@ struct RemoteLLMRuntimeClient {
         case rewrite
     }
 
-    private struct GenerationTuning {
+    struct GenerationTuning {
         let maxTokens: Int
         let temperature: Double
         let topP: Double
+    }
+
+    private struct StreamingPartialDeliveryState {
+        var lastPublishedAt = Date.distantPast
+        var lastPublishedLength = 0
+
+        mutating func shouldPublish(
+            aggregatedText: String,
+            force: Bool,
+            minimumInterval: TimeInterval = 0.05,
+            minimumCharacterDelta: Int = 96
+        ) -> Bool {
+            guard force else {
+                let elapsed = Date().timeIntervalSince(lastPublishedAt)
+                let appendedCount = aggregatedText.count - lastPublishedLength
+                guard elapsed >= minimumInterval || appendedCount >= minimumCharacterDelta else {
+                    return false
+                }
+                return true
+            }
+            return aggregatedText.count != lastPublishedLength
+        }
+
+        mutating func markPublished(aggregatedText: String) {
+            lastPublishedAt = Date()
+            lastPublishedLength = aggregatedText.count
+        }
     }
 
     func enhance(
@@ -36,6 +63,20 @@ struct RemoteLLMRuntimeClient {
         Input:
         \(text)
         """
+        if provider.usesResponsesAPI {
+            let result = try await completeResponses(
+                systemPrompt: systemPrompt,
+                debugInput: text,
+                requestContentForLog: prompt,
+                inputPayload: prompt,
+                inputTextLength: text.count,
+                intent: .enhancement,
+                provider: provider,
+                configuration: configuration
+            )
+            let trimmed = result.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            return trimmed.isEmpty ? text : trimmed
+        }
         let output = try await complete(
             systemPrompt: systemPrompt,
             debugInput: text,
@@ -56,6 +97,19 @@ struct RemoteLLMRuntimeClient {
     ) async throws -> String {
         let input = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return "" }
+        if provider.usesResponsesAPI {
+            let result = try await completeResponses(
+                systemPrompt: "",
+                debugInput: input,
+                requestContentForLog: input,
+                inputPayload: input,
+                inputTextLength: input.count,
+                intent: .enhancement,
+                provider: provider,
+                configuration: configuration
+            )
+            return result.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        }
         let output = try await complete(
             systemPrompt: "",
             debugInput: input,
@@ -79,6 +133,20 @@ struct RemoteLLMRuntimeClient {
         Input:
         \(text)
         """
+        if provider.usesResponsesAPI {
+            let result = try await completeResponses(
+                systemPrompt: systemPrompt,
+                debugInput: text,
+                requestContentForLog: prompt,
+                inputPayload: prompt,
+                inputTextLength: text.count,
+                intent: .translation,
+                provider: provider,
+                configuration: configuration
+            )
+            let trimmed = result.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            return trimmed.isEmpty ? text : trimmed
+        }
         let output = try await complete(
             systemPrompt: systemPrompt,
             debugInput: text,
@@ -103,26 +171,6 @@ struct RemoteLLMRuntimeClient {
         onPartialText: (@Sendable (String) -> Void)? = nil,
         onResponseID: ((String) -> Void)? = nil
     ) async throws -> String {
-        if shouldUseAliyunResponsesAPI(
-            provider: provider,
-            configuration: configuration,
-            sourceText: sourceText,
-            wantsStreaming: onPartialText != nil
-        ) {
-            let result = try await completeAliyunResponsesRewrite(
-                dictatedPrompt: dictatedPrompt,
-                systemPrompt: systemPrompt,
-                provider: provider,
-                configuration: configuration,
-                conversationHistory: conversationHistory,
-                previousResponseID: previousResponseID,
-                onPartialText: onPartialText ?? { _ in },
-                onResponseID: onResponseID
-            )
-            let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? sourceText : trimmed
-        }
-
         let prompt = """
         Produce the final text to insert according to the instructions.
         Spoken instruction:
@@ -131,6 +179,55 @@ struct RemoteLLMRuntimeClient {
         Selected source text:
         \(sourceText)
         """
+
+        if provider.usesResponsesAPI {
+            let directAnswerMode = sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let trimmedPreviousResponseID = previousResponseID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let inputPayload: Any
+            let requestContentForLog: String
+
+            if directAnswerMode {
+                if !trimmedPreviousResponseID.isEmpty {
+                    inputPayload = dictatedPrompt
+                    requestContentForLog = dictatedPrompt
+                } else if !conversationHistory.isEmpty {
+                    inputPayload = responsesInputMessages(
+                        currentUserInput: dictatedPrompt,
+                        conversationHistory: conversationHistory
+                    )
+                    requestContentForLog = dictatedPrompt
+                } else {
+                    inputPayload = dictatedPrompt
+                    requestContentForLog = dictatedPrompt
+                }
+            } else {
+                inputPayload = prompt
+                requestContentForLog = prompt
+            }
+
+            let result = try await completeResponses(
+                systemPrompt: systemPrompt,
+                debugInput: """
+                Spoken instruction:
+                \(dictatedPrompt)
+
+                Selected source text:
+                \(sourceText)
+                """,
+                requestContentForLog: requestContentForLog,
+                inputPayload: inputPayload,
+                inputTextLength: sourceText.count + dictatedPrompt.count,
+                intent: .rewrite,
+                provider: provider,
+                configuration: configuration,
+                previousResponseID: directAnswerMode ? previousResponseID : nil,
+                onPartialText: onPartialText,
+                onResponseID: onResponseID
+            )
+            let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? sourceText : trimmed
+        }
+
         let shouldUseConversationMessages =
             sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
             !conversationHistory.isEmpty
@@ -162,61 +259,82 @@ struct RemoteLLMRuntimeClient {
         return trimmed.isEmpty ? sourceText : trimmed
     }
 
-    func shouldUseAliyunResponsesAPI(
-        provider: RemoteLLMProvider,
-        configuration: RemoteProviderConfiguration,
-        sourceText: String,
-        wantsStreaming: Bool
-    ) -> Bool {
-        guard wantsStreaming,
-              sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            return false
-        }
-
-        let explicitEndpoint = configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !explicitEndpoint.isEmpty,
-              let url = URL(string: explicitEndpoint),
-              let host = url.host?.lowercased()
-        else {
-            return false
-        }
-
-        let path = url.path.lowercased()
-        let isDashScopeHost =
-            host.contains("dashscope.aliyuncs.com") ||
-            host.contains("dashscope-intl.aliyuncs.com") ||
-            host.contains("dashscope-us.aliyuncs.com")
-        let isResponsesEndpoint =
-            path.hasSuffix("/v1/responses") ||
-            path.hasSuffix("/responses")
-
-        return isDashScopeHost && isResponsesEndpoint
-    }
-
-    private func completeAliyunResponsesRewrite(
-        dictatedPrompt: String,
+    private func completeResponses(
         systemPrompt: String,
+        debugInput: String,
+        requestContentForLog: String,
+        inputPayload: Any,
+        inputTextLength: Int,
+        intent: CompletionIntent,
         provider: RemoteLLMProvider,
         configuration: RemoteProviderConfiguration,
-        conversationHistory: [RewriteConversationPromptTurn],
-        previousResponseID: String?,
-        onPartialText: @escaping (String) -> Void,
-        onResponseID: ((String) -> Void)?
-    ) async throws -> AliyunResponsesStreamingResult {
+        previousResponseID: String? = nil,
+        onPartialText: (@Sendable (String) -> Void)? = nil,
+        onResponseID: ((String) -> Void)? = nil
+    ) async throws -> ResponsesStreamingResult {
         let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? provider.suggestedModel
             : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
         let endpointValue = responsesEndpointValue(provider: provider, endpoint: configuration.endpoint, model: model)
-        let request = try makeAliyunResponsesRequest(
+        let tuning = generationTuning(
+            for: provider,
+            inputTextLength: inputTextLength,
+            systemPromptLength: systemPrompt.count,
+            userPromptLength: requestContentForLog.count,
+            intent: intent
+        )
+        let shouldAttemptStreaming = onPartialText != nil && supportsStreaming(provider: provider, intent: intent)
+
+        if shouldAttemptStreaming, let onPartialText {
+            do {
+                let streamingRequest = try makeResponsesRequest(
+                    provider: provider,
+                    endpointValue: endpointValue,
+                    model: model,
+                    systemPrompt: systemPrompt,
+                    inputPayload: inputPayload,
+                    configuration: configuration,
+                    previousResponseID: previousResponseID,
+                    tuning: tuning,
+                    streamingEnabled: true
+                )
+                let requestStartedAt = Date()
+                logRequest(
+                    request: streamingRequest,
+                    provider: provider,
+                    endpointValue: endpointValue,
+                    model: model,
+                    inputTextLength: inputTextLength,
+                    systemPrompt: systemPrompt,
+                    debugInput: debugInput,
+                    userPrompt: requestContentForLog,
+                    tuning: tuning
+                )
+                return try await completeResponsesStreaming(
+                    request: streamingRequest,
+                    provider: provider,
+                    endpointValue: endpointValue,
+                    requestStartedAt: requestStartedAt,
+                    onPartialText: onPartialText,
+                    onResponseID: onResponseID
+                )
+            } catch let streamingFailure as StreamingFailure where streamingFailure.emittedChunkCount == 0 {
+                VoxtLog.warning(
+                    "Remote LLM Responses streaming unavailable, retrying non-streaming. provider=\(provider.rawValue), endpoint=\(endpointValue), detail=\(streamingFailure.underlying.localizedDescription)"
+                )
+            }
+        }
+
+        let request = try makeResponsesRequest(
+            provider: provider,
             endpointValue: endpointValue,
             model: model,
             systemPrompt: systemPrompt,
-            dictatedPrompt: dictatedPrompt,
+            inputPayload: inputPayload,
             configuration: configuration,
-            conversationHistory: conversationHistory,
             previousResponseID: previousResponseID,
-            streamingEnabled: true
+            tuning: tuning,
+            streamingEnabled: false
         )
         let requestStartedAt = Date()
         logRequest(
@@ -224,22 +342,69 @@ struct RemoteLLMRuntimeClient {
             provider: provider,
             endpointValue: endpointValue,
             model: model,
-            inputTextLength: dictatedPrompt.count,
+            inputTextLength: inputTextLength,
             systemPrompt: systemPrompt,
-            debugInput: dictatedPrompt,
-            userPrompt: dictatedPrompt,
-            tuning: generationTuning(
-                for: provider,
-                inputTextLength: dictatedPrompt.count,
-                systemPromptLength: systemPrompt.count,
-                userPromptLength: dictatedPrompt.count,
-                intent: .rewrite
-            )
+            debugInput: debugInput,
+            userPrompt: requestContentForLog,
+            tuning: tuning
         )
 
+        let (data, response) = try await VoxtNetworkSession.active.data(for: request)
+        let responseElapsedMs = Int(Date().timeIntervalSince(requestStartedAt) * 1000)
+        guard let http = response as? HTTPURLResponse else {
+            throw NSError(domain: "Voxt.RemoteLLM", code: -305, userInfo: [NSLocalizedDescriptionKey: "Invalid remote LLM response."])
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let payload = String(data: data.prefix(260), encoding: .utf8) ?? ""
+            throw NSError(
+                domain: "Voxt.RemoteLLM",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "Remote LLM request failed (HTTP \(http.statusCode)): \(payload)"]
+            )
+        }
+
+        let decodeStartedAt = Date()
+        let object = try JSONSerialization.jsonObject(with: data)
+        let decodeElapsedMs = Int(Date().timeIntervalSince(decodeStartedAt) * 1000)
+        let totalElapsedMs = Int(Date().timeIntervalSince(requestStartedAt) * 1000)
+
+        if let dict = object as? [String: Any],
+           let responseID = responsesResponseID(from: dict) {
+            onResponseID?(responseID)
+        }
+
+        guard let content = extractPrimaryText(from: object), !content.isEmpty else {
+            throw NSError(domain: "Voxt.RemoteLLM", code: -306, userInfo: [NSLocalizedDescriptionKey: "Remote LLM returned no text content."])
+        }
+
+        VoxtLog.llm(
+            "Remote LLM Responses response received. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode), bytes=\(data.count), networkMs=\(responseElapsedMs), decodeMs=\(decodeElapsedMs), totalMs=\(totalElapsedMs)"
+        )
+        VoxtLog.llm(
+            """
+            Remote LLM Responses content. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode)
+            [output]
+            \(VoxtLog.llmPreview(content))
+            """
+        )
+        return ResponsesStreamingResult(
+            text: content,
+            responseID: (object as? [String: Any]).flatMap { responsesResponseID(from: $0) }
+        )
+    }
+
+    private func completeResponsesStreaming(
+        request: URLRequest,
+        provider: RemoteLLMProvider,
+        endpointValue: String,
+        requestStartedAt: Date,
+        onPartialText: @escaping (String) -> Void,
+        onResponseID: ((String) -> Void)?
+    ) async throws -> ResponsesStreamingResult {
         var aggregated = ""
         var responseID: String?
         var emittedChunkCount = 0
+        var partialDeliveryState = StreamingPartialDeliveryState()
 
         do {
             let (bytes, response) = try await VoxtNetworkSession.active.bytes(for: request)
@@ -257,6 +422,12 @@ struct RemoteLLMRuntimeClient {
             var bufferedEventLines: [String] = []
             var sawEventStreamMarkers = false
 
+            func publishAggregated(force: Bool = false) {
+                guard partialDeliveryState.shouldPublish(aggregatedText: aggregated, force: force) else { return }
+                partialDeliveryState.markPublished(aggregatedText: aggregated)
+                onPartialText(aggregated)
+            }
+
             func publish(_ chunkPayload: String) throws {
                 let trimmed = chunkPayload.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty, trimmed != "[DONE]" else { return }
@@ -265,12 +436,12 @@ struct RemoteLLMRuntimeClient {
                     return
                 }
 
-                if let extractedResponseID = aliyunResponsesResponseID(from: object) {
+                if let extractedResponseID = responsesResponseID(from: object) {
                     responseID = extractedResponseID
                     onResponseID?(extractedResponseID)
                 }
 
-                if let errorMessage = extractStreamingErrorMessage(from: object) ?? aliyunResponsesErrorMessage(from: object) {
+                if let errorMessage = extractStreamingErrorMessage(from: object) ?? responsesErrorMessage(from: object) {
                     throw NSError(
                         domain: "Voxt.RemoteLLM",
                         code: -307,
@@ -278,10 +449,15 @@ struct RemoteLLMRuntimeClient {
                     )
                 }
 
-                if let delta = aliyunResponsesStreamingDelta(from: object), !delta.isEmpty {
-                    aggregated.append(delta)
+                if let delta = responsesStreamingDelta(from: object), !delta.isEmpty {
+                    let eventType = object["type"] as? String
+                    if eventType == "response.output_text.delta" {
+                        aggregated.append(delta)
+                    } else {
+                        aggregated = mergedStreamingSnapshot(current: aggregated, next: delta)
+                    }
                     emittedChunkCount += 1
-                    onPartialText(aggregated)
+                    publishAggregated()
                 }
             }
 
@@ -330,19 +506,20 @@ struct RemoteLLMRuntimeClient {
             if !bufferedEventLines.isEmpty {
                 try publish(bufferedEventLines.joined(separator: "\n"))
             }
+            publishAggregated(force: true)
 
             let totalElapsedMs = Int(Date().timeIntervalSince(requestStartedAt) * 1000)
             VoxtLog.llm(
-                "Aliyun Responses streaming response received. endpoint=\(endpointValue), status=\(http.statusCode), chunks=\(emittedChunkCount), totalMs=\(totalElapsedMs), responseID=\(responseID ?? "nil")"
+                "Remote LLM Responses streaming response received. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode), chunks=\(emittedChunkCount), totalMs=\(totalElapsedMs), responseID=\(responseID ?? "nil")"
             )
             VoxtLog.llm(
                 """
-                Aliyun Responses streaming content. endpoint=\(endpointValue), status=\(http.statusCode)
+                Remote LLM Responses streaming content. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode)
                 [output]
                 \(VoxtLog.llmPreview(aggregated))
                 """
             )
-            return AliyunResponsesStreamingResult(text: aggregated, responseID: responseID)
+            return ResponsesStreamingResult(text: aggregated, responseID: responseID)
         } catch {
             throw StreamingFailure(
                 underlying: error,
@@ -708,6 +885,7 @@ struct RemoteLLMRuntimeClient {
     ) async throws -> String {
         var aggregated = ""
         var emittedChunkCount = 0
+        var partialDeliveryState = StreamingPartialDeliveryState()
         do {
             let (bytes, response) = try await VoxtNetworkSession.active.bytes(for: request)
             guard let http = response as? HTTPURLResponse else {
@@ -724,6 +902,12 @@ struct RemoteLLMRuntimeClient {
             var bufferedEventLines: [String] = []
             var sawEventStreamMarkers = false
             var nonEventStreamBuffer = ""
+
+            func publishAggregated(force: Bool = false) {
+                guard partialDeliveryState.shouldPublish(aggregatedText: aggregated, force: force) else { return }
+                partialDeliveryState.markPublished(aggregatedText: aggregated)
+                onPartialText(aggregated)
+            }
 
             func publish(_ chunkPayload: String) throws {
                 let trimmed = chunkPayload.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -754,7 +938,7 @@ struct RemoteLLMRuntimeClient {
                 }
 
                 emittedChunkCount += 1
-                onPartialText(aggregated)
+                publishAggregated()
             }
 
             for try await line in bytes.lines {
@@ -817,6 +1001,7 @@ struct RemoteLLMRuntimeClient {
             if !trailingText.isEmpty {
                 try publish(trailingText)
             }
+            publishAggregated(force: true)
 
             let totalElapsedMs = Int(Date().timeIntervalSince(requestStartedAt) * 1000)
             VoxtLog.llm(

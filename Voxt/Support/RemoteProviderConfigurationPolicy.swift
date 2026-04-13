@@ -112,26 +112,34 @@ enum RemoteProviderConfigurationPolicy {
             guard provider == .aliyunBailianASR else { return [] }
             if isAliyunQwenRealtimeModel(resolvedModel) {
                 return [
-                    RemoteEndpointPreset(id: "aliyun-asr-qwen-cn-beijing", title: "Qwen Realtime WS · Beijing", url: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"),
-                    RemoteEndpointPreset(id: "aliyun-asr-qwen-ap-southeast-1", title: "Qwen Realtime WS · Singapore", url: "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"),
-                    RemoteEndpointPreset(id: "aliyun-asr-qwen-us-east-1", title: "Qwen Realtime WS · US (Virginia)", url: "wss://dashscope-us.aliyuncs.com/api-ws/v1/realtime")
+                    RemoteEndpointPreset(id: "aliyun-asr-qwen-cn-beijing", title: AppLocalization.localizedString("Qwen Realtime WS · Beijing"), url: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"),
+                    RemoteEndpointPreset(id: "aliyun-asr-qwen-ap-southeast-1", title: AppLocalization.localizedString("Qwen Realtime WS · Singapore"), url: "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"),
+                    RemoteEndpointPreset(id: "aliyun-asr-qwen-us-east-1", title: AppLocalization.localizedString("Qwen Realtime WS · US (Virginia)"), url: "wss://dashscope-us.aliyuncs.com/api-ws/v1/realtime")
                 ]
             }
             return [
-                RemoteEndpointPreset(id: "aliyun-asr-fun-cn-beijing", title: "Realtime WS · Beijing", url: "wss://dashscope.aliyuncs.com/api-ws/v1/inference"),
-                RemoteEndpointPreset(id: "aliyun-asr-fun-ap-southeast-1", title: "Realtime WS · Singapore", url: "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference"),
-                RemoteEndpointPreset(id: "aliyun-asr-fun-us-east-1", title: "Realtime WS · US (Virginia)", url: "wss://dashscope-us.aliyuncs.com/api-ws/v1/inference")
+                RemoteEndpointPreset(id: "aliyun-asr-fun-cn-beijing", title: AppLocalization.localizedString("Realtime WS · Beijing"), url: "wss://dashscope.aliyuncs.com/api-ws/v1/inference"),
+                RemoteEndpointPreset(id: "aliyun-asr-fun-ap-southeast-1", title: AppLocalization.localizedString("Realtime WS · Singapore"), url: "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference"),
+                RemoteEndpointPreset(id: "aliyun-asr-fun-us-east-1", title: AppLocalization.localizedString("Realtime WS · US (Virginia)"), url: "wss://dashscope-us.aliyuncs.com/api-ws/v1/inference")
             ]
         case .meetingASR(let provider):
             guard provider == .aliyunBailianASR else { return [] }
             return AliyunMeetingASRConfiguration.endpointPresets(for: resolvedModel)
         case .llm(let provider):
-            guard provider == .aliyunBailian else { return [] }
-            return [
-                RemoteEndpointPreset(id: "aliyun-llm-cn-beijing", title: "Beijing", url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"),
-                RemoteEndpointPreset(id: "aliyun-llm-ap-southeast-1", title: "Singapore", url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"),
-                RemoteEndpointPreset(id: "aliyun-llm-us-east-1", title: "US (Virginia)", url: "https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions")
-            ]
+            switch provider {
+            case .aliyunBailian:
+                return [
+                    RemoteEndpointPreset(id: "aliyun-llm-cn-beijing", title: AppLocalization.localizedString("Beijing"), url: "https://dashscope.aliyuncs.com/compatible-mode/v1/responses"),
+                    RemoteEndpointPreset(id: "aliyun-llm-ap-southeast-1", title: AppLocalization.localizedString("Singapore"), url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/responses"),
+                    RemoteEndpointPreset(id: "aliyun-llm-us-east-1", title: AppLocalization.localizedString("US (Virginia)"), url: "https://dashscope-us.aliyuncs.com/compatible-mode/v1/responses")
+                ]
+            case .volcengine:
+                return [
+                    RemoteEndpointPreset(id: "volcengine-llm-cn-beijing", title: AppLocalization.localizedString("Beijing"), url: "https://ark.cn-beijing.volces.com/api/v3/responses")
+                ]
+            default:
+                return []
+            }
         }
     }
 

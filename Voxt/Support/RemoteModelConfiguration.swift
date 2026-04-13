@@ -94,9 +94,18 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var usesResponsesAPI: Bool {
+        switch self {
+        case .volcengine, .aliyunBailian:
+            return true
+        default:
+            return false
+        }
+    }
+
     var supportsHostedSearch: Bool {
         switch self {
-        case .anthropic, .google, .zai, .aliyunBailian:
+        case .anthropic, .google, .zai, .volcengine, .aliyunBailian:
             return true
         default:
             return false

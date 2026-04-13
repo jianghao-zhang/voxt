@@ -21,7 +21,7 @@ extension RemoteLLMRuntimeClient {
         case .zai:
             return "https://open.bigmodel.cn/api/paas/v4/models"
         case .volcengine:
-            return "https://ark.cn-beijing.volces.com/api/v3/models"
+            return "https://ark.cn-beijing.volces.com/api/v3/responses"
         case .kimi:
             return "https://api.moonshot.cn/v1/models"
         case .lmStudio:
@@ -29,7 +29,7 @@ extension RemoteLLMRuntimeClient {
         case .minimax:
             return "https://api.minimax.chat/v1/text/chatcompletion_v2"
         case .aliyunBailian:
-            return "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
+            return "https://dashscope.aliyuncs.com/compatible-mode/v1/responses"
         }
     }
 
@@ -45,6 +45,16 @@ extension RemoteLLMRuntimeClient {
         let path = url.path.lowercased()
 
         switch provider {
+        case .volcengine:
+            return normalizedResponsesEndpoint(
+                base,
+                defaultPath: "/api/v3/responses"
+            )
+        case .aliyunBailian:
+            return normalizedResponsesEndpoint(
+                base,
+                defaultPath: "/compatible-mode/v1/responses"
+            )
         case .anthropic:
             if path.hasSuffix("/v1/messages") { return base }
             if path.hasSuffix("/v1/models") {
@@ -94,7 +104,7 @@ extension RemoteLLMRuntimeClient {
             if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
             if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/api/chat") }
             return base
-        case .openAI, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio, .aliyunBailian:
+        case .openAI, .deepseek, .openrouter, .grok, .zai, .kimi, .lmStudio:
             if path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
                 return base
             }
@@ -135,6 +145,10 @@ extension RemoteLLMRuntimeClient {
         endpoint: String,
         model: String
     ) -> String {
+        if provider.usesResponsesAPI {
+            return resolvedLLMEndpoint(provider: provider, endpoint: endpoint, model: model)
+        }
+
         let resolved = resolvedLLMEndpoint(provider: provider, endpoint: endpoint, model: model)
         if resolved.hasSuffix("/v1/chat/completions") {
             return replacingPathSuffix(in: resolved, oldSuffix: "/v1/chat/completions", newSuffix: "/v1/responses")
@@ -155,6 +169,34 @@ extension RemoteLLMRuntimeClient {
             return appendingPath(resolved, suffix: "/v1/responses")
         }
         return appendingPath(resolved, suffix: "/responses")
+    }
+
+    private func normalizedResponsesEndpoint(_ value: String, defaultPath: String) -> String {
+        guard let url = URL(string: value) else { return value }
+        let normalizedPath = url.path.lowercased()
+
+        if normalizedPath.hasSuffix("/responses") {
+            return value
+        }
+        if normalizedPath.hasSuffix("/v1/chat/completions") {
+            return replacingPathSuffix(in: value, oldSuffix: "/v1/chat/completions", newSuffix: "/v1/responses")
+        }
+        if normalizedPath.hasSuffix("/chat/completions") {
+            return replacingPathSuffix(in: value, oldSuffix: "/chat/completions", newSuffix: "/responses")
+        }
+        if normalizedPath.hasSuffix("/v1/models") {
+            return replacingPathSuffix(in: value, oldSuffix: "/v1/models", newSuffix: "/v1/responses")
+        }
+        if normalizedPath.hasSuffix("/models") {
+            return replacingPathSuffix(in: value, oldSuffix: "/models", newSuffix: "/responses")
+        }
+        if normalizedPath.isEmpty || normalizedPath == "/" {
+            return appendingPath(value, suffix: defaultPath)
+        }
+        if normalizedPath.hasSuffix("/v1") || normalizedPath.hasSuffix("/v3") {
+            return appendingPath(value, suffix: "/responses")
+        }
+        return value
     }
 
     func resolvedProxyRoute(for url: URL, settings: VoxtNetworkSession.ProxySettings) -> String {

@@ -110,18 +110,18 @@ enum AliyunMeetingASRConfiguration {
         switch routing {
         case .asyncFileTranscription:
             return [
-                RemoteEndpointPreset(id: "aliyun-meeting-cn-beijing", title: "Meeting HTTP · Beijing", url: defaultTranscriptionEndpointCN),
-                RemoteEndpointPreset(id: "aliyun-meeting-ap-southeast-1", title: "Meeting HTTP · Singapore", url: defaultTranscriptionEndpointSG)
+                RemoteEndpointPreset(id: "aliyun-meeting-cn-beijing", title: AppLocalization.localizedString("Meeting HTTP · Beijing"), url: defaultTranscriptionEndpointCN),
+                RemoteEndpointPreset(id: "aliyun-meeting-ap-southeast-1", title: AppLocalization.localizedString("Meeting HTTP · Singapore"), url: defaultTranscriptionEndpointSG)
             ]
         case .compatibleShortAudio:
             if isUSShortAudioModel(model) {
                 return [
-                    RemoteEndpointPreset(id: "aliyun-meeting-us-east-1", title: "Meeting HTTP · US (Virginia)", url: defaultCompatibleEndpointUS)
+                    RemoteEndpointPreset(id: "aliyun-meeting-us-east-1", title: AppLocalization.localizedString("Meeting HTTP · US (Virginia)"), url: defaultCompatibleEndpointUS)
                 ]
             }
             return [
-                RemoteEndpointPreset(id: "aliyun-meeting-cn-beijing", title: "Meeting HTTP · Beijing", url: defaultCompatibleEndpointCN),
-                RemoteEndpointPreset(id: "aliyun-meeting-ap-southeast-1", title: "Meeting HTTP · Singapore", url: defaultCompatibleEndpointSG)
+                RemoteEndpointPreset(id: "aliyun-meeting-cn-beijing", title: AppLocalization.localizedString("Meeting HTTP · Beijing"), url: defaultCompatibleEndpointCN),
+                RemoteEndpointPreset(id: "aliyun-meeting-ap-southeast-1", title: AppLocalization.localizedString("Meeting HTTP · Singapore"), url: defaultCompatibleEndpointSG)
             ]
         }
     }

@@ -118,7 +118,8 @@ enum RemoteModelConfigurationStore {
         do {
             let items = try JSONDecoder().decode([RemoteProviderConfiguration].self, from: data)
             return Dictionary(uniqueKeysWithValues: items.map { item in
-                let resolved = resolvedSensitiveValues(for: item)
+                let normalized = normalizedCompatibilityValues(for: item)
+                let resolved = resolvedSensitiveValues(for: normalized)
                 return (resolved.providerID, resolved)
             })
         } catch {
@@ -151,6 +152,21 @@ enum RemoteModelConfigurationStore {
         )
     }
 
+    // Temporary compatibility migration for persisted legacy LLM endpoints.
+    // Remove this after the legacy upgrade window closes and all supported users
+    // have moved through a version that rewrites old `/models` and
+    // `/chat/completions` URLs to `/responses`.
+    static func migrateLegacyLLMEndpoints(defaults: UserDefaults = .standard) {
+        let defaultsKey = AppPreferenceKey.remoteLLMProviderConfigurations
+        let raw = defaults.string(forKey: defaultsKey) ?? ""
+        guard !raw.isEmpty else { return }
+
+        let migrated = saveConfigurations(loadConfigurations(from: raw))
+        if migrated != raw {
+            defaults.set(migrated, forKey: defaultsKey)
+        }
+    }
+
     static func resolvedASRConfiguration(
         provider: RemoteASRProvider,
         stored: [String: RemoteProviderConfiguration]
@@ -180,7 +196,7 @@ enum RemoteModelConfigurationStore {
         stored: [String: RemoteProviderConfiguration]
     ) -> RemoteProviderConfiguration {
         if let existing = stored[provider.rawValue] {
-            var normalized = existing
+            var normalized = normalizedCompatibilityValues(for: existing)
             if !provider.supportsHostedSearch {
                 normalized.searchEnabled = false
             }
@@ -205,6 +221,32 @@ enum RemoteModelConfigurationStore {
         if sanitized != raw {
             defaults.set(sanitized, forKey: defaultsKey)
         }
+    }
+
+    private static func normalizedCompatibilityValues(
+        for configuration: RemoteProviderConfiguration
+    ) -> RemoteProviderConfiguration {
+        guard let provider = RemoteLLMProvider(rawValue: configuration.providerID) else {
+            return configuration
+        }
+
+        var normalized = configuration
+        if !provider.supportsHostedSearch {
+            normalized.searchEnabled = false
+        }
+
+        let trimmedEndpoint = configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard provider.usesResponsesAPI, !trimmedEndpoint.isEmpty else {
+            return normalized
+        }
+
+        let runtimeClient = RemoteLLMRuntimeClient()
+        normalized.endpoint = runtimeClient.resolvedLLMEndpoint(
+            provider: provider,
+            endpoint: trimmedEndpoint,
+            model: configuration.model
+        )
+        return normalized
     }
 
     private static func resolvedSensitiveValues(for configuration: RemoteProviderConfiguration) -> RemoteProviderConfiguration {
