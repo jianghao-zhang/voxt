@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-04-12
+
+### Fixed
+- Fixed rewrite follow-up answers so Aliyun-backed continue conversations no longer collapse into empty fallback responses.
+- Improved rewrite conversation stability with safer prompt assembly and overlay teardown handling during longer answer sessions.
+
 ## [1.9.2] - 2026-04-11
 
 ### Added
