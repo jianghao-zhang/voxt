@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.9.5] - 2026-04-16
+
+### Fixed
+- EN: Fixed the Settings permission badge so it no longer warns about unopened permissions when the currently enabled features only require access you have already granted.
+- 简体中文：修复了设置页的权限提示徽标，当当前启用的功能只依赖已授权权限时，不会再错误显示还有权限未开启。
+- 日本語：設定画面の権限バッジを修正し、現在有効な機能がすでに許可済みの権限だけを必要とする場合は、未許可の警告が表示されないようにしました。
+- EN: Fixed local model lists so known file sizes stay visible more reliably, and model metadata or downloads automatically retry through the mirror when the primary Hugging Face endpoint is rate-limited or unavailable.
+- 简体中文：修复了本地模型列表的文件大小显示，已知大小会更稳定地展示；当 Hugging Face 主站遇到限流或不可用时，模型元数据与下载会自动改走镜像重试。
+- 日本語：ローカルモデル一覧のファイルサイズ表示を修正し、既知のサイズをより安定して表示するようにしました。あわせて、Hugging Face の本家エンドポイントがレート制限または利用不可の場合は、モデル情報取得とダウンロードをミラー経由で自動再試行するようにしました。
+
 ## [1.9.4] - 2026-04-13
 
 ### Changed
