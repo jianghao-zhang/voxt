@@ -415,11 +415,11 @@ struct SettingsView: View {
 
     private func refreshPermissionBadge() {
         let engine = TranscriptionEngine(rawValue: transcriptionEngineRaw) ?? .mlxAudio
-        let context = SettingsPermissionRequirementContext(
+        let featureSettings = FeatureSettingsStore.load(defaults: .standard)
+        let context = SettingsPermissionRequirementResolver.sidebarRequirementContext(
             selectedEngine: engine,
             muteSystemAudioWhileRecording: muteSystemAudioWhileRecording,
-            meetingNotesEnabled: true,
-            featureSettings: FeatureSettingsStore.load(defaults: .standard)
+            featureSettings: featureSettings
         )
 
         hasMissingPermissions = SettingsPermissionRequirementResolver.requiredPermissions(context: context)

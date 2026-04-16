@@ -125,6 +125,40 @@ final class MLXModelManagerTests: XCTestCase {
         XCTAssertTrue(modelIDs.contains("mlx-community/Voxtral-Mini-4B-Realtime-6bit"))
     }
 
+    func testKnownRemoteSizeFallbacksCoverCuratedLocalModels() {
+        XCTAssertEqual(
+            MLXModelManager.fallbackRemoteSizeText(repo: "mlx-community/FireRedASR2"),
+            MLXModelManager.fallbackRemoteSizeText(repo: "mlx-community/FireRedASR2-AED-mlx")
+        )
+        XCTAssertNotNil(MLXModelManager.fallbackRemoteSizeText(repo: "mlx-community/Qwen3-ASR-0.6B-4bit"))
+        XCTAssertNotNil(CustomLLMModelManager.fallbackRemoteSizeText(repo: "mlx-community/Qwen3-4B-4bit"))
+        XCTAssertNotNil(WhisperKitModelManager.fallbackRemoteSizeText(id: "base"))
+    }
+
+    func testAllCuratedMLXModelsHaveRemoteSizeFallbacks() {
+        let missingRepos = MLXModelManager.availableModels
+            .map(\.id)
+            .filter { MLXModelManager.fallbackRemoteSizeText(repo: $0) == nil }
+
+        XCTAssertEqual(missingRepos, [])
+    }
+
+    func testAllCuratedCustomLLMModelsHaveRemoteSizeFallbacks() {
+        let missingRepos = CustomLLMModelManager.availableModels
+            .map(\.id)
+            .filter { CustomLLMModelManager.fallbackRemoteSizeText(repo: $0) == nil }
+
+        XCTAssertEqual(missingRepos, [])
+    }
+
+    func testAllCuratedWhisperModelsHaveRemoteSizeFallbacks() {
+        let missingModelIDs = WhisperKitModelManager.availableModels
+            .map(\.id)
+            .filter { WhisperKitModelManager.fallbackRemoteSizeText(id: $0) == nil }
+
+        XCTAssertEqual(missingModelIDs, [])
+    }
+
     func testCustomLLMBehaviorDisablesThinkingForQwen3Family() {
         XCTAssertEqual(CustomLLMModelBehaviorResolver.behavior(for: "mlx-community/Qwen3-4B-4bit").family, .qwen3)
         XCTAssertTrue(CustomLLMModelBehaviorResolver.behavior(for: "mlx-community/Qwen3-4B-4bit").disablesThinking)

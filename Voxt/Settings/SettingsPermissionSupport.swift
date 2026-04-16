@@ -55,6 +55,19 @@ struct SettingsPermissionRequirementContext {
 }
 
 enum SettingsPermissionRequirementResolver {
+    static func sidebarRequirementContext(
+        selectedEngine: TranscriptionEngine,
+        muteSystemAudioWhileRecording: Bool,
+        featureSettings: FeatureSettings
+    ) -> SettingsPermissionRequirementContext {
+        SettingsPermissionRequirementContext(
+            selectedEngine: selectedEngine,
+            muteSystemAudioWhileRecording: muteSystemAudioWhileRecording,
+            meetingNotesEnabled: featureSettings.meeting.enabled,
+            featureSettings: featureSettings
+        )
+    }
+
     static func requiredPermissions(
         context: SettingsPermissionRequirementContext
     ) -> [SettingsPermissionKind] {

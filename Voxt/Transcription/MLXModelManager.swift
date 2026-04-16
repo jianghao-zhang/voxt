@@ -176,6 +176,32 @@ class MLXModelManager: ObservableObject {
         "mlx-community/Voxtral-Mini-4B-Realtime-2602-6bit": "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
         "mlx-community/FireRedASR2": "mlx-community/FireRedASR2-AED-mlx",
     ]
+    private static let knownRemoteSizeBytesByRepo: [String: Int64] = [
+        "mlx-community/Qwen3-ASR-0.6B-4bit": 712_781_279,
+        "mlx-community/Qwen3-ASR-0.6B-6bit": 861_777_567,
+        "mlx-community/Qwen3-ASR-0.6B-8bit": 1_010_773_761,
+        "mlx-community/Qwen3-ASR-0.6B-bf16": 1_569_438_434,
+        "mlx-community/Qwen3-ASR-1.7B-4bit": 1_607_633_106,
+        "mlx-community/Qwen3-ASR-1.7B-6bit": 2_037_746_046,
+        "mlx-community/Qwen3-ASR-1.7B-8bit": 2_467_859_030,
+        "mlx-community/Qwen3-ASR-1.7B-bf16": 4_080_710_353,
+        "mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit": 3_148_833_321,
+        "mlx-community/Voxtral-Mini-4B-Realtime-6bit": 3_624_337_564,
+        "mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16": 8_885_525_001,
+        "mlx-community/parakeet-tdt_ctc-110m": 458_961_098,
+        "mlx-community/parakeet-tdt-0.6b-v2": 2_471_865_399,
+        "mlx-community/parakeet-tdt-0.6b-v3": 2_509_044_141,
+        "mlx-community/parakeet-ctc-0.6b": 2_435_805_367,
+        "mlx-community/parakeet-rnnt-0.6b": 2_467_370_930,
+        "mlx-community/parakeet-tdt-1.1b": 4_282_575_398,
+        "mlx-community/parakeet-tdt_ctc-1.1b": 4_286_788_359,
+        "mlx-community/parakeet-ctc-1.1b": 4_250_996_647,
+        "mlx-community/parakeet-rnnt-1.1b": 4_282_562_211,
+        "mlx-community/GLM-ASR-Nano-2512-4bit": 1_288_437_789,
+        "mlx-community/granite-4.0-1b-speech-5bit": 2_226_816_753,
+        "mlx-community/FireRedASR2-AED-mlx": 4_566_119_694,
+        "mlx-community/SenseVoiceSmall": 936_491_235,
+    ]
 
     enum ModelSizeState: Equatable {
         case unknown
@@ -237,6 +263,10 @@ class MLXModelManager: ObservableObject {
             return option.title
         }
         return canonicalRepo
+    }
+
+    static func fallbackRemoteSizeText(repo: String) -> String? {
+        fallbackRemoteSizeInfo(repo: repo)?.text
     }
 
     func isModelDownloaded(repo: String) -> Bool {
@@ -340,6 +370,12 @@ class MLXModelManager: ObservableObject {
         Self.transcriptionBehavior(for: modelRepo)
     }
 
+    private static func fallbackRemoteSizeInfo(repo: String) -> (bytes: Int64, text: String)? {
+        let canonicalRepo = canonicalModelRepo(repo)
+        guard let bytes = knownRemoteSizeBytesByRepo[canonicalRepo] else { return nil }
+        return (bytes, byteFormatter.string(fromByteCount: bytes))
+    }
+
     func updateHubBaseURL(_ url: URL) {
         guard url != hubBaseURL else { return }
         hubBaseURL = url
@@ -388,29 +424,7 @@ class MLXModelManager: ObservableObject {
                 totalFiles: 0
             )
             do {
-                guard let repoID = Repo.ID(rawValue: modelRepo) else {
-                    state = .error("Invalid model identifier")
-                    return
-                }
-                let cache = HubCache.default
-                let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
-                    ?? Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String
-                let session = MLXModelDownloadSupport.makeDownloadSession(for: hubBaseURL)
-                let client = MLXModelDownloadSupport.makeHubClient(
-                    session: session,
-                    baseURL: hubBaseURL,
-                    cache: cache,
-                    token: token,
-                    userAgent: Self.hubUserAgent
-                )
-                VoxtLog.info("Model download transport: LFS-only (\(hubBaseURL.absoluteString))")
-                let resolvedCache = client.cache ?? cache
-                let modelDir = try await resolveOrDownloadModelUsingLFS(
-                    client: client,
-                    cache: resolvedCache,
-                    repoID: repoID,
-                    session: session
-                )
+                let modelDir = try await performDownloadWithFallback()
                 try Task.checkCancellation()
                 try MLXModelDownloadSupport.validateDownloadedModel(
                     at: modelDir,
@@ -601,20 +615,20 @@ class MLXModelManager: ObservableObject {
         sizeTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let sizeInfo = try await MLXModelDownloadSupport.fetchModelSizeInfo(
-                    repo: repo,
-                    baseURL: hubBaseURL,
-                    userAgent: Self.hubUserAgent,
-                    byteFormatter: Self.byteFormatter
-                )
+                let sizeInfo = try await loadRemoteSizeInfo(repo: repo)
                 if Task.isCancelled { return }
                 sizeState = .ready(bytes: sizeInfo.bytes, text: sizeInfo.text)
                 updateRemoteSizeCache(repo: repo, text: sizeInfo.text)
             } catch is CancellationError {
                 return
             } catch {
-                sizeState = .error("Size unavailable")
-                updateRemoteSizeCache(repo: repo, text: "Unknown")
+                if let fallback = Self.fallbackRemoteSizeInfo(repo: repo) {
+                    sizeState = .ready(bytes: fallback.bytes, text: fallback.text)
+                    updateRemoteSizeCache(repo: repo, text: fallback.text)
+                } else {
+                    sizeState = .error("Size unavailable")
+                    updateRemoteSizeCache(repo: repo, text: "Unknown")
+                }
             }
         }
     }
@@ -627,16 +641,16 @@ class MLXModelManager: ObservableObject {
         if canonicalRepo == modelRepo {
             switch sizeState {
             case .unknown:
-                return "Unknown"
+                return Self.fallbackRemoteSizeText(repo: canonicalRepo) ?? "Unknown"
             case .loading:
                 return "Loading…"
             case .ready(_, let text):
                 return text
             case .error:
-                return "Unknown"
+                return Self.fallbackRemoteSizeText(repo: canonicalRepo) ?? "Unknown"
             }
         }
-        return "Unknown"
+        return Self.fallbackRemoteSizeText(repo: canonicalRepo) ?? "Unknown"
     }
 
     func ensureRemoteSizeLoaded(repo: String) {
@@ -646,18 +660,16 @@ class MLXModelManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let info = try await MLXModelDownloadSupport.fetchModelSizeInfo(
-                    repo: canonicalRepo,
-                    baseURL: hubBaseURL,
-                    userAgent: Self.hubUserAgent,
-                    byteFormatter: Self.byteFormatter
-                )
+                let info = try await loadRemoteSizeInfo(repo: canonicalRepo)
                 await MainActor.run {
                     self.updateRemoteSizeCache(repo: canonicalRepo, text: info.text)
                 }
             } catch {
                 await MainActor.run {
-                    self.updateRemoteSizeCache(repo: canonicalRepo, text: "Unknown")
+                    self.updateRemoteSizeCache(
+                        repo: canonicalRepo,
+                        text: Self.fallbackRemoteSizeText(repo: canonicalRepo) ?? "Unknown"
+                    )
                 }
             }
         }
@@ -680,18 +692,16 @@ class MLXModelManager: ObservableObject {
             for repo in repos {
                 guard let self else { return }
                 do {
-                    let info = try await MLXModelDownloadSupport.fetchModelSizeInfo(
-                        repo: repo,
-                        baseURL: baseURL,
-                        userAgent: Self.hubUserAgent,
-                        byteFormatter: Self.byteFormatter
-                    )
+                    let info = try await self.loadRemoteSizeInfo(repo: repo, preferredBaseURL: baseURL)
                     await MainActor.run {
                         self.updateRemoteSizeCache(repo: repo, text: info.text)
                     }
                 } catch {
                     await MainActor.run {
-                        self.updateRemoteSizeCache(repo: repo, text: "Unknown")
+                        self.updateRemoteSizeCache(
+                            repo: repo,
+                            text: Self.fallbackRemoteSizeText(repo: repo) ?? "Unknown"
+                        )
                     }
                 }
             }
@@ -716,11 +726,91 @@ class MLXModelManager: ObservableObject {
         Self.savePersistedRemoteSizeCache(remoteSizeTextByRepo)
     }
 
+    private func fallbackHubBaseURL(from baseURL: URL) -> URL? {
+        guard !MLXModelDownloadSupport.isMirrorHost(baseURL) else { return nil }
+        return Self.mirrorHubBaseURL
+    }
+
+    private func loadRemoteSizeInfo(
+        repo: String,
+        preferredBaseURL: URL? = nil
+    ) async throws -> (bytes: Int64, text: String) {
+        let baseURL = preferredBaseURL ?? hubBaseURL
+        do {
+            return try await MLXModelDownloadSupport.fetchModelSizeInfo(
+                repo: repo,
+                baseURL: baseURL,
+                userAgent: Self.hubUserAgent,
+                byteFormatter: Self.byteFormatter
+            )
+        } catch {
+            guard let fallbackBaseURL = fallbackHubBaseURL(from: baseURL) else {
+                throw error
+            }
+            VoxtLog.warning(
+                "Primary model metadata endpoint failed. Retrying with mirror. repo=\(repo), baseURL=\(baseURL.absoluteString), error=\(error.localizedDescription)"
+            )
+            return try await MLXModelDownloadSupport.fetchModelSizeInfo(
+                repo: repo,
+                baseURL: fallbackBaseURL,
+                userAgent: Self.hubUserAgent,
+                byteFormatter: Self.byteFormatter
+            )
+        }
+    }
+
+    private func performDownloadWithFallback() async throws -> URL {
+        do {
+            return try await performDownload(using: hubBaseURL)
+        } catch {
+            guard let fallbackBaseURL = fallbackHubBaseURL(from: hubBaseURL) else {
+                throw error
+            }
+            VoxtLog.warning(
+                "Primary model download endpoint failed. Retrying with mirror. repo=\(modelRepo), baseURL=\(hubBaseURL.absoluteString), error=\(error.localizedDescription)"
+            )
+            cleanupPartialDownload()
+            clearCurrentRepoHubCache()
+            return try await performDownload(using: fallbackBaseURL)
+        }
+    }
+
+    private func performDownload(using baseURL: URL) async throws -> URL {
+        guard let repoID = Repo.ID(rawValue: modelRepo) else {
+            throw NSError(
+                domain: "MLXModelManager",
+                code: 1000,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid model identifier"]
+            )
+        }
+        let cache = HubCache.default
+        let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String
+        let session = MLXModelDownloadSupport.makeDownloadSession(for: baseURL)
+        let client = MLXModelDownloadSupport.makeHubClient(
+            session: session,
+            baseURL: baseURL,
+            cache: cache,
+            token: token,
+            userAgent: Self.hubUserAgent
+        )
+        VoxtLog.info("Model download transport: LFS-only (\(baseURL.absoluteString))")
+        let resolvedCache = client.cache ?? cache
+        return try await resolveOrDownloadModelUsingLFS(
+            client: client,
+            cache: resolvedCache,
+            repoID: repoID,
+            session: session,
+            baseURL: baseURL
+        )
+    }
+
     private func resolveOrDownloadModelUsingLFS(
         client: HubClient,
         cache: HubCache,
         repoID: Repo.ID,
-        session: URLSession
+        session: URLSession,
+        baseURL: URL
     ) async throws -> URL {
         let modelSubdir = repoID.description.replacingOccurrences(of: "/", with: "_")
         let baseDir = ModelStorageDirectoryManager.resolvedRootURL().appendingPathComponent("mlx-audio")
@@ -738,7 +828,7 @@ class MLXModelManager: ObservableObject {
         VoxtLog.info("Fetching model entries: \(repoID.description)")
         let entries = try await MLXModelDownloadSupport.fetchModelEntries(
             repo: repoID.description,
-            baseURL: hubBaseURL,
+            baseURL: baseURL,
             session: session,
             userAgent: Self.hubUserAgent
         )

@@ -116,6 +116,21 @@ class CustomLLMModelManager: ObservableObject {
             description: "Higher-capacity Gemma 2 model for better quality output."
         )
     ]
+    private static let knownRemoteSizeBytesByRepo: [String: Int64] = [
+        "Qwen/Qwen2-1.5B-Instruct": 3_098_962_420,
+        "Qwen/Qwen2.5-3B-Instruct": 6_183_464_935,
+        "mlx-community/Qwen3-4B-4bit": 2_278_972_183,
+        "mlx-community/Qwen3-8B-4bit": 4_623_784_971,
+        "mlx-community/GLM-4-9B-0414-4bit": 5_309_031_270,
+        "mlx-community/Llama-3.2-3B-Instruct-4bit": 1_824_825_759,
+        "mlx-community/Llama-3.2-1B-Instruct-4bit": 712_593_855,
+        "mlx-community/Meta-Llama-3-8B-Instruct-4bit": 5_281_878_323,
+        "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit": 4_526_698_444,
+        "mlx-community/Mistral-7B-Instruct-v0.3-4bit": 4_080_222_853,
+        "mlx-community/Mistral-Nemo-Instruct-2407-4bit": 6_905_203_123,
+        "mlx-community/gemma-2-2b-it-4bit": 1_492_852_888,
+        "mlx-community/gemma-2-9b-it-4bit": 5_217_089_310,
+    ]
 
     @Published private(set) var state: ModelState = .notDownloaded
     @Published private(set) var sizeState: ModelSizeState = .unknown
@@ -384,6 +399,10 @@ class CustomLLMModelManager: ObservableObject {
         return repo
     }
 
+    static func fallbackRemoteSizeText(repo: String) -> String? {
+        fallbackRemoteSizeInfo(repo: repo)?.text
+    }
+
     func updateModel(repo: String) {
         let repoSelection = CustomLLMRepoSelection.resolve(
             requestedRepo: repo,
@@ -412,6 +431,11 @@ class CustomLLMModelManager: ObservableObject {
         VoxtLog.info("Custom LLM hub base URL changed: \(hubBaseURL.absoluteString) -> \(url.absoluteString)")
         hubBaseURL = url
         fetchRemoteSize()
+    }
+
+    private static func fallbackRemoteSizeInfo(repo: String) -> (bytes: Int64, text: String)? {
+        guard let bytes = knownRemoteSizeBytesByRepo[repo] else { return nil }
+        return (bytes, byteFormatter.string(fromByteCount: bytes))
     }
 
     func isModelDownloaded(repo: String) -> Bool {
@@ -450,16 +474,16 @@ class CustomLLMModelManager: ObservableObject {
         if let cached = remoteSizeTextByRepo[repo] {
             return cached
         }
-        guard repo == modelRepo else { return "Unknown" }
+        guard repo == modelRepo else { return Self.fallbackRemoteSizeText(repo: repo) ?? "Unknown" }
         switch sizeState {
         case .unknown:
-            return "Unknown"
+            return Self.fallbackRemoteSizeText(repo: repo) ?? "Unknown"
         case .loading:
             return "Loading…"
         case .ready(_, let text):
             return text
         case .error:
-            return "Unknown"
+            return Self.fallbackRemoteSizeText(repo: repo) ?? "Unknown"
         }
     }
 
@@ -505,117 +529,12 @@ class CustomLLMModelManager: ObservableObject {
             setDownloadingState(progress: 0, completed: 0, total: 0, currentFile: nil, completedFiles: 0, totalFiles: 0)
 
             do {
-                guard let repoID = Repo.ID(rawValue: modelRepo) else {
-                    state = .error("Invalid model identifier")
-                    VoxtLog.error("Custom LLM download failed: invalid repo id \(modelRepo)")
-                    return
-                }
-
-                let cache = HubCache.default
-                let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
-                    ?? Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String
-                let session = MLXModelDownloadSupport.makeDownloadSession(for: hubBaseURL)
-                let client = MLXModelDownloadSupport.makeHubClient(
-                    session: session,
-                    baseURL: hubBaseURL,
-                    cache: cache,
-                    token: token,
-                    userAgent: Self.hubUserAgent
-                )
-
-                let entries = try await MLXModelDownloadSupport.fetchModelEntries(
-                    repo: repoID.description,
-                    baseURL: hubBaseURL,
-                    session: session,
-                    userAgent: Self.hubUserAgent
-                )
-                guard !entries.isEmpty else {
-                    state = .error("No downloadable files were found for this model.")
-                    VoxtLog.error("Custom LLM download failed: no downloadable files for \(repoID.description)")
-                    return
-                }
-                VoxtLog.info("Custom LLM download started: repo=\(repoID.description), files=\(entries.count)")
-
-                let totalBytes = max(entries.reduce(Int64(0)) { $0 + max($1.size ?? 0, 0) }, 1)
-                let totalFiles = entries.count
-                var completedBytes: Int64 = 0
-
-                let modelDir = cacheDirectory(for: modelRepo)!
-                try? FileManager.default.removeItem(at: modelDir)
-                try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
-
-                for (index, entry) in entries.enumerated() {
-                    let expectedFileBytes = max(entry.size ?? 0, 0)
-                    let progress = Progress(totalUnitCount: max(expectedFileBytes, 1))
-                    let fileBaseCompleted = completedBytes
-                    setDownloadingState(
-                        progress: min(1, Double(completedBytes) / Double(totalBytes)),
-                        completed: min(completedBytes, totalBytes),
-                        total: totalBytes,
-                        currentFile: entry.path,
-                        completedFiles: index,
-                        totalFiles: totalFiles
-                    )
-
-                    let destination = try destinationFileURL(for: entry.path, under: modelDir)
-                    cancelDownloadProgressTask()
-                    downloadProgressTask = Task { [weak self] in
-                        let startTime = Date()
-                        while !Task.isCancelled {
-                            await MainActor.run {
-                                guard let self else { return }
-                                let effectiveCurrentFileCompleted = Self.inFlightBytes(
-                                    progress: progress,
-                                    expectedFileBytes: expectedFileBytes,
-                                    startTime: startTime
-                                )
-                                let aggregateCompleted = min(
-                                    fileBaseCompleted + effectiveCurrentFileCompleted,
-                                    totalBytes
-                                )
-                                self.setDownloadingState(
-                                    progress: min(1, Double(aggregateCompleted) / Double(totalBytes)),
-                                    completed: aggregateCompleted,
-                                    total: totalBytes,
-                                    currentFile: entry.path,
-                                    completedFiles: index,
-                                    totalFiles: totalFiles
-                                )
-                            }
-                            try? await Task.sleep(for: .milliseconds(200))
-                        }
-                    }
-
-                    _ = try await client.downloadFile(
-                        at: entry.path,
-                        from: repoID,
-                        to: destination,
-                        kind: .model,
-                        revision: "main",
-                        progress: progress,
-                        transport: .lfs,
-                        localFilesOnly: false
-                    )
-                    cancelDownloadProgressTask()
-
-                    let delta = max(expectedFileBytes, max(progress.completedUnitCount, 0))
-                    completedBytes += max(delta, 0)
-                    setDownloadingState(
-                        progress: min(1, Double(completedBytes) / Double(totalBytes)),
-                        completed: min(completedBytes, totalBytes),
-                        total: totalBytes,
-                        currentFile: nil,
-                        completedFiles: index + 1,
-                        totalFiles: totalFiles
-                    )
-                }
-
+                let modelDir = try await performDownloadWithFallback()
                 guard Self.isModelDirectoryValid(modelDir) else {
                     state = .error("Downloaded files are incomplete.")
                     VoxtLog.error("Custom LLM download produced incomplete files: \(modelRepo)")
                     return
                 }
-
                 state = .downloaded
                 VoxtLog.info("Custom LLM download completed: \(modelRepo)")
             } catch is CancellationError {
@@ -646,6 +565,150 @@ class CustomLLMModelManager: ObservableObject {
     private func cancelDownloadProgressTask() {
         downloadProgressTask?.cancel()
         downloadProgressTask = nil
+    }
+
+    private func fallbackHubBaseURL(from baseURL: URL) -> URL? {
+        guard !MLXModelDownloadSupport.isMirrorHost(baseURL) else { return nil }
+        return Self.mirrorHubBaseURL
+    }
+
+    private func performDownloadWithFallback() async throws -> URL {
+        do {
+            return try await performDownload(using: hubBaseURL)
+        } catch {
+            guard let fallbackBaseURL = fallbackHubBaseURL(from: hubBaseURL) else {
+                throw error
+            }
+            VoxtLog.warning(
+                "Primary custom LLM download endpoint failed. Retrying with mirror. repo=\(modelRepo), baseURL=\(hubBaseURL.absoluteString), error=\(error.localizedDescription)"
+            )
+            if let repoID = Repo.ID(rawValue: modelRepo) {
+                clearHubCache(for: repoID)
+            }
+            if let modelDir = cacheDirectory(for: modelRepo) {
+                try? FileManager.default.removeItem(at: modelDir)
+            }
+            return try await performDownload(using: fallbackBaseURL)
+        }
+    }
+
+    private func performDownload(using baseURL: URL) async throws -> URL {
+        guard let repoID = Repo.ID(rawValue: modelRepo) else {
+            throw NSError(
+                domain: "Voxt.CustomLLM",
+                code: 1000,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid model identifier"]
+            )
+        }
+
+        let cache = HubCache.default
+        let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String
+        let session = MLXModelDownloadSupport.makeDownloadSession(for: baseURL)
+        let client = MLXModelDownloadSupport.makeHubClient(
+            session: session,
+            baseURL: baseURL,
+            cache: cache,
+            token: token,
+            userAgent: Self.hubUserAgent
+        )
+
+        let entries = try await MLXModelDownloadSupport.fetchModelEntries(
+            repo: repoID.description,
+            baseURL: baseURL,
+            session: session,
+            userAgent: Self.hubUserAgent
+        )
+        guard !entries.isEmpty else {
+            throw NSError(
+                domain: "Voxt.CustomLLM",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "No downloadable files were found for this model."]
+            )
+        }
+        VoxtLog.info("Custom LLM download started: repo=\(repoID.description), files=\(entries.count), baseURL=\(baseURL.absoluteString)")
+
+        let totalBytes = max(entries.reduce(Int64(0)) { $0 + max($1.size ?? 0, 0) }, 1)
+        let totalFiles = entries.count
+        var completedBytes: Int64 = 0
+
+        guard let modelDir = cacheDirectory(for: modelRepo) else {
+            throw NSError(
+                domain: "Voxt.CustomLLM",
+                code: 1002,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid model cache directory."]
+            )
+        }
+        try? FileManager.default.removeItem(at: modelDir)
+        try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
+
+        for (index, entry) in entries.enumerated() {
+            let expectedFileBytes = max(entry.size ?? 0, 0)
+            let progress = Progress(totalUnitCount: max(expectedFileBytes, 1))
+            let fileBaseCompleted = completedBytes
+            setDownloadingState(
+                progress: min(1, Double(completedBytes) / Double(totalBytes)),
+                completed: min(completedBytes, totalBytes),
+                total: totalBytes,
+                currentFile: entry.path,
+                completedFiles: index,
+                totalFiles: totalFiles
+            )
+
+            let destination = try destinationFileURL(for: entry.path, under: modelDir)
+            cancelDownloadProgressTask()
+            downloadProgressTask = Task { [weak self] in
+                let startTime = Date()
+                while !Task.isCancelled {
+                    await MainActor.run {
+                        guard let self else { return }
+                        let effectiveCurrentFileCompleted = Self.inFlightBytes(
+                            progress: progress,
+                            expectedFileBytes: expectedFileBytes,
+                            startTime: startTime
+                        )
+                        let aggregateCompleted = min(
+                            fileBaseCompleted + effectiveCurrentFileCompleted,
+                            totalBytes
+                        )
+                        self.setDownloadingState(
+                            progress: min(1, Double(aggregateCompleted) / Double(totalBytes)),
+                            completed: aggregateCompleted,
+                            total: totalBytes,
+                            currentFile: entry.path,
+                            completedFiles: index,
+                            totalFiles: totalFiles
+                        )
+                    }
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+            }
+
+            _ = try await client.downloadFile(
+                at: entry.path,
+                from: repoID,
+                to: destination,
+                kind: .model,
+                revision: "main",
+                progress: progress,
+                transport: .lfs,
+                localFilesOnly: false
+            )
+            cancelDownloadProgressTask()
+
+            let delta = max(expectedFileBytes, max(progress.completedUnitCount, 0))
+            completedBytes += max(delta, 0)
+            setDownloadingState(
+                progress: min(1, Double(completedBytes) / Double(totalBytes)),
+                completed: min(completedBytes, totalBytes),
+                total: totalBytes,
+                currentFile: nil,
+                completedFiles: index + 1,
+                totalFiles: totalFiles
+            )
+        }
+
+        return modelDir
     }
 
     func deleteModel() {
@@ -999,9 +1062,37 @@ class CustomLLMModelManager: ObservableObject {
         remoteSizeTextByRepo = CustomLLMRemoteSizeCache.updatedCache(
             remoteSizeTextByRepo,
             repo: repo,
-            text: CustomLLMRemoteSizeCache.unknownText
+            text: Self.fallbackRemoteSizeText(repo: repo) ?? CustomLLMRemoteSizeCache.unknownText
         )
         VoxtLog.warning(logMessage)
+    }
+
+    private func fetchRemoteSizeInfo(
+        for repo: String,
+        preferredBaseURL: URL? = nil
+    ) async throws -> (bytes: Int64, text: String) {
+        let baseURL = preferredBaseURL ?? hubBaseURL
+        do {
+            return try await MLXModelDownloadSupport.fetchModelSizeInfo(
+                repo: repo,
+                baseURL: baseURL,
+                userAgent: Self.hubUserAgent,
+                byteFormatter: Self.byteFormatter
+            )
+        } catch {
+            guard let fallbackBaseURL = fallbackHubBaseURL(from: baseURL) else {
+                throw error
+            }
+            VoxtLog.warning(
+                "Primary custom LLM metadata endpoint failed. Retrying with mirror. repo=\(repo), baseURL=\(baseURL.absoluteString), error=\(error.localizedDescription)"
+            )
+            return try await MLXModelDownloadSupport.fetchModelSizeInfo(
+                repo: repo,
+                baseURL: fallbackBaseURL,
+                userAgent: Self.hubUserAgent,
+                byteFormatter: Self.byteFormatter
+            )
+        }
     }
 
     private func loadRemoteSize(
@@ -1009,12 +1100,7 @@ class CustomLLMModelManager: ObservableObject {
         updatesVisibleState: Bool
     ) async {
         do {
-            let info = try await MLXModelDownloadSupport.fetchModelSizeInfo(
-                repo: repo,
-                baseURL: hubBaseURL,
-                userAgent: Self.hubUserAgent,
-                byteFormatter: Self.byteFormatter
-            )
+            let info = try await fetchRemoteSizeInfo(for: repo)
             if Task.isCancelled { return }
             updateRemoteSizeCache(for: repo, bytes: info.bytes, text: info.text)
             if updatesVisibleState {
@@ -1028,7 +1114,11 @@ class CustomLLMModelManager: ObservableObject {
                 logMessage: "Failed to \(updatesVisibleState ? "fetch" : "prefetch") custom LLM remote size: repo=\(repo), error=\(error.localizedDescription)"
             )
             if updatesVisibleState {
-                sizeState = .error("Size unavailable")
+                if let fallback = Self.fallbackRemoteSizeInfo(repo: repo) {
+                    sizeState = .ready(bytes: fallback.bytes, text: fallback.text)
+                } else {
+                    sizeState = .error("Size unavailable")
+                }
             }
         }
     }

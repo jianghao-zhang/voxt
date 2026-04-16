@@ -93,6 +93,13 @@ final class WhisperKitModelManager: ObservableObject {
             remoteSizeText: "Unknown"
         ),
     ]
+    private static let knownRemoteSizeBytesByID: [String: Int64] = [
+        "tiny": 76_635_397,
+        "base": 146_719_453,
+        "small": 486_487_465,
+        "medium": 1_529_654_233,
+        "large-v3": 3_090_319_899,
+    ]
 
     @Published private(set) var state: ModelState = .notDownloaded
     @Published private(set) var remoteSizeTextByID: [String: String] = [:]
@@ -134,6 +141,10 @@ final class WhisperKitModelManager: ObservableObject {
         availableModels.contains(where: { $0.id == modelID }) ? modelID : defaultModelID
     }
 
+    static func fallbackRemoteSizeText(id: String) -> String? {
+        fallbackRemoteSizeInfo(id: id)?.text
+    }
+
     func updateModel(id: String) {
         let canonicalModelID = Self.canonicalModelID(id)
         guard canonicalModelID != modelID else { return }
@@ -151,6 +162,12 @@ final class WhisperKitModelManager: ObservableObject {
         guard url != hubBaseURL else { return }
         hubBaseURL = url
         fetchRemoteSize(for: modelID)
+    }
+
+    private static func fallbackRemoteSizeInfo(id: String) -> (bytes: Int64, text: String)? {
+        let canonicalModelID = canonicalModelID(id)
+        guard let bytes = knownRemoteSizeBytesByID[canonicalModelID] else { return nil }
+        return (bytes, byteFormatter.string(fromByteCount: bytes))
     }
 
     func refreshResidencyPolicy() {
@@ -257,21 +274,7 @@ final class WhisperKitModelManager: ObservableObject {
 
             do {
                 try FileManager.default.createDirectory(at: downloadRootURL(), withIntermediateDirectories: true)
-                let downloadedFolder: URL
-                do {
-                    downloadedFolder = try await performModelDownload(targetID: targetID)
-                } catch {
-                    guard shouldRetryAfterMetadataRecovery(for: error) else {
-                        throw error
-                    }
-
-                    VoxtLog.warning(
-                        "Whisper download hit invalid metadata cache. Clearing local metadata and retrying once. model=\(targetID), error=\(error.localizedDescription)"
-                    )
-                    clearRepositoryMetadataCache()
-                    setDownloadingState(for: targetID, progress: 0, completed: 0, total: 0)
-                    downloadedFolder = try await performModelDownload(targetID: targetID)
-                }
+                let downloadedFolder = try await performModelDownloadWithFallback(targetID: targetID)
 
                 guard !Task.isCancelled else {
                     removeModelDirectoryIfPresent(id: targetID)
@@ -306,6 +309,40 @@ final class WhisperKitModelManager: ObservableObject {
         }
 
         await downloadTask?.value
+    }
+
+    private func performModelDownloadWithFallback(targetID: String) async throws -> URL {
+        do {
+            return try await performModelDownloadWithMetadataRecovery(targetID: targetID, baseURL: hubBaseURL)
+        } catch {
+            guard let fallbackBaseURL = fallbackHubBaseURL(from: hubBaseURL) else {
+                throw error
+            }
+            VoxtLog.warning(
+                "Primary Whisper download endpoint failed. Retrying with mirror. model=\(targetID), baseURL=\(hubBaseURL.absoluteString), error=\(error.localizedDescription)"
+            )
+            removeModelDirectoryIfPresent(id: targetID)
+            clearRepositoryMetadataCache()
+            setDownloadingState(for: targetID, progress: 0, completed: 0, total: 0)
+            return try await performModelDownloadWithMetadataRecovery(targetID: targetID, baseURL: fallbackBaseURL)
+        }
+    }
+
+    private func performModelDownloadWithMetadataRecovery(targetID: String, baseURL: URL) async throws -> URL {
+        do {
+            return try await performModelDownload(targetID: targetID, baseURL: baseURL)
+        } catch {
+            guard shouldRetryAfterMetadataRecovery(for: error) else {
+                throw error
+            }
+
+            VoxtLog.warning(
+                "Whisper download hit invalid metadata cache. Clearing local metadata and retrying once. model=\(targetID), baseURL=\(baseURL.absoluteString), error=\(error.localizedDescription)"
+            )
+            clearRepositoryMetadataCache()
+            setDownloadingState(for: targetID, progress: 0, completed: 0, total: 0)
+            return try await performModelDownload(targetID: targetID, baseURL: baseURL)
+        }
     }
 
     func cancelDownload() {
@@ -421,7 +458,9 @@ final class WhisperKitModelManager: ObservableObject {
 
     func remoteSizeText(id: String) -> String {
         let canonicalModelID = Self.canonicalModelID(id)
-        return remoteSizeTextByID[canonicalModelID] ?? AppLocalization.localizedString("Unknown")
+        return remoteSizeTextByID[canonicalModelID]
+            ?? Self.fallbackRemoteSizeText(id: canonicalModelID)
+            ?? AppLocalization.localizedString("Unknown")
     }
 
     func ensureRemoteSizeLoaded(id: String) {
@@ -455,9 +494,9 @@ final class WhisperKitModelManager: ObservableObject {
             for modelID in modelIDs {
                 guard let self else { return }
                 do {
-                    let bytes = try await Self.fetchRemoteModelBytes(
+                    let bytes = try await self.fetchRemoteModelBytesWithFallback(
                         modelID: modelID,
-                        baseURL: baseURL
+                        preferredBaseURL: baseURL
                     )
                     guard !Task.isCancelled else { return }
                     let text = bytes > 0
@@ -470,7 +509,10 @@ final class WhisperKitModelManager: ObservableObject {
                     return
                 } catch {
                     await MainActor.run {
-                        self.updateRemoteSizeCache(id: modelID, text: AppLocalization.localizedString("Unknown"))
+                        self.updateRemoteSizeCache(
+                            id: modelID,
+                            text: Self.fallbackRemoteSizeText(id: modelID) ?? AppLocalization.localizedString("Unknown")
+                        )
                     }
                 }
             }
@@ -504,10 +546,7 @@ final class WhisperKitModelManager: ObservableObject {
         let task = Task { [weak self] in
             guard let self else { return }
             do {
-                let bytes = try await Self.fetchRemoteModelBytes(
-                    modelID: canonicalModelID,
-                    baseURL: hubBaseURL
-                )
+                let bytes = try await self.fetchRemoteModelBytesWithFallback(modelID: canonicalModelID)
                 guard !Task.isCancelled else { return }
                 let text = bytes > 0
                     ? Self.byteFormatter.string(fromByteCount: bytes)
@@ -519,7 +558,10 @@ final class WhisperKitModelManager: ObservableObject {
                 return
             } catch {
                 await MainActor.run {
-                    self.updateRemoteSizeCache(id: canonicalModelID, text: AppLocalization.localizedString("Unknown"))
+                    self.updateRemoteSizeCache(
+                        id: canonicalModelID,
+                        text: Self.fallbackRemoteSizeText(id: canonicalModelID) ?? AppLocalization.localizedString("Unknown")
+                    )
                 }
                 VoxtLog.warning(
                     "Failed to fetch Whisper remote size: model=\(canonicalModelID), error=\(error.localizedDescription)"
@@ -535,6 +577,29 @@ final class WhisperKitModelManager: ObservableObject {
     private func updateRemoteSizeCache(id: String, text: String) {
         remoteSizeTextByID[id] = text
         Self.savePersistedRemoteSizeCache(remoteSizeTextByID)
+    }
+
+    private func fallbackHubBaseURL(from baseURL: URL) -> URL? {
+        guard baseURL.host?.contains("hf-mirror.com") != true else { return nil }
+        return MLXModelManager.mirrorHubBaseURL
+    }
+
+    private func fetchRemoteModelBytesWithFallback(
+        modelID: String,
+        preferredBaseURL: URL? = nil
+    ) async throws -> Int64 {
+        let baseURL = preferredBaseURL ?? hubBaseURL
+        do {
+            return try await Self.fetchRemoteModelBytes(modelID: modelID, baseURL: baseURL)
+        } catch {
+            guard let fallbackBaseURL = fallbackHubBaseURL(from: baseURL) else {
+                throw error
+            }
+            VoxtLog.warning(
+                "Primary Whisper metadata endpoint failed. Retrying with mirror. model=\(modelID), baseURL=\(baseURL.absoluteString), error=\(error.localizedDescription)"
+            )
+            return try await Self.fetchRemoteModelBytes(modelID: modelID, baseURL: fallbackBaseURL)
+        }
     }
 
     private static func fetchRemoteModelBytes(modelID: String, baseURL: URL) async throws -> Int64 {
@@ -639,17 +704,17 @@ final class WhisperKitModelManager: ObservableObject {
             .appendingPathComponent("whisperkit", isDirectory: true)
     }
 
-    private func performModelDownload(targetID: String) async throws -> URL {
-        if hubBaseURL.host?.contains("hf-mirror.com") == true {
-            VoxtLog.info("Whisper download using direct mirror fetch path. model=\(targetID), baseURL=\(hubBaseURL.absoluteString)")
-            return try await performMirrorModelDownload(targetID: targetID)
+    private func performModelDownload(targetID: String, baseURL: URL) async throws -> URL {
+        if baseURL.host?.contains("hf-mirror.com") == true {
+            VoxtLog.info("Whisper download using direct mirror fetch path. model=\(targetID), baseURL=\(baseURL.absoluteString)")
+            return try await performMirrorModelDownload(targetID: targetID, baseURL: baseURL)
         }
 
         return try await WhisperKit.download(
             variant: targetID,
             downloadBase: downloadRootURL(),
             from: Self.repo,
-            endpoint: hubBaseURL.absoluteString
+            endpoint: baseURL.absoluteString
         ) { [weak self] progress in
             guard let self else { return }
             let completed = max(progress.completedUnitCount, 0)
@@ -665,9 +730,9 @@ final class WhisperKitModelManager: ObservableObject {
         }
     }
 
-    private func performMirrorModelDownload(targetID: String) async throws -> URL {
+    private func performMirrorModelDownload(targetID: String, baseURL: URL) async throws -> URL {
         let rootFolderName = Self.topLevelFolderName(for: targetID)
-        let repoItems = try await Self.fetchRepoTreeItems(baseURL: hubBaseURL)
+        let repoItems = try await Self.fetchRepoTreeItems(baseURL: baseURL)
         let fileItems = repoItems
             .filter { $0.type == "file" && $0.path.hasPrefix(rootFolderName + "/") }
             .sorted { $0.path < $1.path }
@@ -743,7 +808,7 @@ final class WhisperKitModelManager: ObservableObject {
             defer { sampler.cancel() }
 
             let remoteURL = try Self.fileResolveURL(
-                baseURL: hubBaseURL,
+                baseURL: baseURL,
                 repo: Self.repo,
                 path: item.path
             )
