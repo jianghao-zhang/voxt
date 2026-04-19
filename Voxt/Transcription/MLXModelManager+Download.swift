@@ -151,7 +151,7 @@ enum MLXModelDownloadSupport {
         repo: String,
         baseURL: URL,
         userAgent: String,
-        byteFormatter: ByteCountFormatter
+        formatByteCount: @Sendable (Int64) -> String
     ) async throws -> (bytes: Int64, text: String) {
         let entries = try await fetchModelEntries(
             repo: repo,
@@ -164,7 +164,7 @@ enum MLXModelDownloadSupport {
         }
 
         guard total > 0 else { return (0, "Unknown") }
-        return (total, byteFormatter.string(fromByteCount: total))
+        return (total, formatByteCount(total))
     }
 
     static func validateDownloadedModel(

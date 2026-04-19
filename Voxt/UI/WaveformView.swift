@@ -46,6 +46,7 @@ struct WaveformView: View {
     var statusMessage: String = ""
     var isEnhancing: Bool = false
     var isRequesting: Bool = false
+    var isFinalizingTranscription: Bool = false
     var isCompleting: Bool = false
     var answerTitle: String = ""
     var answerContent: String = ""
@@ -101,7 +102,9 @@ struct WaveformView: View {
     private var cornerRadius: CGFloat { CGFloat(min(max(overlayCardCornerRadius, 0), 40)) }
     private var cardOpacity: Double { Double(min(max(overlayCardOpacity, 0), 100)) / 100.0 }
     private var textOverflows: Bool { displayText.count > 38 }
-    private var showsLoadingSpinner: Bool { !isCompleting && (isEnhancing || isRequesting) }
+    private var showsLoadingSpinner: Bool {
+        !isCompleting && (isEnhancing || isRequesting || isFinalizingTranscription)
+    }
     private var showsInitializationIcon: Bool { isModelInitializing && !showsLoadingSpinner }
     private var showsSessionTranslationLanguagePill: Bool {
         Self.shouldShowSessionTranslationLanguagePill(
@@ -395,7 +398,7 @@ struct WaveformView: View {
             canShowHistoryDetail: canShowHistoryDetail,
             didCopyAnswer: didCopyAnswer,
             isRecording: isRecording,
-            isProcessing: isEnhancing || isRequesting,
+            isProcessing: isEnhancing || isRequesting || isFinalizingTranscription,
             audioLevel: audioLevel,
             shouldAnimateWave: shouldAnimate,
             streamingDraftPayload: answerInteractionMode == .conversation && isStreamingAnswer
@@ -413,7 +416,7 @@ struct WaveformView: View {
     private var conversationStreamingUserPromptText: String? {
         guard answerInteractionMode == .conversation else { return nil }
         let trimmed = transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, (isRecording || isEnhancing || isRequesting) else { return nil }
+        guard !trimmed.isEmpty, (isRecording || isEnhancing || isRequesting || isFinalizingTranscription) else { return nil }
         return trimmed
     }
 

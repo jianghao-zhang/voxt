@@ -350,14 +350,14 @@ private struct DictionaryPreparedEntryInput {
     let replacementTerms: [DictionaryReplacementTerm]
 }
 
-private func dictionaryIsWordScalar(_ scalar: UnicodeScalar) -> Bool {
+nonisolated private func dictionaryIsWordScalar(_ scalar: UnicodeScalar) -> Bool {
     CharacterSet.alphanumerics.contains(scalar)
         || dictionaryIsHanLike(scalar)
         || dictionaryIsKana(scalar)
         || dictionaryIsHangul(scalar)
 }
 
-private func dictionaryIsHanLike(_ scalar: UnicodeScalar) -> Bool {
+nonisolated private func dictionaryIsHanLike(_ scalar: UnicodeScalar) -> Bool {
     switch scalar.value {
     case 0x4E00...0x9FFF,
          0x3400...0x4DBF,
@@ -371,7 +371,7 @@ private func dictionaryIsHanLike(_ scalar: UnicodeScalar) -> Bool {
     }
 }
 
-private func dictionaryIsKana(_ scalar: UnicodeScalar) -> Bool {
+nonisolated private func dictionaryIsKana(_ scalar: UnicodeScalar) -> Bool {
     switch scalar.value {
     case 0x3040...0x309F,
          0x30A0...0x30FF,
@@ -383,7 +383,7 @@ private func dictionaryIsKana(_ scalar: UnicodeScalar) -> Bool {
     }
 }
 
-private func dictionaryIsHangul(_ scalar: UnicodeScalar) -> Bool {
+nonisolated private func dictionaryIsHangul(_ scalar: UnicodeScalar) -> Bool {
     switch scalar.value {
     case 0x1100...0x11FF,
          0x3130...0x318F,
@@ -1098,7 +1098,7 @@ final class DictionaryStore: ObservableObject {
         persist()
     }
 
-    static func normalizeTerm(_ input: String) -> String {
+    nonisolated static func normalizeTerm(_ input: String) -> String {
         let folded = input.folding(
             options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
             locale: .current

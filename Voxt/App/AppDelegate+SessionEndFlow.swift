@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 
 extension AppDelegate {
+    @MainActor
     private protocol SessionEndStage {
         var name: String { get }
         func run(delegate: AppDelegate)
@@ -57,6 +58,7 @@ extension AppDelegate {
         }
     }
 
+    @MainActor
     func executeSessionEndPipeline() {
         VoxtLog.info("Session end pipeline started. displayMode=\(overlayState.displayMode), overlayVisible=\(overlayWindow.isVisible)")
         let stages: [any SessionEndStage] = [

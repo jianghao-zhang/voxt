@@ -138,6 +138,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     @Published var audioLevel: Float = 0.0
     @Published var transcribedText = ""
     @Published var isEnhancing = false
+    @Published var isFinalizingTranscription = false
 
     var onTranscriptionFinished: ((String) -> Void)?
     var onPartialTranscription: ((String) -> Void)?
@@ -240,6 +241,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         )
 
         guard sampleCount > 0 else {
+            isFinalizingTranscription = false
             if callbackCount > 0 {
                 VoxtLog.warning(
                     "MLX recording stopped with audio callbacks but no extracted samples. sampleRate=\(Int(sampleRate))"
@@ -249,6 +251,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             return
         }
 
+        isFinalizingTranscription = true
         finalizationTask?.cancel()
         finalizationTask = Task { [weak self] in
             await self?.runFinalizationPipeline(revision: revision, sampleRate: sampleRate)
@@ -308,6 +311,12 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     }
 
     private func runFinalizationPipeline(revision: Int, sampleRate: Double) async {
+        defer {
+            if revision == sessionRevision {
+                isFinalizingTranscription = false
+            }
+        }
+
         let snapshot = sampleStore.snapshot()
         guard !snapshot.isEmpty else {
             onTranscriptionFinished?("")
@@ -431,6 +440,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         transcribedText = ""
         audioLevel = 0
         isModelInitializing = false
+        isFinalizingTranscription = false
         stableCommittedText = ""
         lastCandidateText = ""
         nextCorrectionAtSeconds = correctionIntervalSeconds
@@ -494,6 +504,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         correctionLoopTask = nil
         finalizationTask?.cancel()
         finalizationTask = nil
+        isFinalizingTranscription = false
         preloadTask?.cancel()
         preloadTask = nil
         captureWatchdogTask?.cancel()
@@ -646,6 +657,9 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private func resolvedInferenceConfiguration(for stage: CorrectionStage) -> ResolvedInferenceConfiguration {
         let hintPayload = resolvedHintPayload()
         let tuningSettings = resolvedLocalTuningSettings()
+        let userLanguageCodes = UserMainLanguageOption.storedSelection(
+            from: UserDefaults.standard.string(forKey: AppPreferenceKey.userMainLanguageCodes)
+        )
         let family = MLXModelFamily.family(for: modelManager.currentModelRepo)
         let chunkDuration: Float
         let minChunkDuration: Float
@@ -681,10 +695,14 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 minChunkDuration: minChunkDuration
             ),
             languageHint: languageHint,
-            qwenContextBias: tuningSettings.qwenContextBias,
-            granitePromptBias: tuningSettings.granitePromptBias.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? nil
-                : tuningSettings.granitePromptBias.trimmingCharacters(in: .whitespacesAndNewlines),
+            qwenContextBias: mergedBiasText(
+                resolvedBiasTemplate(tuningSettings.qwenContextBias, userLanguageCodes: userLanguageCodes),
+                autoBias: family == .qwen3ASR ? hintPayload.multilingualContext : nil
+            ),
+            granitePromptBias: mergedOptionalBiasText(
+                resolvedBiasTemplate(tuningSettings.granitePromptBias, userLanguageCodes: userLanguageCodes),
+                autoBias: family == .graniteSpeech ? hintPayload.multilingualContext : nil
+            ),
             senseVoiceUseITN: tuningSettings.senseVoiceUseITN
         )
     }
@@ -719,6 +737,35 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         case .postStopQuick: return "post-stop quick"
         case .postStopFinal: return "post-stop final"
         }
+    }
+
+    private func mergedBiasText(_ userBias: String, autoBias: String?) -> String {
+        let trimmedUserBias = userBias.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedAutoBias = autoBias?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        switch (trimmedUserBias.isEmpty, trimmedAutoBias.isEmpty) {
+        case (true, true):
+            return ""
+        case (false, true):
+            return trimmedUserBias
+        case (true, false):
+            return trimmedAutoBias
+        case (false, false):
+            return "\(trimmedAutoBias)\n\(trimmedUserBias)"
+        }
+    }
+
+    private func mergedOptionalBiasText(_ userBias: String, autoBias: String?) -> String? {
+        let merged = mergedBiasText(userBias, autoBias: autoBias)
+        return merged.isEmpty ? nil : merged
+    }
+
+    private func resolvedBiasTemplate(_ template: String, userLanguageCodes: [String]) -> String {
+        ASRHintResolver.resolveTemplateVariables(
+            in: template,
+            userLanguageCodes: userLanguageCodes
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func prepareInputSamples(_ samples: [Float], sampleRate: Double) throws -> [Float] {

@@ -10,13 +10,6 @@ class MLXModelManager: ObservableObject {
     static let defaultHubBaseURL = URL(string: "https://huggingface.co")!
     static let mirrorHubBaseURL = URL(string: "https://hf-mirror.com")!
     static let hubUserAgent = "Voxt/1.0 (MLXAudio)"
-    private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter
-    }()
-
     enum ModelState: Equatable {
         case notDownloaded
         case downloading(
@@ -39,15 +32,15 @@ class MLXModelManager: ObservableObject {
         let description: String
     }
 
-    private static let realtimeCapableModelRepos: Set<String> = [
+    nonisolated private static let realtimeCapableModelRepos: Set<String> = [
         "mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit",
         "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
         "mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16",
     ]
 
-    static let defaultModelRepo = "mlx-community/Qwen3-ASR-0.6B-4bit"
+    nonisolated static let defaultModelRepo = "mlx-community/Qwen3-ASR-0.6B-4bit"
 
-    static let availableModels: [ModelOption] = [
+    nonisolated static let availableModels: [ModelOption] = [
         ModelOption(
             id: "mlx-community/Qwen3-ASR-0.6B-4bit",
             title: "Qwen3-ASR 0.6B (4bit)",
@@ -174,14 +167,14 @@ class MLXModelManager: ObservableObject {
             description: "Fast multilingual model with built-in language and event detection."
         )
     ]
-    private static let legacyModelRepoMap: [String: String] = [
+    nonisolated private static let legacyModelRepoMap: [String: String] = [
         "mlx-community/Parakeet-0.6B": "mlx-community/parakeet-tdt-0.6b-v3",
         "mlx-community/GLM-ASR-Nano-4bit": "mlx-community/GLM-ASR-Nano-2512-4bit",
         "mlx-community/Voxtral-Mini-4B-Realtime-2602": "mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16",
         "mlx-community/Voxtral-Mini-4B-Realtime-2602-6bit": "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
         "mlx-community/FireRedASR2": "mlx-community/FireRedASR2-AED-mlx",
     ]
-    private static let knownRemoteSizeBytesByRepo: [String: Int64] = [
+    nonisolated private static let knownRemoteSizeBytesByRepo: [String: Int64] = [
         "mlx-community/Qwen3-ASR-0.6B-4bit": 712_781_279,
         "mlx-community/Qwen3-ASR-0.6B-6bit": 861_777_567,
         "mlx-community/Qwen3-ASR-0.6B-8bit": 1_010_773_761,
@@ -271,8 +264,15 @@ class MLXModelManager: ObservableObject {
         return canonicalRepo
     }
 
-    static func fallbackRemoteSizeText(repo: String) -> String? {
+    nonisolated static func fallbackRemoteSizeText(repo: String) -> String? {
         fallbackRemoteSizeInfo(repo: repo)?.text
+    }
+
+    nonisolated private static func formatByteCount(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 
     func isModelDownloaded(repo: String) -> Bool {
@@ -297,7 +297,7 @@ class MLXModelManager: ObservableObject {
         else {
             return ""
         }
-        let text = Self.byteFormatter.string(fromByteCount: Int64(size))
+        let text = Self.formatByteCount(Int64(size))
         localSizeTextByRepo[canonicalRepo] = text
         return text
     }
@@ -347,15 +347,15 @@ class MLXModelManager: ObservableObject {
         fetchRemoteSize()
     }
 
-    static func canonicalModelRepo(_ repo: String) -> String {
+    nonisolated static func canonicalModelRepo(_ repo: String) -> String {
         legacyModelRepoMap[repo] ?? repo
     }
 
-    static func isRealtimeCapableModelRepo(_ repo: String) -> Bool {
+    nonisolated static func isRealtimeCapableModelRepo(_ repo: String) -> Bool {
         realtimeCapableModelRepos.contains(canonicalModelRepo(repo))
     }
 
-    static func transcriptionBehavior(for repo: String) -> TranscriptionBehavior {
+    nonisolated static func transcriptionBehavior(for repo: String) -> TranscriptionBehavior {
         let canonicalRepo = canonicalModelRepo(repo)
         if canonicalRepo.localizedCaseInsensitiveContains("firered") {
             return TranscriptionBehavior(
@@ -376,10 +376,10 @@ class MLXModelManager: ObservableObject {
         Self.transcriptionBehavior(for: modelRepo)
     }
 
-    private static func fallbackRemoteSizeInfo(repo: String) -> (bytes: Int64, text: String)? {
+    nonisolated private static func fallbackRemoteSizeInfo(repo: String) -> (bytes: Int64, text: String)? {
         let canonicalRepo = canonicalModelRepo(repo)
         guard let bytes = knownRemoteSizeBytesByRepo[canonicalRepo] else { return nil }
-        return (bytes, byteFormatter.string(fromByteCount: bytes))
+        return (bytes, formatByteCount(bytes))
     }
 
     func updateHubBaseURL(_ url: URL) {
@@ -750,7 +750,7 @@ class MLXModelManager: ObservableObject {
                 repo: repo,
                 baseURL: baseURL,
                 userAgent: Self.hubUserAgent,
-                byteFormatter: Self.byteFormatter
+                formatByteCount: Self.formatByteCount
             )
         } catch {
             guard let fallbackBaseURL = fallbackHubBaseURL(from: baseURL) else {
@@ -763,7 +763,7 @@ class MLXModelManager: ObservableObject {
                 repo: repo,
                 baseURL: fallbackBaseURL,
                 userAgent: Self.hubUserAgent,
-                byteFormatter: Self.byteFormatter
+                formatByteCount: Self.formatByteCount
             )
         }
     }

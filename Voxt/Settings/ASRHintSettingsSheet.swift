@@ -27,10 +27,11 @@ struct ASRHintSettingsSheet: View {
     }
 
     private var mainLanguage: UserMainLanguageOption {
-        UserMainLanguageOption
-            .sanitizedSelection(userLanguageCodes)
-            .compactMap(UserMainLanguageOption.option(for:))
-            .first ?? UserMainLanguageOption.fallbackOption()
+        ASRHintResolver.selectedLanguageOptions(userLanguageCodes).first ?? UserMainLanguageOption.fallbackOption()
+    }
+
+    private var secondaryLanguagePreview: String {
+        ASRHintResolver.secondaryLanguageSummary(userLanguageCodes)
     }
 
     private var resolvedPayload: ResolvedASRHintPayload {
@@ -82,6 +83,8 @@ struct ASRHintSettingsSheet: View {
                 )
             }
 
+            infoRow(label: "Other languages", value: secondaryLanguagePreview)
+
             if target == .aliyunBailianASR {
                 infoRow(label: "Language hints", value: hintsPreview)
             }
@@ -128,6 +131,10 @@ struct ASRHintSettingsSheet: View {
                         PromptTemplateVariableDescriptor(
                             token: AppPreferenceKey.asrUserMainLanguageTemplateVariable,
                             tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
+                        ),
+                        PromptTemplateVariableDescriptor(
+                            token: AppPreferenceKey.asrUserOtherLanguagesTemplateVariable,
+                            tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
                         )
                     ]
                 )

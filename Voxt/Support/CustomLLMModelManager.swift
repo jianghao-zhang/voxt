@@ -14,13 +14,6 @@ class CustomLLMModelManager: ObservableObject {
     static let mirrorHubBaseURL = URL(string: "https://hf-mirror.com")!
     static let hubUserAgent = "Voxt/1.0 (CustomLLM)"
 
-    private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter
-    }()
-
     enum ModelState: Equatable {
         case notDownloaded
         case downloading(
@@ -48,8 +41,8 @@ class CustomLLMModelManager: ObservableObject {
         let description: String
     }
 
-    static let defaultModelRepo = "Qwen/Qwen2-1.5B-Instruct"
-    static let availableModels: [ModelOption] = [
+    nonisolated static let defaultModelRepo = "Qwen/Qwen2-1.5B-Instruct"
+    nonisolated static let availableModels: [ModelOption] = [
         ModelOption(
             id: "Qwen/Qwen2-1.5B-Instruct",
             title: "Qwen2 1.5B Instruct",
@@ -116,7 +109,7 @@ class CustomLLMModelManager: ObservableObject {
             description: "Higher-capacity Gemma 2 model for better quality output."
         )
     ]
-    private static let knownRemoteSizeBytesByRepo: [String: Int64] = [
+    nonisolated private static let knownRemoteSizeBytesByRepo: [String: Int64] = [
         "Qwen/Qwen2-1.5B-Instruct": 3_098_962_420,
         "Qwen/Qwen2.5-3B-Instruct": 6_183_464_935,
         "mlx-community/Qwen3-4B-4bit": 2_278_972_183,
@@ -399,8 +392,15 @@ class CustomLLMModelManager: ObservableObject {
         return repo
     }
 
-    static func fallbackRemoteSizeText(repo: String) -> String? {
+    nonisolated static func fallbackRemoteSizeText(repo: String) -> String? {
         fallbackRemoteSizeInfo(repo: repo)?.text
+    }
+
+    nonisolated private static func formatByteCount(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 
     func updateModel(repo: String) {
@@ -433,9 +433,9 @@ class CustomLLMModelManager: ObservableObject {
         fetchRemoteSize()
     }
 
-    private static func fallbackRemoteSizeInfo(repo: String) -> (bytes: Int64, text: String)? {
+    nonisolated private static func fallbackRemoteSizeInfo(repo: String) -> (bytes: Int64, text: String)? {
         guard let bytes = knownRemoteSizeBytesByRepo[repo] else { return nil }
-        return (bytes, byteFormatter.string(fromByteCount: bytes))
+        return (bytes, formatByteCount(bytes))
     }
 
     func isModelDownloaded(repo: String) -> Bool {
@@ -458,7 +458,7 @@ class CustomLLMModelManager: ObservableObject {
         else {
             return ""
         }
-        let text = Self.byteFormatter.string(fromByteCount: Int64(size))
+        let text = Self.formatByteCount(Int64(size))
         localSizeTextByRepo[repo] = text
         return text
     }
@@ -1080,7 +1080,7 @@ class CustomLLMModelManager: ObservableObject {
                 repo: repo,
                 baseURL: baseURL,
                 userAgent: Self.hubUserAgent,
-                byteFormatter: Self.byteFormatter
+                formatByteCount: Self.formatByteCount
             )
         } catch {
             guard let fallbackBaseURL = fallbackHubBaseURL(from: baseURL) else {
@@ -1093,7 +1093,7 @@ class CustomLLMModelManager: ObservableObject {
                 repo: repo,
                 baseURL: fallbackBaseURL,
                 userAgent: Self.hubUserAgent,
-                byteFormatter: Self.byteFormatter
+                formatByteCount: Self.formatByteCount
             )
         }
     }

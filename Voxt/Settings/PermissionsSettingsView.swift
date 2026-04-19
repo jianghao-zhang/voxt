@@ -83,10 +83,9 @@ struct PermissionsSettingsView: View {
     }
 
     private var permissionRequirementContext: SettingsPermissionRequirementContext {
-        SettingsPermissionRequirementContext(
+        SettingsPermissionRequirementResolver.requirementContext(
             selectedEngine: transcriptionEngine,
             muteSystemAudioWhileRecording: muteSystemAudioWhileRecording,
-            meetingNotesEnabled: meetingEnabled,
             featureSettings: featureSettings
         )
     }
@@ -270,6 +269,7 @@ struct PermissionsSettingsView: View {
             snapshot[kind] = currentState(for: kind)
         }
         states = snapshot
+        notifyPermissionStatusChanged()
         VoxtLog.info("Permission status: \(permissionSnapshotText(snapshot))")
     }
 
@@ -318,6 +318,7 @@ struct PermissionsSettingsView: View {
                 let latest = currentState(for: kind)
                 states[kind] = latest
                 if latest != initialState {
+                    notifyPermissionStatusChanged()
                     VoxtLog.info("Permission status changed: \(kind.logKey)=\(latest == .enabled ? "on" : "off")")
                     return
                 }
@@ -333,6 +334,10 @@ struct PermissionsSettingsView: View {
         }
         monitorTasks.removeAll()
         monitoringKinds.removeAll()
+    }
+
+    private func notifyPermissionStatusChanged() {
+        NotificationCenter.default.post(name: .voxtPermissionsDidChange, object: nil)
     }
 
     private func builtInBrowserTargets() -> [BrowserAutomationTarget] {

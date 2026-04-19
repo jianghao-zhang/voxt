@@ -55,7 +55,7 @@ struct SettingsPermissionRequirementContext {
 }
 
 enum SettingsPermissionRequirementResolver {
-    static func sidebarRequirementContext(
+    static func requirementContext(
         selectedEngine: TranscriptionEngine,
         muteSystemAudioWhileRecording: Bool,
         featureSettings: FeatureSettings
@@ -64,6 +64,18 @@ enum SettingsPermissionRequirementResolver {
             selectedEngine: selectedEngine,
             muteSystemAudioWhileRecording: muteSystemAudioWhileRecording,
             meetingNotesEnabled: featureSettings.meeting.enabled,
+            featureSettings: featureSettings
+        )
+    }
+
+    static func sidebarRequirementContext(
+        selectedEngine: TranscriptionEngine,
+        muteSystemAudioWhileRecording: Bool,
+        featureSettings: FeatureSettings
+    ) -> SettingsPermissionRequirementContext {
+        requirementContext(
+            selectedEngine: selectedEngine,
+            muteSystemAudioWhileRecording: muteSystemAudioWhileRecording,
             featureSettings: featureSettings
         )
     }
@@ -100,6 +112,13 @@ enum SettingsPermissionRequirementResolver {
         }
 
         return permissions
+    }
+
+    static func hasMissingPermissions(
+        context: SettingsPermissionRequirementContext
+    ) -> Bool {
+        requiredPermissions(context: context)
+            .contains { !SettingsPermissionGrantResolver.isGranted($0) }
     }
 }
 

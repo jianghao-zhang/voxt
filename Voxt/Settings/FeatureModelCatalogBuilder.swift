@@ -4,6 +4,7 @@ private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
 }
 
+@MainActor
 struct FeatureModelCatalogBuilder {
     let mlxModelManager: MLXModelManager
     let whisperModelManager: WhisperKitModelManager

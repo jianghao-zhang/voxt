@@ -36,6 +36,7 @@ class OverlayState: ObservableObject {
     @Published var statusMessage = ""
     @Published var isEnhancing = false
     @Published var isRequesting = false
+    @Published var isFinalizingTranscription = false
     @Published var isCompleting = false
     @Published var displayMode: OverlayDisplayMode = .recording
     @Published var sessionIconMode: OverlaySessionIconMode = .transcription
@@ -74,6 +75,7 @@ class OverlayState: ObservableObject {
             transcribedText: transcriber.$transcribedText.eraseToAnyPublisher(),
             isEnhancing: transcriber.$isEnhancing.eraseToAnyPublisher(),
             isRequesting: Just(false).eraseToAnyPublisher(),
+            isFinalizingTranscription: transcriber.$isFinalizingTranscription.eraseToAnyPublisher(),
             initializingEngine: .none
         )
     }
@@ -87,6 +89,7 @@ class OverlayState: ObservableObject {
             transcribedText: transcriber.$transcribedText.eraseToAnyPublisher(),
             isEnhancing: transcriber.$isEnhancing.eraseToAnyPublisher(),
             isRequesting: Just(false).eraseToAnyPublisher(),
+            isFinalizingTranscription: transcriber.$isFinalizingTranscription.eraseToAnyPublisher(),
             initializingEngine: .mlxAudio
         )
     }
@@ -100,6 +103,7 @@ class OverlayState: ObservableObject {
             transcribedText: transcriber.$transcribedText.eraseToAnyPublisher(),
             isEnhancing: transcriber.$isEnhancing.eraseToAnyPublisher(),
             isRequesting: transcriber.$isRequesting.eraseToAnyPublisher(),
+            isFinalizingTranscription: transcriber.$isFinalizingTranscription.eraseToAnyPublisher(),
             initializingEngine: .none
         )
     }
@@ -113,6 +117,7 @@ class OverlayState: ObservableObject {
             transcribedText: transcriber.$transcribedText.eraseToAnyPublisher(),
             isEnhancing: transcriber.$isEnhancing.eraseToAnyPublisher(),
             isRequesting: Just(false).eraseToAnyPublisher(),
+            isFinalizingTranscription: transcriber.$isFinalizingTranscription.eraseToAnyPublisher(),
             initializingEngine: .whisperKit
         )
     }
@@ -126,6 +131,7 @@ class OverlayState: ObservableObject {
         statusMessage = ""
         isEnhancing = false
         isRequesting = false
+        isFinalizingTranscription = false
         isCompleting = false
         displayMode = .recording
         sessionIconMode = .transcription
@@ -155,6 +161,7 @@ class OverlayState: ObservableObject {
         }
         answerTitle = ""
         answerContent = ""
+        isFinalizingTranscription = false
         isStreamingAnswer = false
     }
 
@@ -182,6 +189,7 @@ class OverlayState: ObservableObject {
         audioLevel = 0
         isEnhancing = false
         isRequesting = false
+        isFinalizingTranscription = false
         isCompleting = false
         statusMessage = ""
         dismissSessionTranslationTargetPicker()
@@ -212,6 +220,7 @@ class OverlayState: ObservableObject {
         displayMode = .answer
         isRecording = false
         audioLevel = 0
+        isFinalizingTranscription = false
         isCompleting = false
         statusMessage = ""
         dismissSessionTranslationTargetPicker()
@@ -239,6 +248,7 @@ class OverlayState: ObservableObject {
         audioLevel = 0
         isEnhancing = false
         isRequesting = false
+        isFinalizingTranscription = false
         isCompleting = false
         statusMessage = ""
         dismissSessionTranslationTargetPicker()
@@ -264,13 +274,21 @@ class OverlayState: ObservableObject {
         displayMode = .answer
         isRecording = false
         audioLevel = 0
+        isFinalizingTranscription = false
         isCompleting = false
         statusMessage = ""
         dismissSessionTranslationTargetPicker()
     }
 
     var shouldAnimateVisuals: Bool {
-        isPresented && (isRecording || isModelInitializing || displayMode == .processing || isEnhancing || isRequesting)
+        isPresented && (
+            isRecording ||
+                isModelInitializing ||
+                displayMode == .processing ||
+                isEnhancing ||
+                isRequesting ||
+                isFinalizingTranscription
+        )
     }
 
     var currentAnswerPayload: RewriteAnswerPayload? {
@@ -422,10 +440,12 @@ class OverlayState: ObservableObject {
         transcribedText transcribedTextPublisher: AnyPublisher<String, Never>,
         isEnhancing isEnhancingPublisher: AnyPublisher<Bool, Never>,
         isRequesting isRequestingPublisher: AnyPublisher<Bool, Never>,
+        isFinalizingTranscription isFinalizingPublisher: AnyPublisher<Bool, Never>,
         initializingEngine: TranscriptionEngine?
     ) {
         cancellables.removeAll()
         audioLevel = 0
+        isFinalizingTranscription = false
         self.initializingEngine = initializingEngine
 
         recordingPublisher
@@ -484,6 +504,13 @@ class OverlayState: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] isRequesting in
                 self?.isRequesting = isRequesting
+            }
+            .store(in: &cancellables)
+
+        isFinalizingPublisher
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isFinalizing in
+                self?.isFinalizingTranscription = isFinalizing
             }
             .store(in: &cancellables)
     }
@@ -799,6 +826,7 @@ private struct OverlayContent: View {
             statusMessage: state.statusMessage,
             isEnhancing: state.isEnhancing,
             isRequesting: state.isRequesting,
+            isFinalizingTranscription: state.isFinalizingTranscription,
             isCompleting: state.isCompleting,
             answerTitle: state.answerTitle,
             answerContent: state.answerContent,

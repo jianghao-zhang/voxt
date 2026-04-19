@@ -3,6 +3,10 @@ import XCTest
 
 @MainActor
 final class ModelCatalogBuilderTests: XCTestCase {
+    func testModelCatalogTagPriorityDoesNotExposeMultilingualFilter() {
+        XCTAssertFalse(ModelCatalogTag.priority.contains(AppLocalization.localizedString("Multilingual")))
+    }
+
     func testASRCatalogIncludesDirectDictationSettingsEntry() throws {
         let builder = makeBuilder(
             featureSettings: makeFeatureSettings(
@@ -79,10 +83,43 @@ final class ModelCatalogBuilderTests: XCTestCase {
         XCTAssertEqual(entry.primaryAction?.title, AppLocalization.localizedString("Configure"))
     }
 
+    func testMultilingualMLXModelDisplaysSupportsPrimaryLanguageTag() throws {
+        let repo = "mlx-community/Qwen3-ASR-0.6B-4bit"
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(transcriptionASR: .mlx(repo)),
+            primaryUserLanguageCode: "zh-Hans"
+        )
+
+        let entry = try XCTUnwrap(
+            builder.asrEntries().first(where: { $0.id == "mlx:\(repo)" })
+        )
+
+        XCTAssertTrue(entry.displayTags.contains(AppLocalization.localizedString("Supports Primary Language")))
+        XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Does Not Support Primary Language")))
+        XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Multilingual")))
+    }
+
+    func testEnglishOnlyMLXModelDisplaysDoesNotSupportPrimaryLanguageTag() throws {
+        let repo = "mlx-community/parakeet-tdt-0.6b-v3"
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(transcriptionASR: .mlx(repo)),
+            primaryUserLanguageCode: "zh-Hans"
+        )
+
+        let entry = try XCTUnwrap(
+            builder.asrEntries().first(where: { $0.id == "mlx:\(repo)" })
+        )
+
+        XCTAssertTrue(entry.displayTags.contains(AppLocalization.localizedString("Does Not Support Primary Language")))
+        XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Supports Primary Language")))
+        XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Multilingual")))
+    }
+
     private func makeBuilder(
         featureSettings: FeatureSettings,
         remoteASRConfigurations: [String: RemoteProviderConfiguration] = [:],
         remoteLLMConfigurations: [String: RemoteProviderConfiguration] = [:],
+        primaryUserLanguageCode: String? = "en",
         hasIssue: @escaping (ConfigurationTransferManager.MissingConfigurationIssue.Scope) -> Bool = { _ in false }
     ) -> ModelCatalogBuilder {
         ModelCatalogBuilder(
@@ -99,6 +136,7 @@ final class ModelCatalogBuilderTests: XCTestCase {
             customLLMBadgeText: { _ in nil },
             remoteASRStatusText: { _, _ in "" },
             remoteLLMBadgeText: { _ in nil },
+            primaryUserLanguageCode: primaryUserLanguageCode,
             isDownloadingModel: { _ in false },
             isAnotherModelDownloading: { _ in false },
             isDownloadingWhisperModel: { _ in false },

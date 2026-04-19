@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 protocol MeetingLiveTranscribingSession: AnyObject {
     var state: MeetingLiveSessionState { get }
     func start(

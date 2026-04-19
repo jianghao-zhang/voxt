@@ -9,6 +9,7 @@ protocol TranscriberProtocol: ObservableObject {
     var audioLevel: Float { get }
     var transcribedText: String { get }
     var isEnhancing: Bool { get set }
+    var isFinalizingTranscription: Bool { get }
 
     var onTranscriptionFinished: ((String) -> Void)? { get set }
 

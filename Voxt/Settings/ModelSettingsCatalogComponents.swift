@@ -29,7 +29,7 @@ enum ModelCatalogTag {
     static var groups: [[String]] {
         [
             [localized("Local"), localized("Remote")],
-            [localized("Fast"), localized("Accurate"), localized("Realtime"), localized("Multilingual")],
+            [localized("Fast"), localized("Accurate"), localized("Realtime")],
             [localized("Installed"), localized("Configured"), localized("In Use")]
         ]
     }
@@ -383,20 +383,45 @@ private struct ModelRowTagStrip: View {
     }
 
     private func tagChip(_ text: String) -> some View {
-        Text(text)
+        let style = tagStyle(for: text)
+        return Text(text)
             .font(.caption2.weight(.medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(style.foreground)
             .lineLimit(1)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(
                 Capsule(style: .continuous)
-                    .fill(SettingsUIStyle.groupedFillColor)
+                    .fill(style.fill)
             )
             .overlay(
                 Capsule(style: .continuous)
-                    .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                    .stroke(style.stroke, lineWidth: 1)
             )
+    }
+
+    private func tagStyle(for text: String) -> (foreground: Color, fill: Color, stroke: Color) {
+        if text == localized("Supports Primary Language") {
+            return (
+                foreground: Color.green.opacity(0.85),
+                fill: Color.green.opacity(0.08),
+                stroke: Color.green.opacity(0.18)
+            )
+        }
+
+        if text == localized("Does Not Support Primary Language") {
+            return (
+                foreground: Color.orange.opacity(0.88),
+                fill: Color.orange.opacity(0.08),
+                stroke: Color.orange.opacity(0.18)
+            )
+        }
+
+        return (
+            foreground: .secondary,
+            fill: SettingsUIStyle.groupedFillColor,
+            stroke: SettingsUIStyle.subtleBorderColor
+        )
     }
 }
 

@@ -102,6 +102,13 @@ final class ASRHintSettingsTests: XCTestCase {
         XCTAssertEqual(payload.language, "Traditional Chinese")
     }
 
+    func testMLXModelFamilyRecognizesCohereTranscribe() {
+        XCTAssertEqual(
+            MLXModelFamily.family(for: "beshkenadze/cohere-transcribe-03-2026-mlx-fp16"),
+            .cohereTranscribe
+        )
+    }
+
     func testResolveDictationSettingsUsesMainLanguageAndContextualPhrases() {
         let settings = ASRHintSettings(
             followsUserMainLanguage: true,

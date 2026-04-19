@@ -132,6 +132,9 @@ struct SettingsView: View {
             dictionaryStore.reload()
             dictionarySuggestionStore.reload()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .voxtPermissionsDidChange)) { _ in
+            refreshPermissionBadge()
+        }
         .onReceive(issueRefreshTimer) { _ in
             guard mainWindowState.isVisible else { return }
             refreshModelConfigurationBadge()
@@ -431,14 +434,13 @@ struct SettingsView: View {
     private func refreshPermissionBadge() {
         let engine = TranscriptionEngine(rawValue: transcriptionEngineRaw) ?? .mlxAudio
         let featureSettings = FeatureSettingsStore.load(defaults: .standard)
-        let context = SettingsPermissionRequirementResolver.sidebarRequirementContext(
+        let context = SettingsPermissionRequirementResolver.requirementContext(
             selectedEngine: engine,
             muteSystemAudioWhileRecording: muteSystemAudioWhileRecording,
             featureSettings: featureSettings
         )
 
-        hasMissingPermissions = SettingsPermissionRequirementResolver.requiredPermissions(context: context)
-            .contains { !SettingsPermissionGrantResolver.isGranted($0) }
+        hasMissingPermissions = SettingsPermissionRequirementResolver.hasMissingPermissions(context: context)
     }
 
     private func refreshModelConfigurationBadge() {

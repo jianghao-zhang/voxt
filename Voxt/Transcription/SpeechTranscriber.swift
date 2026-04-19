@@ -10,6 +10,7 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
     @Published var audioLevel: Float = 0.0
     @Published var transcribedText = ""
     @Published var isEnhancing = false
+    @Published var isFinalizingTranscription = false
 
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?

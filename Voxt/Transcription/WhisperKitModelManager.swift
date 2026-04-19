@@ -12,13 +12,7 @@ final class WhisperKitModelManager: ObservableObject {
         let type: String
         let size: Int64
     }
-    private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter
-    }()
-    private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
+    private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
         private let progress: Progress
         private let stagedDownloadURL: URL
         private let lock = NSLock()
@@ -168,9 +162,9 @@ final class WhisperKitModelManager: ObservableObject {
         let rawURL: URL?
     }
 
-    static let defaultModelID = "base"
+    nonisolated static let defaultModelID = "base"
 
-    static let availableModels: [ModelOption] = [
+    nonisolated static let availableModels: [ModelOption] = [
         .init(
             id: "tiny",
             title: "Whisper Tiny",
@@ -202,7 +196,7 @@ final class WhisperKitModelManager: ObservableObject {
             remoteSizeText: "Unknown"
         ),
     ]
-    private static let knownRemoteSizeBytesByID: [String: Int64] = [
+    nonisolated private static let knownRemoteSizeBytesByID: [String: Int64] = [
         "tiny": 76_635_397,
         "base": 146_719_453,
         "small": 486_487_465,
@@ -246,12 +240,19 @@ final class WhisperKitModelManager: ObservableObject {
         return keepResident && engineRaw == TranscriptionEngine.whisperKit.rawValue
     }
 
-    static func canonicalModelID(_ modelID: String) -> String {
+    nonisolated static func canonicalModelID(_ modelID: String) -> String {
         availableModels.contains(where: { $0.id == modelID }) ? modelID : defaultModelID
     }
 
-    static func fallbackRemoteSizeText(id: String) -> String? {
+    nonisolated static func fallbackRemoteSizeText(id: String) -> String? {
         fallbackRemoteSizeInfo(id: id)?.text
+    }
+
+    nonisolated private static func formatByteCount(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 
     func updateModel(id: String) {
@@ -273,10 +274,10 @@ final class WhisperKitModelManager: ObservableObject {
         fetchRemoteSize(for: modelID)
     }
 
-    private static func fallbackRemoteSizeInfo(id: String) -> (bytes: Int64, text: String)? {
+    nonisolated private static func fallbackRemoteSizeInfo(id: String) -> (bytes: Int64, text: String)? {
         let canonicalModelID = canonicalModelID(id)
         guard let bytes = knownRemoteSizeBytesByID[canonicalModelID] else { return nil }
-        return (bytes, byteFormatter.string(fromByteCount: bytes))
+        return (bytes, formatByteCount(bytes))
     }
 
     func refreshResidencyPolicy() {
@@ -563,7 +564,7 @@ final class WhisperKitModelManager: ObservableObject {
         else {
             return ""
         }
-        let text = Self.byteFormatter.string(fromByteCount: Int64(size))
+        let text = Self.formatByteCount(Int64(size))
         localSizeTextByID[canonicalModelID] = text
         return text
     }
@@ -612,7 +613,7 @@ final class WhisperKitModelManager: ObservableObject {
                     )
                     guard !Task.isCancelled else { return }
                     let text = bytes > 0
-                        ? Self.byteFormatter.string(fromByteCount: bytes)
+                        ? Self.formatByteCount(bytes)
                         : AppLocalization.localizedString("Unknown")
                     await MainActor.run {
                         self.updateRemoteSizeCache(id: modelID, text: text)
@@ -661,7 +662,7 @@ final class WhisperKitModelManager: ObservableObject {
                 let bytes = try await self.fetchRemoteModelBytesWithFallback(modelID: canonicalModelID)
                 guard !Task.isCancelled else { return }
                 let text = bytes > 0
-                    ? Self.byteFormatter.string(fromByteCount: bytes)
+                    ? Self.formatByteCount(bytes)
                     : AppLocalization.localizedString("Unknown")
                 await MainActor.run {
                     self.updateRemoteSizeCache(id: canonicalModelID, text: text)

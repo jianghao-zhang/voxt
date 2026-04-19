@@ -269,6 +269,17 @@ extension ModelSettingsView {
 }
 
 private struct MLXASRConfigurationSheetView: View {
+    private static let asrLanguageVariables = [
+        PromptTemplateVariableDescriptor(
+            token: AppPreferenceKey.asrUserMainLanguageTemplateVariable,
+            tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
+        ),
+        PromptTemplateVariableDescriptor(
+            token: AppPreferenceKey.asrUserOtherLanguagesTemplateVariable,
+            tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
+        )
+    ]
+
     let modelRepo: String
     let modelTitle: String
     let family: MLXModelFamily
@@ -279,6 +290,10 @@ private struct MLXASRConfigurationSheetView: View {
 
     private var mainLanguageSummary: String {
         ASRHintResolver.selectedLanguageSummary(userLanguageCodes)
+    }
+
+    private var secondaryLanguageSummary: String {
+        ASRHintResolver.secondaryLanguageSummary(userLanguageCodes)
     }
 
     private var resolvedLanguage: String {
@@ -332,10 +347,13 @@ private struct MLXASRConfigurationSheetView: View {
                 localInfoRow(label: "Resolved language", value: resolvedLanguage)
             }
 
+            localInfoRow(label: "Other languages", value: secondaryLanguageSummary)
+
             if family.supportsContextBias {
                 Text("Recognition Context")
                     .font(.subheadline.weight(.medium))
                 PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110)
+                PromptTemplateVariablesView(variables: Self.asrLanguageVariables)
                 Text("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -345,6 +363,7 @@ private struct MLXASRConfigurationSheetView: View {
                 Text("Recognition Prompt")
                     .font(.subheadline.weight(.medium))
                 PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110)
+                PromptTemplateVariablesView(variables: Self.asrLanguageVariables)
                 Text("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -358,7 +377,10 @@ private struct MLXASRConfigurationSheetView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !family.supportsContextBias && !family.supportsPromptBias && !family.supportsITN {
+            if !family.supportsContextBias
+                && !family.supportsPromptBias
+                && !family.supportsITN
+            {
                 Text("This MLX model family currently uses preset-based chunking and language strategy only. Model-native prompt or context controls are not exposed by this family in Voxt yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -394,6 +416,18 @@ private struct MLXASRConfigurationSheetView: View {
 }
 
 private struct WhisperASRConfigurationSheetView: View {
+    private static let contentMaxHeight: CGFloat = 520
+    private static let asrLanguageVariables = [
+        PromptTemplateVariableDescriptor(
+            token: AppPreferenceKey.asrUserMainLanguageTemplateVariable,
+            tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
+        ),
+        PromptTemplateVariableDescriptor(
+            token: AppPreferenceKey.asrUserOtherLanguagesTemplateVariable,
+            tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
+        )
+    ]
+
     @Binding var hintSettings: ASRHintSettings
     @Binding var tuningSettings: WhisperLocalTuningSettings
     @Binding var whisperTemperature: Double
@@ -408,6 +442,10 @@ private struct WhisperASRConfigurationSheetView: View {
         ASRHintResolver.selectedLanguageSummary(userLanguageCodes)
     }
 
+    private var secondaryLanguageSummary: String {
+        ASRHintResolver.secondaryLanguageSummary(userLanguageCodes)
+    }
+
     private var resolvedLanguage: String {
         ASRHintResolver.resolve(
             target: .whisperKit,
@@ -417,114 +455,119 @@ private struct WhisperASRConfigurationSheetView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Whisper Configuration")
-                .font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Whisper Configuration")
+                        .font(.title3.weight(.semibold))
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Preset")
-                    .font(.subheadline.weight(.medium))
-                SettingsMenuPicker(
-                    selection: Binding(
-                        get: { tuningSettings.preset.rawValue },
-                        set: { rawValue in
-                            guard let preset = LocalASRRecognitionPreset(rawValue: rawValue) else { return }
-                            tuningSettings = WhisperLocalTuningSettings.defaults(for: preset)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Preset")
+                            .font(.subheadline.weight(.medium))
+                        SettingsMenuPicker(
+                            selection: Binding(
+                                get: { tuningSettings.preset.rawValue },
+                                set: { rawValue in
+                                    guard let preset = LocalASRRecognitionPreset(rawValue: rawValue) else { return }
+                                    tuningSettings = WhisperLocalTuningSettings.defaults(for: preset)
+                                }
+                            ),
+                            options: LocalASRRecognitionPreset.allCases.map {
+                                SettingsMenuOption(value: $0.rawValue, title: $0.title)
+                            },
+                            selectedTitle: tuningSettings.preset.title,
+                            width: 220
+                        )
+                        Text(tuningSettings.preset.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Toggle("Follow User Main Language", isOn: $hintSettings.followsUserMainLanguage)
+                        .toggleStyle(.switch)
+
+                    HStack(alignment: .top, spacing: 16) {
+                        localInfoRow(label: "Primary language", value: mainLanguageSummary)
+                        localInfoRow(label: "Resolved language", value: resolvedLanguage)
+                    }
+
+                    localInfoRow(label: "Other languages", value: secondaryLanguageSummary)
+
+                    Text("Recognition Prompt")
+                        .font(.subheadline.weight(.medium))
+                    PromptEditorView(text: $hintSettings.promptTemplate, height: 110)
+                    PromptTemplateVariablesView(variables: Self.asrLanguageVariables)
+                    Text("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .center, spacing: 12) {
+                            Toggle("Enable VAD", isOn: $whisperVADEnabled)
+                                .toggleStyle(.switch)
+                            Toggle("Enable Timestamps", isOn: $whisperTimestampsEnabled)
+                                .toggleStyle(.switch)
+                            Toggle("Realtime", isOn: $whisperRealtimeEnabled)
+                                .toggleStyle(.switch)
                         }
-                    ),
-                    options: LocalASRRecognitionPreset.allCases.map {
-                        SettingsMenuOption(value: $0.rawValue, title: $0.title)
-                    },
-                    selectedTitle: tuningSettings.preset.title,
-                    width: 220
-                )
-                Text(tuningSettings.preset.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
 
-            Toggle("Follow User Main Language", isOn: $hintSettings.followsUserMainLanguage)
-                .toggleStyle(.switch)
+                        Toggle("Keep Resident", isOn: $whisperKeepResidentLoaded)
+                            .toggleStyle(.switch)
 
-            HStack(alignment: .top, spacing: 16) {
-                localInfoRow(label: "Primary language", value: mainLanguageSummary)
-                localInfoRow(label: "Resolved language", value: resolvedLanguage)
-            }
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Temperature")
+                                Spacer()
+                                Text(String(format: "%.1f", whisperTemperature))
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                            Slider(value: $whisperTemperature, in: 0...1, step: 0.1)
+                        }
 
-            Text("Recognition Prompt")
-                .font(.subheadline.weight(.medium))
-            PromptEditorView(text: $hintSettings.promptTemplate, height: 110)
-            Text("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                        whisperIntegerRow(
+                            title: "Fallback Count",
+                            value: $tuningSettings.temperatureFallbackCount,
+                            range: 0...8
+                        )
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 12) {
-                    Toggle("Enable VAD", isOn: $whisperVADEnabled)
-                        .toggleStyle(.switch)
-                    Toggle("Enable Timestamps", isOn: $whisperTimestampsEnabled)
-                        .toggleStyle(.switch)
-                    Toggle("Realtime", isOn: $whisperRealtimeEnabled)
-                        .toggleStyle(.switch)
-                }
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Fallback Increment")
+                                Spacer()
+                                Text(String(format: "%.1f", tuningSettings.temperatureIncrementOnFallback))
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                            Slider(value: $tuningSettings.temperatureIncrementOnFallback, in: 0...1, step: 0.1)
+                        }
 
-                Toggle("Keep Resident", isOn: $whisperKeepResidentLoaded)
-                    .toggleStyle(.switch)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Temperature")
-                        Spacer()
-                        Text(String(format: "%.1f", whisperTemperature))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                        whisperThresholdRow(
+                            title: "No Speech Threshold",
+                            value: $tuningSettings.noSpeechThreshold,
+                            range: 0...1
+                        )
+                        whisperThresholdRow(
+                            title: "Log Prob Threshold",
+                            value: $tuningSettings.logProbThreshold,
+                            range: -3...0
+                        )
+                        whisperThresholdRow(
+                            title: "Compression Ratio Threshold",
+                            value: $tuningSettings.compressionRatioThreshold,
+                            range: 1...4
+                        )
                     }
-                    Slider(value: $whisperTemperature, in: 0...1, step: 0.1)
-                }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Fallback Count")
-                        Spacer()
-                        Text("\(tuningSettings.temperatureFallbackCount)")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    Stepper("", value: $tuningSettings.temperatureFallbackCount, in: 0...8)
-                        .labelsHidden()
+                    Text("These settings apply to Whisper transcription sessions. Standard ASR always uses transcribe; Whisper translate is only used by the translation hotkey when Whisper translation is selected.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Fallback Increment")
-                        Spacer()
-                        Text(String(format: "%.1f", tuningSettings.temperatureIncrementOnFallback))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    Slider(value: $tuningSettings.temperatureIncrementOnFallback, in: 0...1, step: 0.1)
-                }
-
-                whisperThresholdRow(
-                    title: "No Speech Threshold",
-                    value: $tuningSettings.noSpeechThreshold,
-                    range: 0...1
-                )
-                whisperThresholdRow(
-                    title: "Log Prob Threshold",
-                    value: $tuningSettings.logProbThreshold,
-                    range: -3...0
-                )
-                whisperThresholdRow(
-                    title: "Compression Ratio Threshold",
-                    value: $tuningSettings.compressionRatioThreshold,
-                    range: 1...4
-                )
+                .padding(20)
             }
+            .frame(maxHeight: Self.contentMaxHeight)
 
-            Text("These settings apply to Whisper transcription sessions. Standard ASR always uses transcribe; Whisper translate is only used by the translation hotkey when Whisper translation is selected.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Divider()
 
             SettingsDialogActionRow {
                 Button("Reset to Default") {
@@ -544,8 +587,8 @@ private struct WhisperASRConfigurationSheetView: View {
                 .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
+            .padding(20)
         }
-        .padding(20)
         .frame(width: 540)
     }
 
@@ -560,7 +603,7 @@ private struct WhisperASRConfigurationSheetView: View {
     }
 
     private func whisperThresholdRow(
-        title: String,
+        title: LocalizedStringKey,
         value: Binding<Double>,
         range: ClosedRange<Double>
     ) -> some View {
@@ -573,6 +616,78 @@ private struct WhisperASRConfigurationSheetView: View {
                     .monospacedDigit()
             }
             Slider(value: value, in: range, step: 0.05)
+        }
+    }
+
+    private func whisperIntegerRow(
+        title: LocalizedStringKey,
+        value: Binding<Int>,
+        range: ClosedRange<Int>
+    ) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(title)
+            Spacer()
+            WhisperIntegerInputField(value: value, range: range, width: 72)
+        }
+    }
+}
+
+private struct WhisperIntegerInputField: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    let width: CGFloat
+
+    @State private var text: String
+
+    init(value: Binding<Int>, range: ClosedRange<Int>, width: CGFloat) {
+        _value = value
+        self.range = range
+        self.width = width
+        _text = State(initialValue: String(min(max(value.wrappedValue, range.lowerBound), range.upperBound)))
+    }
+
+    var body: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.plain)
+            .settingsFieldSurface(width: width, alignment: .trailing)
+            .multilineTextAlignment(.trailing)
+            .onChange(of: text) { _, newValue in
+                let digits = newValue.filter(\.isNumber)
+                guard !digits.isEmpty else { return }
+
+                let parsed = Int(digits) ?? range.lowerBound
+                let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+                value = clamped
+
+                let normalized = String(clamped)
+                if text != normalized {
+                    text = normalized
+                }
+            }
+            .onSubmit {
+                syncTextToValue()
+            }
+            .onChange(of: value) { _, newValue in
+                let clamped = min(max(newValue, range.lowerBound), range.upperBound)
+                let normalized = String(clamped)
+                if text != normalized {
+                    text = normalized
+                }
+            }
+            .onAppear {
+                syncTextToValue()
+            }
+    }
+
+    private func syncTextToValue() {
+        let digits = text.filter(\.isNumber)
+        let parsed = Int(digits) ?? value
+        let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+        value = clamped
+
+        let normalized = String(clamped)
+        if text != normalized {
+            text = normalized
         }
     }
 }

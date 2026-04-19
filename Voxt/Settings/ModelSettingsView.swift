@@ -180,6 +180,7 @@ struct ModelSettingsView: View {
                 remoteASRStatusText(for: provider, configuration: configuration)
             },
             remoteLLMBadgeText: remoteLLMBadgeText(for:),
+            primaryUserLanguageCode: selectedUserLanguageCodes.first,
             isDownloadingModel: isDownloadingModel,
             isAnotherModelDownloading: isAnotherModelDownloading,
             isDownloadingWhisperModel: isDownloadingWhisperModel,

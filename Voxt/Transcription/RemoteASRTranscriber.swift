@@ -11,6 +11,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     @Published var transcribedText = ""
     @Published var isEnhancing = false
     @Published var isRequesting = false
+    @Published var isFinalizingTranscription = false
 
     var onTranscriptionFinished: ((String) -> Void)?
     var onStartFailure: ((String) -> Void)?

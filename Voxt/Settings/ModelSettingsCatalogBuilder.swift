@@ -4,6 +4,7 @@ private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
 }
 
+@MainActor
 struct ModelCatalogBuilder {
     let mlxModelManager: MLXModelManager
     let whisperModelManager: WhisperKitModelManager
@@ -18,6 +19,7 @@ struct ModelCatalogBuilder {
     let customLLMBadgeText: (String) -> String?
     let remoteASRStatusText: (RemoteASRProvider, RemoteProviderConfiguration) -> String
     let remoteLLMBadgeText: (RemoteLLMProvider) -> String?
+    let primaryUserLanguageCode: String?
     let isDownloadingModel: (String) -> Bool
     let isAnotherModelDownloading: (String) -> Bool
     let isDownloadingWhisperModel: (String) -> Bool
@@ -388,7 +390,10 @@ struct ModelCatalogBuilder {
         configured: Bool,
         selectionID: FeatureModelSelectionID
     ) -> [String] {
-        var tags = base
+        var tags = base.filter { $0 != localized("Multilingual") }
+        if let languageSupportTag = primaryLanguageSupportTag(for: selectionID) {
+            tags.append(languageSupportTag)
+        }
         if requiresConfiguration && configured {
             tags.append(localized("Configured"))
         }
@@ -488,6 +493,55 @@ struct ModelCatalogBuilder {
             return false
         }
         return option.description.localizedCaseInsensitiveContains("multilingual")
+    }
+
+    private func primaryLanguageSupportTag(for selectionID: FeatureModelSelectionID) -> String? {
+        guard let support = supportsPrimaryLanguage(for: selectionID) else { return nil }
+        return localized(support ? "Supports Primary Language" : "Does Not Support Primary Language")
+    }
+
+    private func supportsPrimaryLanguage(for selectionID: FeatureModelSelectionID) -> Bool? {
+        guard let primaryLanguage = resolvedPrimaryLanguageOption() else { return nil }
+
+        switch selectionID.asrSelection {
+        case .dictation:
+            return true
+        case .mlx(let repo):
+            return mlxSupportsPrimaryLanguage(repo, primaryLanguage: primaryLanguage)
+        case .whisper:
+            return true
+        case .remote:
+            return true
+        case .none:
+            return nil
+        }
+    }
+
+    private func resolvedPrimaryLanguageOption() -> UserMainLanguageOption? {
+        guard let primaryUserLanguageCode else { return nil }
+        return UserMainLanguageOption.option(for: primaryUserLanguageCode)
+    }
+
+    private func mlxSupportsPrimaryLanguage(
+        _ repo: String,
+        primaryLanguage: UserMainLanguageOption
+    ) -> Bool {
+        let key = repo.lowercased()
+        let baseCode = primaryLanguage.baseLanguageCode
+
+        if key.contains("parakeet") {
+            return baseCode == "en"
+        }
+
+        if key.contains("glm-asr") {
+            return ["zh", "en"].contains(baseCode)
+        }
+
+        if key.contains("firered") {
+            return ["zh", "en"].contains(baseCode)
+        }
+
+        return mlxSupportsMultilingual(repo)
     }
 
     private func deduplicatedTags(_ tags: [String]) -> [String] {

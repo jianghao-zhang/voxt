@@ -185,7 +185,7 @@ extension AppDelegate {
         }
     }
 
-    private static func orderedUniqueDictionaryTerms(from values: [String]) -> [String] {
+    nonisolated private static func orderedUniqueDictionaryTerms(from values: [String]) -> [String] {
         var seen = Set<String>()
         var ordered: [String] = []
         for value in values {

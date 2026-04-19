@@ -98,6 +98,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
     @Published var audioLevel: Float = 0.0
     @Published var transcribedText = ""
     @Published var isEnhancing = false
+    @Published var isFinalizingTranscription = false
 
     var onTranscriptionFinished: ((String) -> Void)?
     var onPartialTranscription: ((String) -> Void)?
@@ -226,6 +227,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         captureWatchdogTask?.cancel()
         captureWatchdogTask = nil
 
+        isFinalizingTranscription = true
         finalizationTask?.cancel()
         if whisperRealtimeEnabled {
             let streamTranscriber = audioStreamTranscriber
@@ -350,6 +352,12 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
     }
 
     private func runFinalTranscription(revision: Int, samples: [Float], sampleRate: Double) async {
+        defer {
+            if revision == sessionRevision {
+                isFinalizingTranscription = false
+            }
+        }
+
         await runInference(
             revision: revision,
             samples: samples,
@@ -524,6 +532,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         transcribedText = ""
         audioLevel = 0
         isModelInitializing = false
+        isFinalizingTranscription = false
         latestWordTimings = []
         audioStreamTranscriber = nil
         preparedWhisper?.audioProcessor.stopRecording()
@@ -535,6 +544,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         partialLoopTask = nil
         finalizationTask?.cancel()
         finalizationTask = nil
+        isFinalizingTranscription = false
         captureWatchdogTask?.cancel()
         captureWatchdogTask = nil
         realtimeTranscriptionTask?.cancel()
@@ -559,6 +569,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         preparedWhisper = nil
         preparedUseBuiltInTranslationTask = false
         isModelInitializing = false
+        isFinalizingTranscription = false
     }
 
     private func startAudioCaptureGraph() throws {

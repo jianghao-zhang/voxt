@@ -592,6 +592,8 @@ extension ModelSettingsView {
         case .senseVoice:
             let itn = AppLocalization.localizedString(tuning.senseVoiceUseITN ? "ITN On" : "ITN Off")
             return AppLocalization.format("%@ · %@", tuning.preset.title, itn)
+        case .cohereTranscribe:
+            return tuning.preset.title
         case .generic:
             return tuning.preset.title
         }
