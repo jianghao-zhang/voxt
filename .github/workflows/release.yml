@@ -829,6 +829,7 @@ jobs:
           PKG_PATH="build/${PKG_NAME}"
           SHA_PATH="build/${PKG_NAME}.sha256"
           SIG_ENV_FILE="build/sparkle-signature.env"
+          RELEASE_NOTES_BY_LOCALE_FILE="build/release-notes-by-locale.json"
 
           if [ ! -f "$PKG_PATH" ]; then
             echo "::error::Package file missing: $PKG_PATH"
@@ -864,65 +865,141 @@ jobs:
           fi
 
           RELEASE_BODY="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json body --jq '.body // ""' 2>/dev/null || true)"
+          export RELEASE_BODY RELEASE_NOTES_BY_LOCALE_FILE
           RELEASE_NOTES_HTML="$(
-            printf '%s\n' "$RELEASE_BODY" | awk '
-              function escape_html(value, escaped) {
-                escaped = value
-                gsub(/&/, "\\&amp;", escaped)
-                gsub(/</, "\\&lt;", escaped)
-                gsub(/>/, "\\&gt;", escaped)
-                return escaped
-              }
+            python3 - <<'PY'
+import html
+import json
+import os
+import re
 
-              function close_list() {
-                if (in_list) {
-                  print "</ul>"
-                  in_list = 0
-                }
-              }
+release_body = os.environ.get("RELEASE_BODY", "")
+output_path = os.environ["RELEASE_NOTES_BY_LOCALE_FILE"]
 
-              BEGIN {
-                in_list = 0
-              }
+localized_sections = {"en": [], "zh-Hans": [], "ja": []}
+current_heading = None
+language_prefixes = [
+    ("en", "EN:"),
+    ("zh-Hans", "简体中文："),
+    ("zh-Hans", "简体中文:"),
+    ("ja", "日本語："),
+    ("ja", "日本語:"),
+]
+localized_heading_titles = {
+    "en": {"Added": "Added", "Changed": "Changed", "Fixed": "Fixed"},
+    "zh-Hans": {"Added": "新增", "Changed": "改进", "Fixed": "修复"},
+    "ja": {"Added": "追加", "Changed": "変更", "Fixed": "修正"},
+}
 
-              /^## \[/ {
-                next
-              }
 
-              /^### / {
-                close_list()
-                printf "<h3>%s</h3>\n", escape_html(substr($0, 5))
-                next
-              }
+def markdown_to_html(markdown: str) -> str:
+    lines = markdown.splitlines()
+    html_lines: list[str] = []
+    in_list = False
 
-              /^- / {
-                if (!in_list) {
-                  print "<ul>"
-                  in_list = 1
-                }
-                printf "<li>%s</li>\n", escape_html(substr($0, 3))
-                next
-              }
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            html_lines.append("</ul>")
+            in_list = False
 
-              /^[[:space:]]*$/ {
-                close_list()
-                next
-              }
+    for raw_line in lines:
+        line = raw_line.rstrip()
+        stripped = line.strip()
 
-              {
-                close_list()
-                printf "<p>%s</p>\n", escape_html($0)
-              }
+        if re.match(r"^## \[", stripped):
+            continue
 
-              END {
-                close_list()
-              }
-            '
+        if not stripped:
+            close_list()
+            continue
+
+        if stripped.startswith("### "):
+            close_list()
+            html_lines.append(f"<h3>{html.escape(stripped[4:])}</h3>")
+            continue
+
+        if stripped.startswith("- "):
+            if not in_list:
+                html_lines.append("<ul>")
+                in_list = True
+            html_lines.append(f"<li>{html.escape(stripped[2:])}</li>")
+            continue
+
+        close_list()
+        html_lines.append(f"<p>{html.escape(stripped)}</p>")
+
+    close_list()
+    return "\n".join(html_lines)
+
+
+def heading_for_locale(locale: str, heading: str | None) -> str | None:
+    if not heading:
+        return None
+
+    heading_title = heading[4:].strip()
+    localized_title = localized_heading_titles.get(locale, {}).get(
+        heading_title, heading_title
+    )
+    return f"### {localized_title}"
+
+
+for raw_line in release_body.splitlines():
+    line = raw_line.rstrip()
+    stripped = line.strip()
+
+    if re.match(r"^## \[", stripped):
+        continue
+
+    if not stripped:
+        continue
+
+    if stripped.startswith("### "):
+        current_heading = stripped
+        continue
+
+    if not stripped.startswith("- "):
+        continue
+
+    item_text = stripped[2:].strip()
+    for locale, prefix in language_prefixes:
+        if item_text.startswith(prefix):
+            localized_heading = heading_for_locale(locale, current_heading)
+            locale_sections = localized_sections[locale]
+            if not locale_sections or locale_sections[-1][0] != localized_heading:
+                locale_sections.append([localized_heading, []])
+            locale_sections[-1][1].append(f"- {item_text[len(prefix):].strip()}")
+            break
+
+localized_html = {
+    locale: markdown_to_html(
+        "\n".join(
+            [
+                line
+                for heading, items in sections
+                for line in ([heading] if heading else []) + items
+            ]
+        )
+    )
+    for locale, sections in localized_sections.items()
+    if sections
+}
+
+with open(output_path, "w", encoding="utf-8") as handle:
+    json.dump(localized_html, handle, ensure_ascii=False, separators=(",", ":"))
+
+print(markdown_to_html(release_body))
+PY
           )"
 
           RELEASE_NOTES="$(printf '%s' "$RELEASE_NOTES_HTML")"
           if [ -z "$RELEASE_NOTES" ]; then
             RELEASE_NOTES="<p>Release ${VERSION}.</p>"
+          fi
+
+          RELEASE_NOTES_BY_LOCALE=""
+          if [ -f "$RELEASE_NOTES_BY_LOCALE_FILE" ]; then
+            RELEASE_NOTES_BY_LOCALE="$(cat "$RELEASE_NOTES_BY_LOCALE_FILE")"
           fi
 
           PUBLISHED_AT="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json publishedAt --jq '.publishedAt // ""' 2>/dev/null || true)"
@@ -938,20 +1015,29 @@ jobs:
           BASE_VERSION="$(printf '%s' "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
           SPARKLE_VERSION="$((10#$MAJOR * 1000000 + 10#$MINOR * 1000 + 10#$PATCH))"
-          curl --fail --silent --show-error \
-            -X POST "${API_BASE}/api/pkg/update" \
-            -H "Authorization: Bearer ${VOXT_RELEASE_API_KEY}" \
-            -H "X-Voxt-Source: github-actions" \
-            -F "channel=${CHANNEL}" \
-            -F "version=${VERSION}" \
-            -F "sparkleVersion=${SPARKLE_VERSION}" \
-            -F "sha256=${SHA256}" \
-            -F "size=${SPARKLE_ED_LENGTH}" \
-            -F "edSignature=${SPARKLE_ED_SIGNATURE}" \
-            --form-string "releaseNotes=${RELEASE_NOTES}" \
-            -F "releaseURL=${RELEASE_URL}" \
-            -F "publishedAt=${PUBLISHED_AT}" \
+          update_args=(
+            --fail
+            --silent
+            --show-error
+            -X POST "${API_BASE}/api/pkg/update"
+            -H "Authorization: Bearer ${VOXT_RELEASE_API_KEY}"
+            -H "X-Voxt-Source: github-actions"
+            -F "channel=${CHANNEL}"
+            -F "version=${VERSION}"
+            -F "sparkleVersion=${SPARKLE_VERSION}"
+            -F "sha256=${SHA256}"
+            -F "size=${SPARKLE_ED_LENGTH}"
+            -F "edSignature=${SPARKLE_ED_SIGNATURE}"
+            --form-string "releaseNotes=${RELEASE_NOTES}"
+            -F "releaseURL=${RELEASE_URL}"
+            -F "publishedAt=${PUBLISHED_AT}"
             -F "file=@${PKG_PATH};type=application/octet-stream"
+          )
+          if [ -n "${RELEASE_NOTES_BY_LOCALE}" ] && [ "${RELEASE_NOTES_BY_LOCALE}" != "{}" ]; then
+            update_args+=(--form-string "releaseNotesByLocale=${RELEASE_NOTES_BY_LOCALE}")
+          fi
+
+          curl "${update_args[@]}"
 
           curl --fail --silent --show-error \
             -X POST "${API_BASE}/api/pkg/appcast" \
