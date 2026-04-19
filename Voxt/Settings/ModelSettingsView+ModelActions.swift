@@ -437,6 +437,50 @@ extension ModelSettingsView {
         asrHintSettingsRaw = ASRHintSettingsStore.storageValue(for: updated)
     }
 
+    func asrHintSettingsBinding(for target: ASRHintTarget) -> Binding<ASRHintSettings> {
+        Binding(
+            get: { resolvedASRHintSettings(for: target) },
+            set: { saveASRHintSettings($0, for: target) }
+        )
+    }
+
+    func resolvedWhisperLocalTuningSettings() -> WhisperLocalTuningSettings {
+        WhisperLocalTuningSettingsStore.resolvedSettings(from: whisperLocalASRTuningSettingsRaw)
+    }
+
+    func saveWhisperLocalTuningSettings(_ settings: WhisperLocalTuningSettings) {
+        whisperLocalASRTuningSettingsRaw = WhisperLocalTuningSettingsStore.storageValue(for: settings)
+    }
+
+    func whisperLocalTuningSettingsBinding() -> Binding<WhisperLocalTuningSettings> {
+        Binding(
+            get: { resolvedWhisperLocalTuningSettings() },
+            set: { saveWhisperLocalTuningSettings($0) }
+        )
+    }
+
+    func resolvedMLXLocalTuningSettings(for repo: String) -> MLXLocalTuningSettings {
+        MLXLocalTuningSettingsStore.resolvedSettings(
+            for: repo,
+            rawValue: mlxLocalASRTuningSettingsRaw
+        )
+    }
+
+    func saveMLXLocalTuningSettings(_ settings: MLXLocalTuningSettings, for repo: String) {
+        mlxLocalASRTuningSettingsRaw = MLXLocalTuningSettingsStore.save(
+            settings,
+            for: repo,
+            rawValue: mlxLocalASRTuningSettingsRaw
+        )
+    }
+
+    func mlxLocalTuningSettingsBinding(for repo: String) -> Binding<MLXLocalTuningSettings> {
+        Binding(
+            get: { resolvedMLXLocalTuningSettings(for: repo) },
+            set: { saveMLXLocalTuningSettings($0, for: repo) }
+        )
+    }
+
     func useRemoteLLMProvider(_ provider: RemoteLLMProvider) {
         remoteLLMSelectedProviderRaw = provider.rawValue
         let resolved = RemoteModelConfigurationStore.resolvedLLMConfiguration(
@@ -519,7 +563,38 @@ extension ModelSettingsView {
         let realtime = AppLocalization.localizedString(whisperRealtimeEnabled ? "Realtime On" : "Quality Mode")
         let resident = AppLocalization.localizedString(whisperKeepResidentLoaded ? "Resident On" : "Resident Off")
         let temperature = String(format: "%.1f", whisperTemperature)
-        return AppLocalization.format("Temperature: %@ · %@ · %@ · %@ · %@", temperature, vad, timestamps, realtime, resident)
+        let tuning = resolvedWhisperLocalTuningSettings()
+        return AppLocalization.format(
+            "Temperature: %@ · %@ · %@ · %@ · %@ · %@",
+            temperature,
+            vad,
+            timestamps,
+            realtime,
+            resident,
+            tuning.preset.title
+        )
+    }
+
+    var mlxConfigurationSummary: String {
+        let tuning = resolvedMLXLocalTuningSettings(for: modelRepo)
+        let family = MLXModelFamily.family(for: modelRepo)
+        switch family {
+        case .qwen3ASR:
+            let hasContext = tuning.qwenContextBias.isEmpty
+                ? AppLocalization.localizedString("Context Off")
+                : AppLocalization.localizedString("Context On")
+            return AppLocalization.format("%@ · %@", tuning.preset.title, hasContext)
+        case .graniteSpeech:
+            let hasPrompt = tuning.granitePromptBias.isEmpty
+                ? AppLocalization.localizedString("Prompt Off")
+                : AppLocalization.localizedString("Prompt On")
+            return AppLocalization.format("%@ · %@", tuning.preset.title, hasPrompt)
+        case .senseVoice:
+            let itn = AppLocalization.localizedString(tuning.senseVoiceUseITN ? "ITN On" : "ITN Off")
+            return AppLocalization.format("%@ · %@", tuning.preset.title, itn)
+        case .generic:
+            return tuning.preset.title
+        }
     }
 
     func asrCredentialHint(for provider: RemoteASRProvider) -> String? {

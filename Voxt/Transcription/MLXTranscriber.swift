@@ -75,6 +75,14 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         case postStopFinal
     }
 
+    private struct ResolvedInferenceConfiguration {
+        let generationParameters: STTGenerateParameters
+        let languageHint: String?
+        let qwenContextBias: String
+        let granitePromptBias: String?
+        let senseVoiceUseITN: Bool
+    }
+
     private final class AudioSampleStore {
         private let lock = NSLock()
         private var samples: [Float] = []
@@ -388,12 +396,12 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 self.isModelInitializing = false
             }
             let audioSamples = try prepareInputSamples(rawSamples, sampleRate: sampleRate)
-            let parameters = generationParameters(for: stage)
+            let inferenceConfiguration = resolvedInferenceConfiguration(for: stage)
             let inferenceStartedAt = Date()
             let (streamedText, finalOutput) = try await runStreamingInference(
                 model: model,
                 audioSamples: audioSamples,
-                generationParameters: parameters
+                inferenceConfiguration: inferenceConfiguration
             )
             let inferenceElapsedMs = Int(Date().timeIntervalSince(inferenceStartedAt) * 1000)
 
@@ -635,30 +643,50 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func generationParameters(for stage: CorrectionStage) -> STTGenerateParameters? {
+    private func resolvedInferenceConfiguration(for stage: CorrectionStage) -> ResolvedInferenceConfiguration {
         let hintPayload = resolvedHintPayload()
-        let languageHint = hintPayload.language
+        let tuningSettings = resolvedLocalTuningSettings()
+        let family = MLXModelFamily.family(for: modelManager.currentModelRepo)
+        let chunkDuration: Float
+        let minChunkDuration: Float
+        switch tuningSettings.preset {
+        case .balanced:
+            chunkDuration = 1200
+            minChunkDuration = 1
+        case .accuracyFirst:
+            chunkDuration = 90
+            minChunkDuration = 2.5
+        }
+
+        let languageHint = family == .graniteSpeech ? nil : hintPayload.language
+        let maxTokens: Int
         switch stage {
         case .intermediate:
-            return STTGenerateParameters(
-                maxTokens: 1024,
-                temperature: 0.0,
-                topP: 0.95,
-                topK: 0,
-                language: languageHint ?? "English"
-            )
+            maxTokens = 1024
         case .postStopQuick:
-            return STTGenerateParameters(
-                maxTokens: 2048,
+            maxTokens = 2048
+        case .postStopFinal:
+            maxTokens = 8192
+        }
+
+        return ResolvedInferenceConfiguration(
+            generationParameters: STTGenerateParameters(
+                maxTokens: maxTokens,
                 temperature: 0.0,
                 topP: 0.95,
                 topK: 0,
-                language: languageHint ?? "English"
-            )
-        case .postStopFinal:
-            guard let languageHint else { return nil }
-            return STTGenerateParameters(language: languageHint)
-        }
+                verbose: false,
+                language: languageHint,
+                chunkDuration: chunkDuration,
+                minChunkDuration: minChunkDuration
+            ),
+            languageHint: languageHint,
+            qwenContextBias: tuningSettings.qwenContextBias,
+            granitePromptBias: tuningSettings.granitePromptBias.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil
+                : tuningSettings.granitePromptBias.trimmingCharacters(in: .whitespacesAndNewlines),
+            senseVoiceUseITN: tuningSettings.senseVoiceUseITN
+        )
     }
 
     private func resolvedHintPayload() -> ResolvedASRHintPayload {
@@ -675,6 +703,13 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             settings: settings,
             userLanguageCodes: userLanguageCodes,
             mlxModelRepo: modelManager.currentModelRepo
+        )
+    }
+
+    private func resolvedLocalTuningSettings() -> MLXLocalTuningSettings {
+        MLXLocalTuningSettingsStore.resolvedSettings(
+            for: modelManager.currentModelRepo,
+            rawValue: UserDefaults.standard.string(forKey: AppPreferenceKey.mlxLocalASRTuningSettings)
         )
     }
 
@@ -697,17 +732,45 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private func runStreamingInference(
         model: any STTGenerationModel,
         audioSamples: [Float],
-        generationParameters: STTGenerateParameters?
+        inferenceConfiguration: ResolvedInferenceConfiguration
     ) async throws -> (streamedText: String, finalOutput: STTOutput?) {
         let audioArray = MLXArray(audioSamples)
         var streamedText = ""
         var finalOutput: STTOutput?
 
         let stream: AsyncThrowingStream<STTGeneration, Error>
-        if let generationParameters {
-            stream = model.generateStream(audio: audioArray, generationParameters: generationParameters)
+        let generationParameters = inferenceConfiguration.generationParameters
+        if let qwenModel = model as? Qwen3ASRModel {
+            stream = qwenModel.generateStream(
+                audio: audioArray,
+                maxTokens: generationParameters.maxTokens,
+                temperature: generationParameters.temperature,
+                context: inferenceConfiguration.qwenContextBias,
+                language: inferenceConfiguration.languageHint,
+                chunkDuration: generationParameters.chunkDuration,
+                minChunkDuration: generationParameters.minChunkDuration
+            )
+        } else if let graniteModel = model as? GraniteSpeechModel {
+            stream = graniteModel.generateStream(
+                audio: audioArray,
+                maxTokens: generationParameters.maxTokens,
+                temperature: generationParameters.temperature,
+                prompt: inferenceConfiguration.granitePromptBias,
+                language: nil
+            )
+        } else if let senseVoiceModel = model as? SenseVoiceModel {
+            let output = senseVoiceModel.generate(
+                audio: audioArray,
+                language: inferenceConfiguration.languageHint ?? "auto",
+                useITN: inferenceConfiguration.senseVoiceUseITN,
+                verbose: generationParameters.verbose
+            )
+            stream = AsyncThrowingStream { continuation in
+                continuation.yield(.result(output))
+                continuation.finish()
+            }
         } else {
-            stream = model.generateStream(audio: audioArray)
+            stream = model.generateStream(audio: audioArray, generationParameters: generationParameters)
         }
 
         for try await event in stream {
@@ -734,11 +797,11 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             let model = try await modelManager.loadModel()
             isModelInitializing = false
             let audioSamples = try prepareInputSamples(samples, sampleRate: sampleRate)
-            let parameters = generationParameters(for: .postStopFinal)
+            let inferenceConfiguration = resolvedInferenceConfiguration(for: .postStopFinal)
             let (streamedText, finalOutput) = try await runStreamingInference(
                 model: model,
                 audioSamples: audioSamples,
-                generationParameters: parameters
+                inferenceConfiguration: inferenceConfiguration
             )
             let candidate = normalizeText(finalOutput?.text ?? streamedText)
             return candidate.isEmpty ? nil : candidate

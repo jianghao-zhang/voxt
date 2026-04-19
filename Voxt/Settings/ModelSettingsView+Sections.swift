@@ -63,6 +63,11 @@ extension ModelSettingsView {
 
                 Spacer()
 
+                Button("Configure") {
+                    activeLocalASRConfigurationTarget = .mlx(repo: modelRepo)
+                }
+                .buttonStyle(SettingsPillButtonStyle())
+
                 HStack(spacing: 6) {
                     Toggle("Use China mirror", isOn: $useHfMirror)
                         .toggleStyle(.switch)
@@ -84,6 +89,10 @@ extension ModelSettingsView {
             }
 
             Text(modelLocalizedDescription(for: modelRepo))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text(mlxConfigurationSummary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -116,7 +125,7 @@ extension ModelSettingsView {
                 Spacer()
 
                 Button("Configure") {
-                    isWhisperConfigPresented = true
+                    activeLocalASRConfigurationTarget = .whisper(modelID: whisperModelID)
                 }
                 .buttonStyle(SettingsPillButtonStyle())
 
@@ -156,54 +165,34 @@ extension ModelSettingsView {
         }
     }
 
-    var whisperConfigurationSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Whisper Configuration")
-                .font(.title3.weight(.semibold))
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 12) {
-                    Toggle("Enable VAD", isOn: $whisperVADEnabled)
-                        .toggleStyle(.switch)
-                    Toggle("Enable Timestamps", isOn: $whisperTimestampsEnabled)
-                        .toggleStyle(.switch)
-                    Toggle("Realtime", isOn: $whisperRealtimeEnabled)
-                        .toggleStyle(.switch)
-                }
-
-                Toggle("Keep Resident", isOn: $whisperKeepResidentLoaded)
-                    .toggleStyle(.switch)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Temperature")
-                        Spacer()
-                        Text(String(format: "%.1f", whisperTemperature))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    Slider(value: $whisperTemperature, in: 0...1, step: 0.1)
-                }
+    @ViewBuilder
+    func localASRConfigurationSheet(for target: LocalASRConfigurationTarget) -> some View {
+        switch target {
+        case .mlx(let repo):
+            MLXASRConfigurationSheetView(
+                modelRepo: repo,
+                modelTitle: mlxModelManager.displayTitle(for: repo),
+                family: MLXModelFamily.family(for: repo),
+                hintSettings: asrHintSettingsBinding(for: .mlxAudio),
+                tuningSettings: mlxLocalTuningSettingsBinding(for: repo),
+                userLanguageCodes: selectedUserLanguageCodes
+            ) {
+                activeLocalASRConfigurationTarget = nil
             }
-
-            Text("These settings apply to Whisper transcription sessions. Standard ASR always uses transcribe; Whisper translate is only used by the translation hotkey when Whisper translation is selected. Realtime uses WhisperKit's streaming path; turning it off switches to quality-first partial updates.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("When enabled and Whisper is the selected engine, Voxt preloads Whisper after app launch and keeps it resident in memory for faster first use.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            SettingsDialogActionRow {
-                Button("Done") {
-                    isWhisperConfigPresented = false
-                }
-                .buttonStyle(SettingsPrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
+        case .whisper:
+            WhisperASRConfigurationSheetView(
+                hintSettings: asrHintSettingsBinding(for: .whisperKit),
+                tuningSettings: whisperLocalTuningSettingsBinding(),
+                whisperTemperature: $whisperTemperature,
+                whisperVADEnabled: $whisperVADEnabled,
+                whisperTimestampsEnabled: $whisperTimestampsEnabled,
+                whisperRealtimeEnabled: $whisperRealtimeEnabled,
+                whisperKeepResidentLoaded: $whisperKeepResidentLoaded,
+                userLanguageCodes: selectedUserLanguageCodes
+            ) {
+                activeLocalASRConfigurationTarget = nil
             }
         }
-        .padding(20)
-        .frame(width: 440)
     }
 
     @ViewBuilder
@@ -276,5 +265,314 @@ extension ModelSettingsView {
         }
 
         ModelTableView(title: "Remote LLM Providers", rows: remoteLLMRows, viewportHeight: 280)
+    }
+}
+
+private struct MLXASRConfigurationSheetView: View {
+    let modelRepo: String
+    let modelTitle: String
+    let family: MLXModelFamily
+    @Binding var hintSettings: ASRHintSettings
+    @Binding var tuningSettings: MLXLocalTuningSettings
+    let userLanguageCodes: [String]
+    let onDone: () -> Void
+
+    private var mainLanguageSummary: String {
+        ASRHintResolver.selectedLanguageSummary(userLanguageCodes)
+    }
+
+    private var resolvedLanguage: String {
+        guard hintSettings.followsUserMainLanguage else {
+            return AppLocalization.localizedString("Automatic")
+        }
+        return ASRHintResolver.resolve(
+            target: .mlxAudio,
+            settings: hintSettings,
+            userLanguageCodes: userLanguageCodes,
+            mlxModelRepo: modelRepo
+        ).language ?? AppLocalization.localizedString("Automatic")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("MLX ASR Configuration")
+                .font(.title3.weight(.semibold))
+
+            Text(modelTitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Preset")
+                    .font(.subheadline.weight(.medium))
+                SettingsMenuPicker(
+                    selection: Binding(
+                        get: { tuningSettings.preset.rawValue },
+                        set: { rawValue in
+                            guard let preset = LocalASRRecognitionPreset(rawValue: rawValue) else { return }
+                            tuningSettings.preset = preset
+                        }
+                    ),
+                    options: LocalASRRecognitionPreset.allCases.map {
+                        SettingsMenuOption(value: $0.rawValue, title: $0.title)
+                    },
+                    selectedTitle: tuningSettings.preset.title,
+                    width: 220
+                )
+                Text(tuningSettings.preset.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Toggle("Follow User Main Language", isOn: $hintSettings.followsUserMainLanguage)
+                .toggleStyle(.switch)
+
+            HStack(alignment: .top, spacing: 16) {
+                localInfoRow(label: "Primary language", value: mainLanguageSummary)
+                localInfoRow(label: "Resolved language", value: resolvedLanguage)
+            }
+
+            if family.supportsContextBias {
+                Text("Recognition Context")
+                    .font(.subheadline.weight(.medium))
+                PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110)
+                Text("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if family.supportsPromptBias {
+                Text("Recognition Prompt")
+                    .font(.subheadline.weight(.medium))
+                PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110)
+                Text("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if family.supportsITN {
+                Toggle("Enable ITN", isOn: $tuningSettings.senseVoiceUseITN)
+                    .toggleStyle(.switch)
+                Text("ITN lets SenseVoice normalize spoken numbers, dates, and similar expressions into written form.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !family.supportsContextBias && !family.supportsPromptBias && !family.supportsITN {
+                Text("This MLX model family currently uses preset-based chunking and language strategy only. Model-native prompt or context controls are not exposed by this family in Voxt yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsDialogActionRow {
+                Button("Reset to Default") {
+                    hintSettings = ASRHintSettingsStore.defaultSettings(for: .mlxAudio)
+                    tuningSettings = MLXLocalTuningSettings.defaults(for: .balanced)
+                }
+                .buttonStyle(SettingsPillButtonStyle())
+            } trailing: {
+                Button("Done") {
+                    onDone()
+                }
+                .buttonStyle(SettingsPrimaryButtonStyle())
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 520)
+    }
+
+    private func localInfoRow(label: LocalizedStringKey, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+private struct WhisperASRConfigurationSheetView: View {
+    @Binding var hintSettings: ASRHintSettings
+    @Binding var tuningSettings: WhisperLocalTuningSettings
+    @Binding var whisperTemperature: Double
+    @Binding var whisperVADEnabled: Bool
+    @Binding var whisperTimestampsEnabled: Bool
+    @Binding var whisperRealtimeEnabled: Bool
+    @Binding var whisperKeepResidentLoaded: Bool
+    let userLanguageCodes: [String]
+    let onDone: () -> Void
+
+    private var mainLanguageSummary: String {
+        ASRHintResolver.selectedLanguageSummary(userLanguageCodes)
+    }
+
+    private var resolvedLanguage: String {
+        ASRHintResolver.resolve(
+            target: .whisperKit,
+            settings: hintSettings,
+            userLanguageCodes: userLanguageCodes
+        ).language ?? AppLocalization.localizedString("Automatic")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Whisper Configuration")
+                .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Preset")
+                    .font(.subheadline.weight(.medium))
+                SettingsMenuPicker(
+                    selection: Binding(
+                        get: { tuningSettings.preset.rawValue },
+                        set: { rawValue in
+                            guard let preset = LocalASRRecognitionPreset(rawValue: rawValue) else { return }
+                            tuningSettings = WhisperLocalTuningSettings.defaults(for: preset)
+                        }
+                    ),
+                    options: LocalASRRecognitionPreset.allCases.map {
+                        SettingsMenuOption(value: $0.rawValue, title: $0.title)
+                    },
+                    selectedTitle: tuningSettings.preset.title,
+                    width: 220
+                )
+                Text(tuningSettings.preset.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Toggle("Follow User Main Language", isOn: $hintSettings.followsUserMainLanguage)
+                .toggleStyle(.switch)
+
+            HStack(alignment: .top, spacing: 16) {
+                localInfoRow(label: "Primary language", value: mainLanguageSummary)
+                localInfoRow(label: "Resolved language", value: resolvedLanguage)
+            }
+
+            Text("Recognition Prompt")
+                .font(.subheadline.weight(.medium))
+            PromptEditorView(text: $hintSettings.promptTemplate, height: 110)
+            Text("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
+                    Toggle("Enable VAD", isOn: $whisperVADEnabled)
+                        .toggleStyle(.switch)
+                    Toggle("Enable Timestamps", isOn: $whisperTimestampsEnabled)
+                        .toggleStyle(.switch)
+                    Toggle("Realtime", isOn: $whisperRealtimeEnabled)
+                        .toggleStyle(.switch)
+                }
+
+                Toggle("Keep Resident", isOn: $whisperKeepResidentLoaded)
+                    .toggleStyle(.switch)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Temperature")
+                        Spacer()
+                        Text(String(format: "%.1f", whisperTemperature))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $whisperTemperature, in: 0...1, step: 0.1)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Fallback Count")
+                        Spacer()
+                        Text("\(tuningSettings.temperatureFallbackCount)")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Stepper("", value: $tuningSettings.temperatureFallbackCount, in: 0...8)
+                        .labelsHidden()
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Fallback Increment")
+                        Spacer()
+                        Text(String(format: "%.1f", tuningSettings.temperatureIncrementOnFallback))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $tuningSettings.temperatureIncrementOnFallback, in: 0...1, step: 0.1)
+                }
+
+                whisperThresholdRow(
+                    title: "No Speech Threshold",
+                    value: $tuningSettings.noSpeechThreshold,
+                    range: 0...1
+                )
+                whisperThresholdRow(
+                    title: "Log Prob Threshold",
+                    value: $tuningSettings.logProbThreshold,
+                    range: -3...0
+                )
+                whisperThresholdRow(
+                    title: "Compression Ratio Threshold",
+                    value: $tuningSettings.compressionRatioThreshold,
+                    range: 1...4
+                )
+            }
+
+            Text("These settings apply to Whisper transcription sessions. Standard ASR always uses transcribe; Whisper translate is only used by the translation hotkey when Whisper translation is selected.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            SettingsDialogActionRow {
+                Button("Reset to Default") {
+                    hintSettings = ASRHintSettingsStore.defaultSettings(for: .whisperKit)
+                    tuningSettings = WhisperLocalTuningSettings.defaults(for: .balanced)
+                    whisperTemperature = 0
+                    whisperVADEnabled = true
+                    whisperTimestampsEnabled = false
+                    whisperRealtimeEnabled = true
+                    whisperKeepResidentLoaded = true
+                }
+                .buttonStyle(SettingsPillButtonStyle())
+            } trailing: {
+                Button("Done") {
+                    onDone()
+                }
+                .buttonStyle(SettingsPrimaryButtonStyle())
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 540)
+    }
+
+    private func localInfoRow(label: LocalizedStringKey, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func whisperThresholdRow(
+        title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(String(format: "%.2f", value.wrappedValue))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Slider(value: value, in: range, step: 0.05)
+        }
     }
 }

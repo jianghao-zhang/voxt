@@ -432,6 +432,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         includeWordTimings: Bool
     ) -> DecodingOptions {
         let hintPayload = resolvedHintPayload()
+        let tuningSettings = resolvedLocalTuningSettings()
         let resolvedTask = resolvedDecodingTask()
         let detectLanguage = hintPayload.language == nil
         let promptTokens: [Int]?
@@ -454,13 +455,17 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
             task: resolvedTask,
             language: hintPayload.language,
             temperature: whisperTemperature,
-            temperatureFallbackCount: 0,
+            temperatureIncrementOnFallback: Float(tuningSettings.temperatureIncrementOnFallback),
+            temperatureFallbackCount: tuningSettings.temperatureFallbackCount,
             usePrefillPrompt: true,
             detectLanguage: detectLanguage,
             skipSpecialTokens: true,
             withoutTimestamps: !includeWordTimings,
             wordTimestamps: includeWordTimings,
             promptTokens: promptTokens,
+            compressionRatioThreshold: Float(tuningSettings.compressionRatioThreshold),
+            logProbThreshold: Float(tuningSettings.logProbThreshold),
+            noSpeechThreshold: Float(tuningSettings.noSpeechThreshold),
             chunkingStrategy: whisperVADEnabled ? .vad : nil
         )
     }
@@ -485,6 +490,12 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
             target: .whisperKit,
             settings: settings,
             userLanguageCodes: userLanguageCodes
+        )
+    }
+
+    private func resolvedLocalTuningSettings() -> WhisperLocalTuningSettings {
+        WhisperLocalTuningSettingsStore.resolvedSettings(
+            from: UserDefaults.standard.string(forKey: AppPreferenceKey.whisperLocalASRTuningSettings)
         )
     }
 

@@ -6,6 +6,20 @@ private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
 }
 
+enum LocalASRConfigurationTarget: Equatable, Identifiable {
+    case mlx(repo: String)
+    case whisper(modelID: String)
+
+    var id: String {
+        switch self {
+        case .mlx(let repo):
+            return "mlx:\(repo)"
+        case .whisper(let modelID):
+            return "whisper:\(modelID)"
+        }
+    }
+}
+
 struct ModelSettingsView: View {
     private struct DownloadEndpointCheckResult: Equatable {
         let isReachable: Bool
@@ -26,6 +40,7 @@ struct ModelSettingsView: View {
     @AppStorage(AppPreferenceKey.whisperTimestampsEnabled) var whisperTimestampsEnabled = false
     @AppStorage(AppPreferenceKey.whisperRealtimeEnabled) var whisperRealtimeEnabled = true
     @AppStorage(AppPreferenceKey.whisperKeepResidentLoaded) var whisperKeepResidentLoaded = true
+    @AppStorage(AppPreferenceKey.whisperLocalASRTuningSettings) var whisperLocalASRTuningSettingsRaw = WhisperLocalTuningSettingsStore.defaultStoredValue()
     @AppStorage(AppPreferenceKey.customLLMModelRepo) var customLLMRepo = CustomLLMModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.translationCustomLLMModelRepo) var translationCustomLLMRepo = CustomLLMModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.rewriteCustomLLMModelRepo) var rewriteCustomLLMRepo = CustomLLMModelManager.defaultModelRepo
@@ -36,6 +51,7 @@ struct ModelSettingsView: View {
     @AppStorage(AppPreferenceKey.remoteASRSelectedProvider) var remoteASRSelectedProviderRaw = RemoteASRProvider.openAIWhisper.rawValue
     @AppStorage(AppPreferenceKey.remoteASRProviderConfigurations) var remoteASRProviderConfigurationsRaw = ""
     @AppStorage(AppPreferenceKey.asrHintSettings) var asrHintSettingsRaw = ASRHintSettingsStore.defaultStoredValue()
+    @AppStorage(AppPreferenceKey.mlxLocalASRTuningSettings) var mlxLocalASRTuningSettingsRaw = "{}"
     @AppStorage(AppPreferenceKey.userMainLanguageCodes) var userMainLanguageCodesRaw = UserMainLanguageOption.defaultStoredSelectionValue
     @AppStorage(AppPreferenceKey.remoteLLMSelectedProvider) var remoteLLMSelectedProviderRaw = RemoteLLMProvider.openAI.rawValue
     @AppStorage(AppPreferenceKey.remoteLLMProviderConfigurations) var remoteLLMProviderConfigurationsRaw = ""
@@ -64,7 +80,7 @@ struct ModelSettingsView: View {
     @State var editingASRProvider: RemoteASRProvider?
     @State var editingLLMProvider: RemoteLLMProvider?
     @State private var activeASRHintTarget: ASRHintTarget?
-    @State var isWhisperConfigPresented = false
+    @State var activeLocalASRConfigurationTarget: LocalASRConfigurationTarget?
     @State private var isModelDownloadSettingsPresented = false
     @State private var isTestingGlobalDownloadEndpoint = false
     @State private var isTestingChinaDownloadEndpoint = false
@@ -176,7 +192,9 @@ struct ModelSettingsView: View {
             downloadWhisperModel: downloadWhisperModel,
             deleteWhisperModel: deleteWhisperModel,
             openWhisperModelDirectory: openWhisperModelDirectory,
-            presentWhisperSettings: { isWhisperConfigPresented = true },
+            presentWhisperSettings: {
+                activeLocalASRConfigurationTarget = .whisper(modelID: whisperModelID)
+            },
             downloadCustomLLM: downloadCustomLLM,
             deleteCustomLLM: deleteCustomLLM,
             openCustomLLMModelDirectory: openCustomLLMModelDirectory,
@@ -246,10 +264,8 @@ struct ModelSettingsView: View {
             .map(\.element)
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            modelTabHeader
-
+    private var tagFilterBar: some View {
+        Group {
             if !availableTags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -275,23 +291,36 @@ struct ModelSettingsView: View {
                     .padding(.vertical, 2)
                 }
             }
+        }
+    }
 
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    if filteredEntries.isEmpty {
-                        ModelEmptyStateView()
-                    } else {
-                        ForEach(filteredEntries) { entry in
-                            ModelCatalogRow(entry: entry)
-                        }
+    private var modelCatalogContent: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                if filteredEntries.isEmpty {
+                    ModelEmptyStateView()
+                } else {
+                    ForEach(filteredEntries) { entry in
+                        ModelCatalogRow(entry: entry)
                     }
                 }
-                .padding(.vertical, 2)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 430)
-
+            .padding(.vertical, 2)
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: 430)
+    }
+
+    private var mainContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            modelTabHeader
+            tagFilterBar
+            modelCatalogContent
+        }
+    }
+
+    private var contentWithLifecycle: some View {
+        mainContent
         .onAppear(perform: handleOnAppear)
         .onAppear(perform: reloadCachedConfigurationState)
         .onAppear(perform: refreshModelStorageDisplayPath)
@@ -371,6 +400,10 @@ struct ModelSettingsView: View {
             refreshModelInstallStateIfNeeded()
             pruneSelectedTags()
         }
+    }
+
+    private var contentWithSheets: some View {
+        contentWithLifecycle
         .sheet(item: $editingASRProvider) { provider in
             RemoteProviderConfigurationSheet(
                 providerTitle: provider.title,
@@ -409,12 +442,16 @@ struct ModelSettingsView: View {
                 saveASRHintSettings(updated, for: target)
             }
         }
-        .sheet(isPresented: $isWhisperConfigPresented) {
-            whisperConfigurationSheet
+        .sheet(item: $activeLocalASRConfigurationTarget) { target in
+            localASRConfigurationSheet(for: target)
         }
         .sheet(isPresented: $isModelDownloadSettingsPresented) {
             modelDownloadSettingsSheet
         }
+    }
+
+    var body: some View {
+        contentWithSheets
         .id(interfaceLanguageRaw)
     }
 
