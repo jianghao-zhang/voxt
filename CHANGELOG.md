@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.9.9] - 2026-04-20
+
+### Changed
+- EN: Switched Sparkle auto-updates from package installer payloads to regular app archive updates, reducing unnecessary installer-style authorization prompts during app upgrades.
+- 简体中文：将 Sparkle 自动更新从安装包载体切换为常规应用归档更新，减少了应用升级时不必要的安装器式授权提示。
+- 日本語：Sparkle の自動更新をインストーラパッケージ方式から通常のアプリアーカイブ更新へ切り替え、アップグレード時の不要なインストーラ認証プロンプトを減らしました。
+
 ## [1.9.8] - 2026-04-20
 
 ### Changed
