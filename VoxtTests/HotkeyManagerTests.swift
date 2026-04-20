@@ -1,6 +1,7 @@
 import XCTest
 import Carbon
 import ApplicationServices
+import IOKit.hidsystem
 @testable import Voxt
 
 @MainActor
@@ -336,6 +337,181 @@ final class HotkeyManagerTests: XCTestCase {
         XCTAssertEqual(transcriptionDownCount, 1)
     }
 
+    func testRightCommandTapRemainsStableAcrossDuplicateFlagsChangedEvents() async {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        HotkeyPreference.save(
+            keyCode: HotkeyPreference.modifierOnlyKeyCode,
+            modifiers: [.command],
+            sidedModifiers: [.rightCommand]
+        )
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        let callbackExpectation = expectation(description: "two transcription callbacks")
+        callbackExpectation.expectedFulfillmentCount = 2
+        manager.onKeyDown = {
+            transcriptionDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: commandFlags(for: .rightCommand)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: commandFlags(for: .rightCommand)
+        )
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: []
+        )
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: commandFlags(for: .rightCommand)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: commandFlags(for: .rightCommand)
+        )
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: []
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(transcriptionDownCount, 2)
+    }
+
+    func testLeftCommandDoesNotTriggerRightCommandTapHotkey() {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        HotkeyPreference.save(
+            keyCode: HotkeyPreference.modifierOnlyKeyCode,
+            modifiers: [.command],
+            sidedModifiers: [.rightCommand]
+        )
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        manager.onKeyDown = { transcriptionDownCount += 1 }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Command),
+            flags: commandFlags(for: .leftCommand)
+        )
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Command),
+            flags: []
+        )
+
+        XCTAssertEqual(transcriptionDownCount, 0)
+    }
+
+    func testCustomRightShiftTapRemainsStableAcrossDuplicateFlagsChangedEvents() async {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        HotkeyPreference.save(
+            keyCode: HotkeyPreference.modifierOnlyKeyCode,
+            modifiers: [.shift],
+            sidedModifiers: [.rightShift]
+        )
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        let callbackExpectation = expectation(description: "two right-shift callbacks")
+        callbackExpectation.expectedFulfillmentCount = 2
+        manager.onKeyDown = {
+            transcriptionDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightShift),
+            flags: shiftFlags(for: .rightShift)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightShift),
+            flags: shiftFlags(for: .rightShift)
+        )
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightShift),
+            flags: []
+        )
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightShift),
+            flags: shiftFlags(for: .rightShift)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightShift),
+            flags: shiftFlags(for: .rightShift)
+        )
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightShift),
+            flags: []
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(transcriptionDownCount, 2)
+    }
+
+    func testIdleGapRecoveryDoesNotSwallowFirstRightCommandTap() async {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        HotkeyPreference.save(
+            keyCode: HotkeyPreference.modifierOnlyKeyCode,
+            modifiers: [.command],
+            sidedModifiers: [.rightCommand]
+        )
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        let callbackExpectation = expectation(description: "first tap survives idle recovery")
+        manager.onKeyDown = {
+            transcriptionDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingSetTransientState(currentSidedModifiers: .rightCommand)
+        manager.testingSetLastEventAt(Date().addingTimeInterval(-5))
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: commandFlags(for: .rightCommand)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: []
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(transcriptionDownCount, 1)
+    }
+
     func testFnTapReleaseIsSuppressedAfterNonModifierChordState() {
         let manager = makeManager()
         var transcriptionDownCount = 0
@@ -381,6 +557,30 @@ final class HotkeyManagerTests: XCTestCase {
     private func combinedFlags(_ flags: CGEventFlags...) -> CGEventFlags {
         flags.reduce([]) { partialResult, next in
             partialResult.union(next)
+        }
+    }
+
+    private func commandFlags(for side: SidedModifierFlags) -> CGEventFlags {
+        switch side {
+        case .leftCommand:
+            return CGEventFlags(rawValue: UInt64(NX_COMMANDMASK | NX_DEVICELCMDKEYMASK))
+        case .rightCommand:
+            return CGEventFlags(rawValue: UInt64(NX_COMMANDMASK | NX_DEVICERCMDKEYMASK))
+        default:
+            XCTFail("Unsupported command side \(side)")
+            return []
+        }
+    }
+
+    private func shiftFlags(for side: SidedModifierFlags) -> CGEventFlags {
+        switch side {
+        case .leftShift:
+            return CGEventFlags(rawValue: UInt64(NX_SHIFTMASK | NX_DEVICELSHIFTKEYMASK))
+        case .rightShift:
+            return CGEventFlags(rawValue: UInt64(NX_SHIFTMASK | NX_DEVICERSHIFTKEYMASK))
+        default:
+            XCTFail("Unsupported shift side \(side)")
+            return []
         }
     }
 }

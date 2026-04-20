@@ -261,9 +261,10 @@ class HotkeyManager {
         let meetingHotkey = HotkeyPreference.loadMeeting()
         let distinguishModifierSides = HotkeyPreference.loadDistinguishModifierSides()
         let triggerMode = HotkeyPreference.loadTriggerMode()
-        if type == .flagsChanged {
-            currentSidedModifiers = SidedModifierFlags.toggled(from: currentSidedModifiers, keyCode: keyCode)
-        }
+        let incomingSidedModifiers =
+            type == .flagsChanged
+            ? SidedModifierFlags.from(eventFlags: flags).filtered(by: modifierFlags(from: flags))
+            : currentSidedModifiers
         let transcriptionFlags = HotkeyPreference.cgFlags(from: transcriptionHotkey.modifiers)
         let translationFlags = HotkeyPreference.cgFlags(from: translationHotkey.modifiers)
         let rewriteFlags = HotkeyPreference.cgFlags(from: rewriteHotkey.modifiers)
@@ -286,6 +287,10 @@ class HotkeyManager {
             transcriptionHotkey: transcriptionHotkey,
             transcriptionFlags: transcriptionFlags
         )
+
+        if type == .flagsChanged {
+            currentSidedModifiers = incomingSidedModifiers
+        }
 
         if triggerMode == .tap, type == .keyDown, !isModifierKeyCode(keyCode) {
             if flags.contains(.maskSecondaryFn) {
@@ -1269,6 +1274,16 @@ class HotkeyManager {
         if flags.contains(.maskAlternate) { values.append("opt") }
         if flags.contains(.maskCommand) { values.append("cmd") }
         return values.isEmpty ? "none" : values.joined(separator: "+")
+    }
+
+    private func modifierFlags(from cgFlags: CGEventFlags) -> NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if cgFlags.contains(.maskCommand) { flags.insert(.command) }
+        if cgFlags.contains(.maskAlternate) { flags.insert(.option) }
+        if cgFlags.contains(.maskControl) { flags.insert(.control) }
+        if cgFlags.contains(.maskShift) { flags.insert(.shift) }
+        if cgFlags.contains(.maskSecondaryFn) { flags.insert(.function) }
+        return flags
     }
 
     private func clearTransientState() {

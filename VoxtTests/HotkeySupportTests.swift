@@ -1,5 +1,6 @@
 import XCTest
 import Carbon
+import IOKit.hidsystem
 @testable import Voxt
 
 final class HotkeySupportTests: XCTestCase {
@@ -105,6 +106,40 @@ final class HotkeySupportTests: XCTestCase {
                 sidedModifiers: [.leftShift, .rightShift, .rightCommand],
                 distinguishModifierSides: true
             )
+        )
+    }
+
+    func testHotkeyMatchesRequiresMatchingSideForCustomNonModifierHotkey() {
+        let hotkey = HotkeyPreference.Hotkey(
+            keyCode: UInt16(kVK_ANSI_L),
+            modifiers: [.option],
+            sidedModifiers: [.rightOption]
+        )
+
+        XCTAssertTrue(
+            HotkeyPreference.hotkeyMatches(
+                hotkey,
+                eventFlags: [.maskAlternate],
+                sidedModifiers: [.rightOption],
+                distinguishModifierSides: true
+            )
+        )
+        XCTAssertFalse(
+            HotkeyPreference.hotkeyMatches(
+                hotkey,
+                eventFlags: [.maskAlternate],
+                sidedModifiers: [.leftOption],
+                distinguishModifierSides: true
+            )
+        )
+    }
+
+    func testSidedModifierFlagsFromEventFlagsParsesDeviceSpecificBits() {
+        let flags = CGEventFlags(rawValue: UInt64(NX_COMMANDMASK | NX_DEVICERCMDKEYMASK | NX_DEVICERSHIFTKEYMASK))
+
+        XCTAssertEqual(
+            SidedModifierFlags.from(eventFlags: flags),
+            [.rightCommand, .rightShift]
         )
     }
 }

@@ -1,6 +1,7 @@
 import AppKit
 import Carbon
 import SwiftUI
+import IOKit.hidsystem
 
 struct SidedModifierFlags: OptionSet, Equatable {
     let rawValue: Int
@@ -106,6 +107,22 @@ struct SidedModifierFlags: OptionSet, Equatable {
         default:
             return nil
         }
+    }
+
+    static func from(eventFlags: CGEventFlags) -> SidedModifierFlags {
+        let raw = eventFlags.rawValue
+        var sided: SidedModifierFlags = []
+
+        if raw & UInt64(NX_DEVICELSHIFTKEYMASK) != 0 { sided.insert(.leftShift) }
+        if raw & UInt64(NX_DEVICERSHIFTKEYMASK) != 0 { sided.insert(.rightShift) }
+        if raw & UInt64(NX_DEVICELCTLKEYMASK) != 0 { sided.insert(.leftControl) }
+        if raw & UInt64(NX_DEVICERCTLKEYMASK) != 0 { sided.insert(.rightControl) }
+        if raw & UInt64(NX_DEVICELALTKEYMASK) != 0 { sided.insert(.leftOption) }
+        if raw & UInt64(NX_DEVICERALTKEYMASK) != 0 { sided.insert(.rightOption) }
+        if raw & UInt64(NX_DEVICELCMDKEYMASK) != 0 { sided.insert(.leftCommand) }
+        if raw & UInt64(NX_DEVICERCMDKEYMASK) != 0 { sided.insert(.rightCommand) }
+
+        return sided
     }
 }
 
