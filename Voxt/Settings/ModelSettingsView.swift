@@ -68,6 +68,7 @@ struct ModelSettingsView: View {
     @ObservedObject var mainWindowState: MainWindowVisibilityState
     let missingConfigurationIssues: [ConfigurationTransferManager.MissingConfigurationIssue]
     let navigationRequest: SettingsNavigationRequest?
+    let isActive: Bool
 
     @State private var catalogTab: ModelCatalogTab = .asr
     @State private var selectedTags = Set<String>()
@@ -396,6 +397,7 @@ struct ModelSettingsView: View {
             pruneSelectedTags()
         }
         .onReceive(modelStateRefreshTimer) { _ in
+            guard isActive else { return }
             guard mainWindowState.isVisible else { return }
             guard shouldPollModelState else { return }
             refreshModelInstallStateIfNeeded()

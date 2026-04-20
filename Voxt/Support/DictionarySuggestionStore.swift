@@ -530,6 +530,7 @@ final class DictionarySuggestionStore: ObservableObject {
 
     private let defaults = UserDefaults.standard
     private let fileManager = FileManager.default
+    private var reloadGeneration = 0
     private let evidenceLimit = 3
 
     init() {
@@ -552,18 +553,48 @@ final class DictionarySuggestionStore: ObservableObject {
         do {
             let url = try suggestionsFileURL()
             guard fileManager.fileExists(atPath: url.path) else {
-                suggestions = []
+                applyReloadedSuggestions([])
                 return
             }
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode([DictionarySuggestion].self, from: data)
-            let deduplicated = deduplicatedSuggestions(decoded)
-            suggestions = deduplicated
-            if decoded != deduplicated {
-                persist()
-            }
+            applyReloadedSuggestions(decoded)
         } catch {
-            suggestions = []
+            applyReloadedSuggestions([])
+        }
+    }
+
+    func reloadAsync() {
+        reloadGeneration += 1
+        let generation = reloadGeneration
+        filterSettings = loadFilterSettings()
+
+        let url: URL?
+        do {
+            url = try suggestionsFileURL()
+        } catch {
+            applyReloadedSuggestions([])
+            return
+        }
+
+        let fileManager = self.fileManager
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let decodedSuggestions: [DictionarySuggestion]
+            if let url, fileManager.fileExists(atPath: url.path) {
+                do {
+                    let data = try Data(contentsOf: url)
+                    decodedSuggestions = try JSONDecoder().decode([DictionarySuggestion].self, from: data)
+                } catch {
+                    decodedSuggestions = []
+                }
+            } else {
+                decodedSuggestions = []
+            }
+
+            DispatchQueue.main.async {
+                guard let self, generation == self.reloadGeneration else { return }
+                self.applyReloadedSuggestions(decodedSuggestions)
+            }
         }
     }
 
@@ -603,6 +634,39 @@ final class DictionarySuggestionStore: ObservableObject {
             return nil
         }
         return checkpoint
+    }
+
+    nonisolated static func pendingHistoryEntryCount(
+        in entries: [TranscriptionHistoryEntry],
+        checkpoint: DictionaryHistoryScanCheckpoint?
+    ) -> Int {
+        let sorted = entries.sorted {
+            if $0.createdAt == $1.createdAt {
+                return $0.id.uuidString < $1.id.uuidString
+            }
+            return $0.createdAt < $1.createdAt
+        }
+
+        let pendingEntries: [TranscriptionHistoryEntry]
+        if let checkpoint {
+            pendingEntries = sorted.filter {
+                if $0.createdAt > checkpoint.lastProcessedAt {
+                    return true
+                }
+                if $0.createdAt < checkpoint.lastProcessedAt {
+                    return false
+                }
+                return $0.id.uuidString > checkpoint.lastHistoryEntryID.uuidString
+            }
+        } else {
+            pendingEntries = sorted
+        }
+
+        return pendingEntries.reduce(into: 0) { count, entry in
+            if entry.kind == .normal {
+                count += 1
+            }
+        }
     }
 
     func pendingHistoryEntries(in historyStore: TranscriptionHistoryStore) -> [TranscriptionHistoryEntry] {
@@ -1052,6 +1116,14 @@ final class DictionarySuggestionStore: ObservableObject {
 
     private func suggestionKey(normalizedTerm: String, groupID: UUID?) -> String {
         "\(normalizedTerm)|\(groupID?.uuidString ?? "global")"
+    }
+
+    private func applyReloadedSuggestions(_ decodedSuggestions: [DictionarySuggestion]) {
+        let deduplicated = deduplicatedSuggestions(decodedSuggestions)
+        suggestions = deduplicated
+        if decodedSuggestions != deduplicated {
+            persist()
+        }
     }
 
     private func persist() {

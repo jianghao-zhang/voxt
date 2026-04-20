@@ -35,6 +35,7 @@ struct SettingsView: View {
     @State private var missingModelConfigurationIssues: [ConfigurationTransferManager.MissingConfigurationIssue] = []
     @State private var languageRefreshToken = UUID()
     @State private var displayMode: SettingsDisplayMode
+    @State private var initializedStaticTabs: Set<SettingsTab>
     private let issueRefreshTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
 
     init(
@@ -68,6 +69,7 @@ struct SettingsView: View {
         _sidebarMode = State(initialValue: initialNavigationTarget.tab == .feature ? .feature : .root)
         _navigationRequest = State(initialValue: SettingsNavigationRequest(target: initialNavigationTarget))
         _displayMode = State(initialValue: initialDisplayMode)
+        _initializedStaticTabs = State(initialValue: Self.initializedStaticTabs(for: initialNavigationTarget.tab))
     }
 
     var body: some View {
@@ -129,8 +131,8 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
             refreshPermissionBadge()
             refreshModelConfigurationBadge()
-            dictionaryStore.reload()
-            dictionarySuggestionStore.reload()
+            dictionaryStore.reloadAsync()
+            dictionarySuggestionStore.reloadAsync()
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtPermissionsDidChange)) { _ in
             refreshPermissionBadge()
@@ -163,6 +165,11 @@ struct SettingsView: View {
             if !meetingEnabled, selectedTab == .feature, selectedFeatureTab == .meeting {
                 navigationRequest = nil
                 selectedFeatureTab = .transcription
+            }
+        }
+        .onChange(of: selectedTab) { _, tab in
+            if Self.isStaticTab(tab) {
+                initializedStaticTabs.insert(tab)
             }
         }
     }
@@ -315,48 +322,78 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var staticTabContent: some View {
-        Group {
-            if selectedTab == .history {
-                HistorySettingsView(
-                    historyStore: historyStore,
-                    dictionaryStore: dictionaryStore,
-                    dictionarySuggestionStore: dictionarySuggestionStore,
-                    navigationRequest: navigationRequest
-                )
-            } else if selectedTab == .dictionary {
-                DictionarySettingsView(
-                    historyStore: historyStore,
-                    dictionaryStore: dictionaryStore,
-                    dictionarySuggestionStore: dictionarySuggestionStore,
-                    availableHistoryScanModels: availableDictionaryHistoryScanModels,
-                    onIngestSuggestionsFromHistory: onIngestDictionarySuggestionsFromHistory,
-                    onCancelIngestSuggestionsFromHistory: onCancelDictionarySuggestionsFromHistory,
-                    navigationRequest: navigationRequest
-                )
-            } else if selectedTab == .feature {
-                FeatureSettingsView(
-                    selectedTab: selectedFeatureTab,
-                    navigationRequest: navigationRequest,
-                    mlxModelManager: mlxModelManager,
-                    whisperModelManager: whisperModelManager,
-                    customLLMManager: customLLMManager
-                )
-            } else if selectedTab == .model {
-                ModelSettingsView(
-                    mlxModelManager: mlxModelManager,
-                    whisperModelManager: whisperModelManager,
-                    customLLMManager: customLLMManager,
-                    mainWindowState: mainWindowState,
-                    missingConfigurationIssues: missingModelConfigurationIssues,
-                    navigationRequest: navigationRequest
-                )
-            } else {
-                ReportSettingsView(historyStore: historyStore)
+        ZStack(alignment: .topLeading) {
+            if initializedStaticTabs.contains(.report) {
+                staticTabLayer(for: .report) {
+                    ReportSettingsView(historyStore: historyStore)
+                }
+            }
+
+            if initializedStaticTabs.contains(.history) {
+                staticTabLayer(for: .history) {
+                    HistorySettingsView(
+                        historyStore: historyStore,
+                        dictionaryStore: dictionaryStore,
+                        dictionarySuggestionStore: dictionarySuggestionStore,
+                        navigationRequest: navigationRequest
+                    )
+                }
+            }
+
+            if initializedStaticTabs.contains(.dictionary) {
+                staticTabLayer(for: .dictionary) {
+                    DictionarySettingsView(
+                        historyStore: historyStore,
+                        dictionaryStore: dictionaryStore,
+                        dictionarySuggestionStore: dictionarySuggestionStore,
+                        availableHistoryScanModels: availableDictionaryHistoryScanModels,
+                        onIngestSuggestionsFromHistory: onIngestDictionarySuggestionsFromHistory,
+                        onCancelIngestSuggestionsFromHistory: onCancelDictionarySuggestionsFromHistory,
+                        navigationRequest: navigationRequest
+                    )
+                }
+            }
+
+            if initializedStaticTabs.contains(.feature) {
+                staticTabLayer(for: .feature) {
+                    FeatureSettingsView(
+                        selectedTab: selectedFeatureTab,
+                        navigationRequest: navigationRequest,
+                        mlxModelManager: mlxModelManager,
+                        whisperModelManager: whisperModelManager,
+                        customLLMManager: customLLMManager
+                    )
+                }
+            }
+
+            if initializedStaticTabs.contains(.model) {
+                staticTabLayer(for: .model) {
+                    ModelSettingsView(
+                        mlxModelManager: mlxModelManager,
+                        whisperModelManager: whisperModelManager,
+                        customLLMManager: customLLMManager,
+                        mainWindowState: mainWindowState,
+                        missingConfigurationIssues: missingModelConfigurationIssues,
+                        navigationRequest: navigationRequest,
+                        isActive: selectedTab == .model
+                    )
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 8)
         .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func staticTabLayer<Content: View>(
+        for tab: SettingsTab,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .opacity(selectedTab == tab ? 1 : 0)
+            .allowsHitTesting(selectedTab == tab)
+            .accessibilityHidden(selectedTab != tab)
     }
 
     private var scrollableTabContent: some View {
@@ -383,7 +420,8 @@ struct SettingsView: View {
                             customLLMManager: customLLMManager,
                             mainWindowState: mainWindowState,
                             missingConfigurationIssues: missingModelConfigurationIssues,
-                            navigationRequest: navigationRequest
+                            navigationRequest: navigationRequest,
+                            isActive: true
                         )
                     case .dictionary:
                         EmptyView()
@@ -515,6 +553,14 @@ struct SettingsView: View {
         selectedFeatureTab = tab
     }
 
+    private static func initializedStaticTabs(for tab: SettingsTab) -> Set<SettingsTab> {
+        isStaticTab(tab) ? [tab] : []
+    }
+
+    private static func isStaticTab(_ tab: SettingsTab) -> Bool {
+        tab == .history || tab == .report || tab == .feature || tab == .dictionary || tab == .model
+    }
+
 }
 
 private struct SettingsSidebar: View {
@@ -588,6 +634,7 @@ private struct SettingsSidebar: View {
                         Spacer(minLength: 0)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .buttonStyle(SettingsStatusButtonStyle(tint: .red))
             }
 
@@ -603,6 +650,7 @@ private struct SettingsSidebar: View {
                         Spacer(minLength: 0)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .buttonStyle(SettingsStatusButtonStyle(tint: .red))
             }
 
@@ -629,6 +677,7 @@ private struct SettingsSidebar: View {
                             )
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .buttonStyle(SettingsStatusButtonStyle(tint: .accentColor))
             }
 
@@ -644,6 +693,7 @@ private struct SettingsSidebar: View {
                         Spacer(minLength: 0)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .buttonStyle(SettingsStatusButtonStyle(tint: .orange))
             }
 
@@ -669,6 +719,7 @@ private struct SettingsSidebar: View {
                         Spacer(minLength: 0)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .buttonStyle(SettingsStatusButtonStyle(tint: updateBadgeState.tintColor))
             }
 

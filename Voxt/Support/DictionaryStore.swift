@@ -902,6 +902,7 @@ final class DictionaryStore: ObservableObject {
 
     private let defaults = UserDefaults.standard
     private let fileManager = FileManager.default
+    private var reloadGeneration = 0
     private let persistenceCoordinator = AsyncJSONPersistenceCoordinator(
         label: "com.voxt.dictionary.persistence"
     )
@@ -914,14 +915,47 @@ final class DictionaryStore: ObservableObject {
         do {
             let url = try dictionaryFileURL()
             guard fileManager.fileExists(atPath: url.path) else {
-                entries = []
+                applyReloadedEntries([])
                 return
             }
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode([DictionaryEntry].self, from: data)
-            entries = sortEntries(decoded)
+            applyReloadedEntries(decoded)
         } catch {
-            entries = []
+            applyReloadedEntries([])
+        }
+    }
+
+    func reloadAsync() {
+        reloadGeneration += 1
+        let generation = reloadGeneration
+
+        let url: URL?
+        do {
+            url = try dictionaryFileURL()
+        } catch {
+            applyReloadedEntries([])
+            return
+        }
+
+        let fileManager = self.fileManager
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let decodedEntries: [DictionaryEntry]
+            if let url, fileManager.fileExists(atPath: url.path) {
+                do {
+                    let data = try Data(contentsOf: url)
+                    decodedEntries = try JSONDecoder().decode([DictionaryEntry].self, from: data)
+                } catch {
+                    decodedEntries = []
+                }
+            } else {
+                decodedEntries = []
+            }
+
+            DispatchQueue.main.async {
+                guard let self, generation == self.reloadGeneration else { return }
+                self.applyReloadedEntries(decodedEntries)
+            }
         }
     }
 
@@ -1336,5 +1370,9 @@ final class DictionaryStore: ObservableObject {
             }
             return $0.updatedAt > $1.updatedAt
         }
+    }
+
+    private func applyReloadedEntries(_ decodedEntries: [DictionaryEntry]) {
+        entries = sortEntries(decodedEntries)
     }
 }

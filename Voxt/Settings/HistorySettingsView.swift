@@ -195,19 +195,16 @@ struct HistorySettingsView: View {
             if HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) == nil {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
             }
-            historyStore.reload()
-            historyStore.updateRetentionPolicy()
+            historyStore.reloadAsync()
         }
         .onChange(of: historyEnabled) { _, _ in
-            historyStore.updateRetentionPolicy()
-            historyStore.reload()
+            historyStore.reloadAsync()
         }
         .onChange(of: historyRetentionPeriodRaw) { _, newValue in
             if HistoryRetentionPeriod(rawValue: newValue) == nil {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
             }
-            historyStore.updateRetentionPolicy()
-            historyStore.reload()
+            historyStore.reloadAsync()
         }
     }
 

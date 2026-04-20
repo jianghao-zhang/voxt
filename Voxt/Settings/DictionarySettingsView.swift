@@ -31,13 +31,21 @@ struct DictionarySettingsView: View {
     @State private var selectedHistoryScanModelID = ""
     @State private var dictionaryTransferMessage: String?
     @State private var suggestionActionMessage: String?
+    @State private var pendingHistoryScanCount = 0
+    @State private var visibleEntryLimit = Self.dictionaryPageSize
+
+    private static let dictionaryPageSize = 80
 
     private var visibleEntries: [DictionaryEntry] {
         dictionaryStore.filteredEntries(for: selectedFilter)
     }
 
-    private var pendingHistoryScanCount: Int {
-        dictionarySuggestionStore.pendingHistoryEntries(in: historyStore).count
+    private var pagedVisibleEntries: [DictionaryEntry] {
+        Array(visibleEntries.prefix(visibleEntryLimit))
+    }
+
+    private var hasMoreVisibleEntries: Bool {
+        visibleEntryLimit < visibleEntries.count
     }
 
     private var localHistoryScanModelOptions: [DictionaryHistoryScanModelOption] {
@@ -108,9 +116,24 @@ struct DictionarySettingsView: View {
                 onSave: saveSuggestionIngestSettings
             )
         }
-        .onAppear(perform: reloadContent)
+        .onAppear(perform: reloadContentAsync)
         .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
-            reloadContent()
+            reloadContentAsync()
+        }
+        .onChange(of: selectedFilter) { _, _ in
+            resetVisibleEntryLimit()
+        }
+        .onChange(of: dictionaryStore.entries.count) { _, _ in
+            resetVisibleEntryLimit()
+        }
+        .onReceive(historyStore.$entries) { _ in
+            refreshPendingHistoryScanCountAsync()
+        }
+        .onReceive(dictionarySuggestionStore.$suggestions) { _ in
+            refreshPendingHistoryScanCountAsync()
+        }
+        .onChange(of: dictionarySuggestionStore.historyScanProgress) { _, _ in
+            refreshPendingHistoryScanCountAsync()
         }
     }
 
@@ -125,6 +148,31 @@ struct DictionarySettingsView: View {
         DispatchQueue.main.async {
             withAnimation(.easeInOut(duration: 0.18)) {
                 proxy.scrollTo(section.rawValue, anchor: .top)
+            }
+        }
+    }
+
+    private func resetVisibleEntryLimit() {
+        visibleEntryLimit = Self.dictionaryPageSize
+    }
+
+    private func loadNextDictionaryPageIfNeeded() {
+        guard hasMoreVisibleEntries else { return }
+        visibleEntryLimit = min(visibleEntryLimit + Self.dictionaryPageSize, visibleEntries.count)
+    }
+
+    private func refreshPendingHistoryScanCountAsync() {
+        let historyEntries = historyStore.allHistoryEntries
+        let checkpoint = dictionarySuggestionStore.historyScanCheckpoint
+
+        DispatchQueue.global(qos: .utility).async {
+            let count = DictionarySuggestionStore.pendingHistoryEntryCount(
+                in: historyEntries,
+                checkpoint: checkpoint
+            )
+
+            DispatchQueue.main.async {
+                pendingHistoryScanCount = count
             }
         }
     }
@@ -255,7 +303,7 @@ struct DictionarySettingsView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 6) {
-                            ForEach(visibleEntries) { entry in
+                            ForEach(pagedVisibleEntries) { entry in
                                 DictionaryRow(
                                     entry: entry,
                                     scopeLabel: scopeLabel(for: entry),
@@ -272,6 +320,19 @@ struct DictionarySettingsView: View {
                                         dictionaryStore.delete(id: entry.id)
                                     }
                                 )
+                                .onAppear {
+                                    if entry.id == pagedVisibleEntries.last?.id {
+                                        loadNextDictionaryPageIfNeeded()
+                                    }
+                                }
+                            }
+
+                            if hasMoreVisibleEntries {
+                                Button("Load More") {
+                                    loadNextDictionaryPageIfNeeded()
+                                }
+                                .buttonStyle(SettingsPillButtonStyle())
+                                .padding(.top, 4)
                             }
                         }
                     }
@@ -445,10 +506,16 @@ struct DictionarySettingsView: View {
         errorMessage = nil
     }
 
-    private func reloadContent() {
-        dictionaryStore.reload()
-        dictionarySuggestionStore.reload()
+    private func reloadContentAsync() {
+        dictionaryStore.reloadAsync()
+        dictionarySuggestionStore.reloadAsync()
+        refreshLocalContentState()
+        refreshPendingHistoryScanCountAsync()
+    }
+
+    private func refreshLocalContentState() {
         reloadGroups()
+        resetVisibleEntryLimit()
         historyScanModelOptions = availableHistoryScanModels()
         suggestionFilterDraft = dictionarySuggestionStore.filterSettings
         selectedHistoryScanModelID = resolvedDefaultHistoryScanModelID(from: historyScanModelOptions)
@@ -565,7 +632,7 @@ struct DictionarySettingsView: View {
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
             let result = try dictionaryStore.importTransferJSONString(text)
-            reloadContent()
+            refreshLocalContentState()
             dictionaryTransferMessage = AppLocalization.format(
                 "Imported %d terms and skipped %d duplicates.",
                 result.addedCount,

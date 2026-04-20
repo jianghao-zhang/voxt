@@ -551,6 +551,7 @@ struct OnboardingSettingsView: View {
                             Spacer(minLength: 0)
                         }
                     }
+                    .frame(maxWidth: .infinity)
                     .buttonStyle(SettingsStatusButtonStyle(tint: .red))
                 }
 

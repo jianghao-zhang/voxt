@@ -197,6 +197,7 @@ final class TranscriptionHistoryStore: ObservableObject {
 
     private var allEntries: [TranscriptionHistoryEntry] = []
     private var loadedCount = 0
+    private var reloadGeneration = 0
     private let pageSize = 40
     private let maxStoredEntries = 1000
 
@@ -234,24 +235,47 @@ final class TranscriptionHistoryStore: ObservableObject {
         do {
             let url = try historyFileURL()
             guard fileManager.fileExists(atPath: url.path) else {
-                allEntries = []
-                entries = []
-                loadedCount = 0
+                applyReloadedEntries([], resetPagination: true)
                 return
             }
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode([TranscriptionHistoryEntry].self, from: data)
-            allEntries = decoded.sorted { $0.createdAt > $1.createdAt }
-            let didPrune = applyRetentionPolicyIfNeeded()
-            loadedCount = min(pageSize, allEntries.count)
-            entries = Array(allEntries.prefix(loadedCount))
-            if didPrune {
-                persist()
-            }
+            applyReloadedEntries(decoded, resetPagination: true)
         } catch {
-            allEntries = []
-            entries = []
-            loadedCount = 0
+            applyReloadedEntries([], resetPagination: true)
+        }
+    }
+
+    func reloadAsync() {
+        reloadGeneration += 1
+        let generation = reloadGeneration
+
+        let url: URL?
+        do {
+            url = try historyFileURL()
+        } catch {
+            applyReloadedEntries([], resetPagination: true)
+            return
+        }
+
+        let fileManager = self.fileManager
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let decodedEntries: [TranscriptionHistoryEntry]
+            if let url, fileManager.fileExists(atPath: url.path) {
+                do {
+                    let data = try Data(contentsOf: url)
+                    decodedEntries = try JSONDecoder().decode([TranscriptionHistoryEntry].self, from: data)
+                } catch {
+                    decodedEntries = []
+                }
+            } else {
+                decodedEntries = []
+            }
+
+            DispatchQueue.main.async {
+                guard let self, generation == self.reloadGeneration else { return }
+                self.applyReloadedEntries(decodedEntries, resetPagination: false)
+            }
         }
     }
 
@@ -442,6 +466,28 @@ final class TranscriptionHistoryStore: ObservableObject {
     private var historyRetentionPeriod: HistoryRetentionPeriod {
         let raw = defaults.string(forKey: AppPreferenceKey.historyRetentionPeriod)
         return HistoryRetentionPeriod(rawValue: raw ?? "") ?? .thirtyDays
+    }
+
+    private func applyReloadedEntries(
+        _ decodedEntries: [TranscriptionHistoryEntry],
+        resetPagination: Bool
+    ) {
+        allEntries = decodedEntries.sorted { $0.createdAt > $1.createdAt }
+        let didPrune = applyRetentionPolicyIfNeeded()
+
+        let targetLoadedCount: Int
+        if resetPagination || loadedCount == 0 {
+            targetLoadedCount = pageSize
+        } else {
+            targetLoadedCount = max(loadedCount, pageSize)
+        }
+
+        loadedCount = min(targetLoadedCount, allEntries.count)
+        entries = Array(allEntries.prefix(loadedCount))
+
+        if didPrune {
+            persist()
+        }
     }
 
     private func applyRetentionPolicyIfNeeded(referenceDate: Date = Date()) -> Bool {

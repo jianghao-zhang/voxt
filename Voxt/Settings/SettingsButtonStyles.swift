@@ -8,6 +8,7 @@ struct SettingsSidebarItemButtonStyle: ButtonStyle {
             .font(.system(size: 12.5, weight: .medium))
             .foregroundStyle(isActive ? Color.white : Color.primary)
             .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 34)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -17,6 +18,7 @@ struct SettingsSidebarItemButtonStyle: ButtonStyle {
                             : Color.clear
                     )
             )
+            .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.9 : 1)
     }
 }
@@ -160,6 +162,7 @@ struct SettingsStatusButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(tint.opacity(0.28), lineWidth: 1)
             )
+            .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.9 : 1)
     }
 }
