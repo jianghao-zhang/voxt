@@ -42,6 +42,8 @@ private enum HistoryFilterTab: String, CaseIterable, Identifiable {
 }
 
 struct HistorySettingsView: View {
+    private static let pageSize = 40
+
     @AppStorage(AppPreferenceKey.historyEnabled) private var historyEnabled = false
     @AppStorage(AppPreferenceKey.historyRetentionPeriod) private var historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
 
@@ -52,13 +54,26 @@ struct HistorySettingsView: View {
     @State private var copiedEntryID: UUID?
     @State private var showRetentionInfo = false
     @State private var selectedFilter: HistoryFilterTab = .all
+    @State private var visibleEntryLimit = pageSize
 
     private var historyRetentionPeriod: HistoryRetentionPeriod {
         HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) ?? .thirtyDays
     }
 
+    private var allEntries: [TranscriptionHistoryEntry] {
+        historyStore.allHistoryEntries
+    }
+
     private var filteredEntries: [TranscriptionHistoryEntry] {
-        historyStore.entries.filter { selectedFilter.matches($0) }
+        allEntries.filter { selectedFilter.matches($0) }
+    }
+
+    private var visibleEntries: [TranscriptionHistoryEntry] {
+        Array(filteredEntries.prefix(visibleEntryLimit))
+    }
+
+    private var hasMoreFilteredEntries: Bool {
+        visibleEntryLimit < filteredEntries.count
     }
 
     var body: some View {
@@ -116,17 +131,18 @@ struct HistorySettingsView: View {
                                 Spacer(minLength: 12)
                                 Button(String(localized: "Clean All"), role: .destructive) {
                                     copiedEntryID = nil
+                                    resetVisibleEntryLimit()
                                     historyStore.clearAll()
                                 }
                                 .buttonStyle(SettingsPillButtonStyle())
-                                .disabled(historyStore.entries.isEmpty)
+                                .disabled(allEntries.isEmpty)
                             }
 
-                            if historyStore.entries.isEmpty && !historyEnabled {
+                            if allEntries.isEmpty && !historyEnabled {
                                 Text(String(localized: "History is currently disabled."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                            } else if historyStore.entries.isEmpty {
+                            } else if allEntries.isEmpty {
                                 Text(String(localized: "No history yet."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -137,7 +153,7 @@ struct HistorySettingsView: View {
                             } else {
                                 ScrollView {
                                     LazyVStack(spacing: 8) {
-                                        ForEach(filteredEntries) { entry in
+                                        ForEach(visibleEntries) { entry in
                                             HistoryRow(
                                                 entry: entry,
                                                 meetingAudioURL: historyStore.meetingAudioURL(for: entry),
@@ -153,19 +169,20 @@ struct HistorySettingsView: View {
                                                     }
                                                 },
                                                 onDelete: {
+                                                    copiedEntryID = nil
                                                     historyStore.delete(id: entry.id)
                                                 }
                                             )
                                             .onAppear {
-                                                if entry.id == filteredEntries.last?.id {
-                                                    historyStore.loadNextPage()
+                                                if entry.id == visibleEntries.last?.id {
+                                                    loadNextPageIfNeeded()
                                                 }
                                             }
                                         }
 
-                                        if historyStore.hasMore {
+                                        if hasMoreFilteredEntries {
                                             Button(String(localized: "Load More")) {
-                                                historyStore.loadNextPage()
+                                                loadNextPageIfNeeded()
                                             }
                                             .buttonStyle(SettingsPillButtonStyle())
                                             .padding(.top, 4)
@@ -195,16 +212,25 @@ struct HistorySettingsView: View {
             if HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) == nil {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
             }
+            resetVisibleEntryLimit()
             historyStore.reloadAsync()
         }
         .onChange(of: historyEnabled) { _, _ in
+            resetVisibleEntryLimit()
             historyStore.reloadAsync()
         }
         .onChange(of: historyRetentionPeriodRaw) { _, newValue in
             if HistoryRetentionPeriod(rawValue: newValue) == nil {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
             }
+            resetVisibleEntryLimit()
             historyStore.reloadAsync()
+        }
+        .onChange(of: selectedFilter) { _, _ in
+            resetVisibleEntryLimit()
+        }
+        .onReceive(historyStore.$entries) { _ in
+            visibleEntryLimit = min(max(visibleEntryLimit, Self.pageSize), max(filteredEntries.count, Self.pageSize))
         }
     }
 
@@ -227,6 +253,15 @@ struct HistorySettingsView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+
+    private func resetVisibleEntryLimit() {
+        visibleEntryLimit = Self.pageSize
+    }
+
+    private func loadNextPageIfNeeded() {
+        guard hasMoreFilteredEntries else { return }
+        visibleEntryLimit = min(visibleEntryLimit + Self.pageSize, filteredEntries.count)
     }
 }
 

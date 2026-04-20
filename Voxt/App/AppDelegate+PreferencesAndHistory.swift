@@ -259,6 +259,7 @@ extension AppDelegate {
 
     func appendHistoryIfNeeded(
         text: String,
+        outputMode: SessionOutputMode,
         displayTitle: String? = nil,
         llmDurationSeconds: TimeInterval?,
         dictionaryHitTerms: [String],
@@ -290,7 +291,7 @@ extension AppDelegate {
             }
         }
 
-        let historyKind = resolvedHistoryKind()
+        let historyKind = resolvedHistoryKind(for: outputMode)
         let textModelMetadata = resolvedHistoryTextModelMetadata(for: historyKind)
 
         let now = Date()
@@ -323,7 +324,7 @@ extension AppDelegate {
             enhancementMode: textModelMetadata.modeTitle,
             enhancementModel: textModelMetadata.modelTitle,
             kind: historyKind,
-            isTranslation: sessionOutputMode == .translation,
+            isTranslation: outputMode == .translation,
             audioDurationSeconds: audioDuration,
             transcriptionProcessingDurationSeconds: processingDuration,
             llmDurationSeconds: llmDurationSeconds,
@@ -356,8 +357,8 @@ extension AppDelegate {
         return entryID
     }
 
-    private func resolvedHistoryKind() -> TranscriptionHistoryKind {
-        HistoryValueResolver.resolvedKind(for: sessionOutputMode)
+    private func resolvedHistoryKind(for outputMode: SessionOutputMode) -> TranscriptionHistoryKind {
+        HistoryValueResolver.resolvedKind(for: outputMode)
     }
 
     private func resolvedHistoryTextModelMetadata(for kind: TranscriptionHistoryKind) -> HistoryTextModelMetadata {

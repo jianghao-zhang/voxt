@@ -431,6 +431,7 @@ extension AppDelegate {
                 guard let self else { return }
                 let historyEntryID = self.appendHistoryIfNeeded(
                     text: deliveredText,
+                    outputMode: sessionOutputMode,
                     displayTitle: displayTitle,
                     llmDurationSeconds: llmDurationSeconds,
                     dictionaryHitTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryCorrection.candidates.map(\.term)),
