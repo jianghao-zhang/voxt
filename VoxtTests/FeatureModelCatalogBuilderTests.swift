@@ -95,10 +95,45 @@ final class FeatureModelCatalogBuilderTests: XCTestCase {
         XCTAssertEqual(builder.asrSelectionSummary(.remoteASR(.aliyunBailianASR)), "Aliyun Bailian ASR · fun-asr-realtime")
     }
 
+    func testASRSelectorEntryDisplaysSupportsPrimaryLanguageTag() throws {
+        let repo = "mlx-community/Qwen3-ASR-0.6B-4bit"
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(transcriptionASR: .mlx(repo)),
+            primaryUserLanguageCode: "zh-Hans"
+        )
+
+        let entry = try XCTUnwrap(
+            builder.entries(for: .transcriptionASR)
+                .first(where: { $0.selectionID == .mlx(repo) })
+        )
+
+        XCTAssertTrue(entry.displayTags.contains(AppLocalization.localizedString("Supports Primary Language")))
+        XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Does Not Support Primary Language")))
+        XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Multilingual")))
+    }
+
+    func testASRSelectorEntryDisplaysDoesNotSupportPrimaryLanguageTag() throws {
+        let repo = "mlx-community/parakeet-tdt-0.6b-v3"
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(transcriptionASR: .mlx(repo)),
+            primaryUserLanguageCode: "zh-Hans"
+        )
+
+        let entry = try XCTUnwrap(
+            builder.entries(for: .transcriptionASR)
+                .first(where: { $0.selectionID == .mlx(repo) })
+        )
+
+        XCTAssertTrue(entry.displayTags.contains(AppLocalization.localizedString("Does Not Support Primary Language")))
+        XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Supports Primary Language")))
+        XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Multilingual")))
+    }
+
     private func makeBuilder(
         featureSettings: FeatureSettings,
         remoteASRConfigurationsRaw: String = "",
-        remoteLLMConfigurationsRaw: String = ""
+        remoteLLMConfigurationsRaw: String = "",
+        primaryUserLanguageCode: String? = "en"
     ) -> FeatureModelCatalogBuilder {
         FeatureModelCatalogBuilder(
             mlxModelManager: TestModelManagers.mlx,
@@ -107,7 +142,8 @@ final class FeatureModelCatalogBuilderTests: XCTestCase {
             featureSettings: featureSettings,
             remoteASRProviderConfigurationsRaw: remoteASRConfigurationsRaw,
             remoteLLMProviderConfigurationsRaw: remoteLLMConfigurationsRaw,
-            appleIntelligenceAvailable: true
+            appleIntelligenceAvailable: true,
+            primaryUserLanguageCode: primaryUserLanguageCode
         )
     }
 

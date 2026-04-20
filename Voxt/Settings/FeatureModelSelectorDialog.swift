@@ -476,7 +476,7 @@ private enum FeatureSelectorTagPriority {
     static var groups: [[String]] {
         [
             [localized("Local"), localized("Remote")],
-            [localized("Fast"), localized("Accurate"), localized("Realtime"), localized("Multilingual")],
+            [localized("Fast"), localized("Accurate"), localized("Realtime")],
             [localized("Installed"), localized("Configured"), localized("In Use")]
         ]
     }

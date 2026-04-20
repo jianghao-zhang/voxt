@@ -443,7 +443,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         HotkeyPreference.migrateDefaultsIfNeeded()
         Self.migrateLegacyNetworkProxyPreferenceIfNeeded()
         RemoteModelConfigurationStore.migrateLegacyLLMEndpoints()
-        RemoteModelConfigurationStore.migrateLegacyStoredSecrets()
         VoxtNetworkSession.migrateLegacyProxyCredentials()
         super.init()
         AppDelegate.shared = self
@@ -527,6 +526,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             VoxtLog.info("Voxt launch running under XCTest; skipping app startup services.")
             return
         }
+
+        RemoteModelConfigurationStore.migrateLegacyStoredSecrets()
 
         AppBehaviorController.applyDockVisibility(showInDock: showInDock)
 

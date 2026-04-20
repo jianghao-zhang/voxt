@@ -104,7 +104,6 @@ extension AppDelegate {
             overlayState.clearPendingConversationUserPrompt()
             overlayState.statusMessage = ""
             overlayState.sessionIconMode = .rewrite
-            overlayState.latestHistoryEntryID = nil
             overlayState.answerTitle = ""
             overlayState.answerContent = ""
             overlayState.isStreamingAnswer = false

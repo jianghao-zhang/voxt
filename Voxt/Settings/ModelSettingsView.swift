@@ -373,12 +373,18 @@ struct ModelSettingsView: View {
             ensureRewriteModelSelectionConsistency()
         }
         .onChange(of: remoteLLMProviderConfigurationsRaw) { _, _ in
-            cachedRemoteLLMConfigurations = RemoteModelConfigurationStore.loadConfigurations(from: remoteLLMProviderConfigurationsRaw)
+            cachedRemoteLLMConfigurations = RemoteModelConfigurationStore.loadConfigurations(
+                from: remoteLLMProviderConfigurationsRaw,
+                sensitiveValueLoading: .metadataOnly
+            )
             ensureTranslationModelSelectionConsistency()
             ensureRewriteModelSelectionConsistency()
         }
         .onChange(of: remoteASRProviderConfigurationsRaw) { _, _ in
-            cachedRemoteASRConfigurations = RemoteModelConfigurationStore.loadConfigurations(from: remoteASRProviderConfigurationsRaw)
+            cachedRemoteASRConfigurations = RemoteModelConfigurationStore.loadConfigurations(
+                from: remoteASRProviderConfigurationsRaw,
+                sensitiveValueLoading: .metadataOnly
+            )
         }
         .onChange(of: useHfMirror) { _, _ in
             updateMirrorSetting()
@@ -415,7 +421,7 @@ struct ModelSettingsView: View {
                 testTarget: .asr(provider),
                 configuration: RemoteModelConfigurationStore.resolvedASRConfiguration(
                     provider: provider,
-                    stored: remoteASRConfigurations
+                    stored: RemoteModelConfigurationStore.loadConfigurations(from: remoteASRProviderConfigurationsRaw)
                 )
             ) { updated in
                 saveRemoteASRConfiguration(updated)
@@ -429,7 +435,7 @@ struct ModelSettingsView: View {
                 testTarget: .llm(provider),
                 configuration: RemoteModelConfigurationStore.resolvedLLMConfiguration(
                     provider: provider,
-                    stored: remoteLLMConfigurations
+                    stored: RemoteModelConfigurationStore.loadConfigurations(from: remoteLLMProviderConfigurationsRaw)
                 )
             ) { updated in
                 saveRemoteLLMConfiguration(updated)
@@ -460,8 +466,14 @@ struct ModelSettingsView: View {
 
     private func reloadCachedConfigurationState() {
         cachedFeatureSettings = FeatureSettingsStore.load(defaults: .standard)
-        cachedRemoteASRConfigurations = RemoteModelConfigurationStore.loadConfigurations(from: remoteASRProviderConfigurationsRaw)
-        cachedRemoteLLMConfigurations = RemoteModelConfigurationStore.loadConfigurations(from: remoteLLMProviderConfigurationsRaw)
+        cachedRemoteASRConfigurations = RemoteModelConfigurationStore.loadConfigurations(
+            from: remoteASRProviderConfigurationsRaw,
+            sensitiveValueLoading: .metadataOnly
+        )
+        cachedRemoteLLMConfigurations = RemoteModelConfigurationStore.loadConfigurations(
+            from: remoteLLMProviderConfigurationsRaw,
+            sensitiveValueLoading: .metadataOnly
+        )
     }
 
     private func chooseModelStorageDirectory() {

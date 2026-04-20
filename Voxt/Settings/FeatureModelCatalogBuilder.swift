@@ -13,6 +13,7 @@ struct FeatureModelCatalogBuilder {
     let remoteASRProviderConfigurationsRaw: String
     let remoteLLMProviderConfigurationsRaw: String
     let appleIntelligenceAvailable: Bool
+    let primaryUserLanguageCode: String?
 
     func entries(for sheet: FeatureModelSelectorSheet) -> [FeatureModelSelectorEntry] {
         switch sheet {
@@ -37,7 +38,10 @@ struct FeatureModelCatalogBuilder {
         case .whisper(let modelID):
             return whisperModelManager.displayTitle(for: modelID)
         case .remote(let provider):
-            let configurations = RemoteModelConfigurationStore.loadConfigurations(from: remoteASRProviderConfigurationsRaw)
+            let configurations = RemoteModelConfigurationStore.loadConfigurations(
+                from: remoteASRProviderConfigurationsRaw,
+                sensitiveValueLoading: .metadataOnly
+            )
             let configuration = RemoteModelConfigurationStore.resolvedASRConfiguration(provider: provider, stored: configurations)
             return configuration.hasUsableModel ? "\(provider.title) · \(configuration.model)" : provider.title
         case .none:
@@ -52,7 +56,10 @@ struct FeatureModelCatalogBuilder {
         case .localLLM(let repo):
             return customLLMManager.displayTitle(for: repo)
         case .remoteLLM(let provider):
-            let configurations = RemoteModelConfigurationStore.loadConfigurations(from: remoteLLMProviderConfigurationsRaw)
+            let configurations = RemoteModelConfigurationStore.loadConfigurations(
+                from: remoteLLMProviderConfigurationsRaw,
+                sensitiveValueLoading: .metadataOnly
+            )
             let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(provider: provider, stored: configurations)
             return configuration.hasUsableModel ? "\(provider.title) · \(configuration.model)" : provider.title
         case .none:
@@ -81,7 +88,12 @@ struct FeatureModelCatalogBuilder {
                 sizeText: localized("Built-in"),
                 ratingText: "3.4",
                 filterTags: [localized("Local"), localized("Built-in"), localized("Multilingual"), localized("Installed")],
-                displayTags: [localized("Local"), localized("Built-in"), localized("Multilingual")],
+                displayTags: featureDisplayTags(
+                    base: [localized("Local"), localized("Built-in"), localized("Multilingual")],
+                    requiresConfiguration: false,
+                    configured: true,
+                    selectionID: .dictation
+                ),
                 statusText: localized("Works immediately with no model download."),
                 usageLocations: usageLabels(for: .dictation),
                 isSelectable: true,
@@ -109,7 +121,7 @@ struct FeatureModelCatalogBuilder {
                     base: [localized("Local")] + mlxSpeedTags(for: model.id),
                     requiresConfiguration: false,
                     configured: true,
-                    usageLabels: usageLabels(for: selectionID)
+                    selectionID: selectionID
                 ),
                 statusText: isInstalled ? localized("Installed") : localized("Not installed"),
                 usageLocations: usageLabels(for: selectionID),
@@ -138,7 +150,7 @@ struct FeatureModelCatalogBuilder {
                     base: [localized("Local")] + whisperSpeedTags(for: model.id),
                     requiresConfiguration: false,
                     configured: true,
-                    usageLabels: usageLabels(for: selectionID)
+                    selectionID: selectionID
                 ),
                 statusText: isInstalled ? localized("Installed") : localized("Not installed"),
                 usageLocations: usageLabels(for: selectionID),
@@ -147,7 +159,10 @@ struct FeatureModelCatalogBuilder {
             )
         })
 
-        let remoteConfigurations = RemoteModelConfigurationStore.loadConfigurations(from: remoteASRProviderConfigurationsRaw)
+        let remoteConfigurations = RemoteModelConfigurationStore.loadConfigurations(
+            from: remoteASRProviderConfigurationsRaw,
+            sensitiveValueLoading: .metadataOnly
+        )
         entries.append(contentsOf: RemoteASRProvider.allCases.map { provider in
             let selectionID = FeatureModelSelectionID.remoteASR(provider)
             let configuration = RemoteModelConfigurationStore.resolvedASRConfiguration(
@@ -171,7 +186,7 @@ struct FeatureModelCatalogBuilder {
                     base: [localized("Remote")] + remoteASRTags(for: provider, configuration: configuration),
                     requiresConfiguration: true,
                     configured: configuration.isConfigured,
-                    usageLabels: usageLabels(for: selectionID)
+                    selectionID: selectionID
                 ),
                 statusText: configuration.isConfigured ? localized("Configured") : localized("Not configured"),
                 usageLocations: usageLabels(for: selectionID),
@@ -194,7 +209,12 @@ struct FeatureModelCatalogBuilder {
                     sizeText: localized("Built-in"),
                     ratingText: "4.2",
                     filterTags: [localized("Local"), localized("Multilingual"), localized("Installed")] + inUseTags(for: .appleIntelligence),
-                    displayTags: [localized("Local"), localized("Multilingual")] + inUseTags(for: .appleIntelligence),
+                    displayTags: featureDisplayTags(
+                        base: [localized("Local"), localized("Multilingual")],
+                        requiresConfiguration: false,
+                        configured: true,
+                        selectionID: .appleIntelligence
+                    ),
                     statusText: localized("Available on this Mac"),
                     usageLocations: usageLabels(for: .appleIntelligence),
                     isSelectable: true,
@@ -223,7 +243,7 @@ struct FeatureModelCatalogBuilder {
                     base: [localized("Local")] + llmSpeedTags(for: model.id),
                     requiresConfiguration: false,
                     configured: true,
-                    usageLabels: usageLabels(for: selectionID)
+                    selectionID: selectionID
                 ),
                 statusText: isInstalled ? localized("Installed") : localized("Not installed"),
                 usageLocations: usageLabels(for: selectionID),
@@ -232,7 +252,10 @@ struct FeatureModelCatalogBuilder {
             )
         })
 
-        let remoteConfigurations = RemoteModelConfigurationStore.loadConfigurations(from: remoteLLMProviderConfigurationsRaw)
+        let remoteConfigurations = RemoteModelConfigurationStore.loadConfigurations(
+            from: remoteLLMProviderConfigurationsRaw,
+            sensitiveValueLoading: .metadataOnly
+        )
         entries.append(contentsOf: RemoteLLMProvider.allCases.map { provider in
             let selectionID = FeatureModelSelectionID.remoteLLM(provider)
             let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
@@ -257,7 +280,7 @@ struct FeatureModelCatalogBuilder {
                     base: [localized("Remote")] + remoteLLMTags(for: provider),
                     requiresConfiguration: true,
                     configured: isConfigured,
-                    usageLabels: usageLabels(for: selectionID)
+                    selectionID: selectionID
                 ),
                 statusText: configuration.hasUsableModel ? localized("Configured") : localized("Not configured"),
                 usageLocations: usageLabels(for: selectionID),
@@ -309,7 +332,7 @@ struct FeatureModelCatalogBuilder {
                     base: [localized("Local"), localized("Fast"), localized("Multilingual")],
                     requiresConfiguration: false,
                     configured: true,
-                    usageLabels: usageLabels(for: .whisperDirectTranslate)
+                    selectionID: .whisperDirectTranslate
                 ),
                 statusText: whisperSelectable ? localized("Ready when Whisper ASR is selected") : localized("Unavailable"),
                 usageLocations: usageLabels(for: .whisperDirectTranslate),
@@ -370,13 +393,16 @@ struct FeatureModelCatalogBuilder {
         base: [String],
         requiresConfiguration: Bool,
         configured: Bool,
-        usageLabels: [String]
+        selectionID: FeatureModelSelectionID
     ) -> [String] {
-        var tags = base
+        var tags = base.filter { $0 != localized("Multilingual") }
+        if let languageSupportTag = primaryLanguageSupportTag(for: selectionID) {
+            tags.append(languageSupportTag)
+        }
         if requiresConfiguration && configured {
             tags.append(localized("Configured"))
         }
-        if !usageLabels.isEmpty {
+        if !usageLabels(for: selectionID).isEmpty {
             tags.append(localized("In Use"))
         }
         return deduplicatedFeatureTags(tags)
@@ -472,6 +498,51 @@ struct FeatureModelCatalogBuilder {
             return false
         }
         return option.description.localizedCaseInsensitiveContains("multilingual")
+    }
+
+    private func primaryLanguageSupportTag(for selectionID: FeatureModelSelectionID) -> String? {
+        guard let support = supportsPrimaryLanguage(for: selectionID) else { return nil }
+        return localized(support ? "Supports Primary Language" : "Does Not Support Primary Language")
+    }
+
+    private func supportsPrimaryLanguage(for selectionID: FeatureModelSelectionID) -> Bool? {
+        guard let primaryLanguage = resolvedPrimaryLanguageOption() else { return nil }
+
+        switch selectionID.asrSelection {
+        case .dictation:
+            return true
+        case .mlx(let repo):
+            return mlxSupportsPrimaryLanguage(repo, primaryLanguage: primaryLanguage)
+        case .whisper:
+            return true
+        case .remote:
+            return true
+        case .none:
+            return nil
+        }
+    }
+
+    private func resolvedPrimaryLanguageOption() -> UserMainLanguageOption? {
+        guard let primaryUserLanguageCode else { return nil }
+        return UserMainLanguageOption.option(for: primaryUserLanguageCode)
+    }
+
+    private func mlxSupportsPrimaryLanguage(
+        _ repo: String,
+        primaryLanguage: UserMainLanguageOption
+    ) -> Bool {
+        let key = repo.lowercased()
+        let baseCode = primaryLanguage.baseLanguageCode
+
+        if key.contains("parakeet") {
+            return baseCode == "en"
+        }
+
+        if key.contains("glm-asr") || key.contains("firered") {
+            return ["zh", "en"].contains(baseCode)
+        }
+
+        return mlxSupportsMultilingual(repo)
     }
 
     private func deduplicatedFeatureTags(_ tags: [String]) -> [String] {

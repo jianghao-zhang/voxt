@@ -105,26 +105,31 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
 }
 
 enum RemoteModelConfigurationStore {
+    enum SensitiveValueLoading {
+        case metadataOnly
+        case includeStoredValues
+    }
+
     private enum SensitiveField: String, CaseIterable {
         case apiKey
         case appID
         case accessToken
     }
 
-    static func loadConfigurations(from raw: String) -> [String: RemoteProviderConfiguration] {
-        guard let data = raw.data(using: .utf8), !data.isEmpty else {
-            return [:]
-        }
-        do {
-            let items = try JSONDecoder().decode([RemoteProviderConfiguration].self, from: data)
-            return Dictionary(uniqueKeysWithValues: items.map { item in
-                let normalized = normalizedCompatibilityValues(for: item)
-                let resolved = resolvedSensitiveValues(for: normalized)
-                return (resolved.providerID, resolved)
-            })
-        } catch {
-            return [:]
-        }
+    static func loadConfigurations(
+        from raw: String,
+        sensitiveValueLoading: SensitiveValueLoading = .includeStoredValues
+    ) -> [String: RemoteProviderConfiguration] {
+        let items = decodedConfigurations(from: raw).map(normalizedCompatibilityValues(for:))
+        return Dictionary(uniqueKeysWithValues: items.map { item in
+            let resolved = switch sensitiveValueLoading {
+            case .metadataOnly:
+                item.withoutSensitiveValues
+            case .includeStoredValues:
+                resolvedSensitiveValues(for: item)
+            }
+            return (resolved.providerID, resolved)
+        })
     }
 
     static func saveConfigurations(_ values: [String: RemoteProviderConfiguration]) -> String {
@@ -132,13 +137,7 @@ enum RemoteModelConfigurationStore {
         for item in items {
             persistSensitiveValues(for: item)
         }
-        let sanitizedItems = items.map(\.withoutSensitiveValues)
-        guard let data = try? JSONEncoder().encode(sanitizedItems),
-              let text = String(data: data, encoding: .utf8)
-        else {
-            return ""
-        }
-        return text
+        return encodeConfigurations(items.map(\.withoutSensitiveValues))
     }
 
     static func migrateLegacyStoredSecrets(defaults: UserDefaults = .standard) {
@@ -161,7 +160,8 @@ enum RemoteModelConfigurationStore {
         let raw = defaults.string(forKey: defaultsKey) ?? ""
         guard !raw.isEmpty else { return }
 
-        let migrated = saveConfigurations(loadConfigurations(from: raw))
+        let decoded = decodedConfigurations(from: raw)
+        let migrated = encodeConfigurations(decoded.map(normalizedCompatibilityValues(for:)))
         if migrated != raw {
             defaults.set(migrated, forKey: defaultsKey)
         }
@@ -215,12 +215,37 @@ enum RemoteModelConfigurationStore {
     private static func migrateLegacyStoredSecrets(defaultsKey: String, defaults: UserDefaults) {
         let raw = defaults.string(forKey: defaultsKey) ?? ""
         guard !raw.isEmpty else { return }
+        let decoded = decodedConfigurations(from: raw)
+        guard decoded.contains(where: hasInlineSensitiveValues) else { return }
 
-        let loaded = loadConfigurations(from: raw)
-        let sanitized = saveConfigurations(loaded)
+        let normalized = decoded.map(normalizedCompatibilityValues(for:))
+        for configuration in normalized {
+            persistSensitiveValues(for: configuration)
+        }
+        let sanitized = encodeConfigurations(normalized.map(\.withoutSensitiveValues))
         if sanitized != raw {
             defaults.set(sanitized, forKey: defaultsKey)
         }
+    }
+
+    private static func decodedConfigurations(from raw: String) -> [RemoteProviderConfiguration] {
+        guard let data = raw.data(using: .utf8), !data.isEmpty else {
+            return []
+        }
+        do {
+            return try JSONDecoder().decode([RemoteProviderConfiguration].self, from: data)
+        } catch {
+            return []
+        }
+    }
+
+    private static func encodeConfigurations(_ items: [RemoteProviderConfiguration]) -> String {
+        guard let data = try? JSONEncoder().encode(items),
+              let text = String(data: data, encoding: .utf8)
+        else {
+            return ""
+        }
+        return text
     }
 
     private static func normalizedCompatibilityValues(
@@ -267,6 +292,14 @@ enum RemoteModelConfigurationStore {
         for field in SensitiveField.allCases {
             let value = sensitiveValue(for: field, in: configuration)
             VoxtSecureStorage.set(value, for: keychainAccount(providerID: configuration.providerID, field: field))
+        }
+    }
+
+    private static func hasInlineSensitiveValues(_ configuration: RemoteProviderConfiguration) -> Bool {
+        SensitiveField.allCases.contains { field in
+            !sensitiveValue(for: field, in: configuration)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
         }
     }
 

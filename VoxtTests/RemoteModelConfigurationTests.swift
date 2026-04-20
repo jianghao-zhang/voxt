@@ -119,6 +119,28 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertEqual(roundTrip, stored)
     }
 
+    func testMetadataOnlyLoadDoesNotResolveStoredSensitiveValues() {
+        let stored: [String: RemoteProviderConfiguration] = [
+            RemoteLLMProvider.openAI.rawValue: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.openAI.rawValue,
+                model: "gpt-5.2",
+                endpoint: "https://example.com/llm",
+                apiKey: "secret"
+            )
+        ]
+
+        let raw = RemoteModelConfigurationStore.saveConfigurations(stored)
+        let metadataOnly = RemoteModelConfigurationStore.loadConfigurations(
+            from: raw,
+            sensitiveValueLoading: .metadataOnly
+        )
+
+        XCTAssertEqual(metadataOnly[RemoteLLMProvider.openAI.rawValue]?.model, "gpt-5.2")
+        XCTAssertEqual(metadataOnly[RemoteLLMProvider.openAI.rawValue]?.endpoint, "https://example.com/llm")
+        XCTAssertEqual(metadataOnly[RemoteLLMProvider.openAI.rawValue]?.apiKey, "")
+        XCTAssertFalse(metadataOnly[RemoteLLMProvider.openAI.rawValue]?.isConfigured ?? true)
+    }
+
     func testResolvedASRConfigurationFallsBackToSuggestedModelAndClearsRealtimeFlag() {
         let stored: [String: RemoteProviderConfiguration] = [
             RemoteASRProvider.doubaoASR.rawValue: TestFactories.makeRemoteConfiguration(
@@ -308,6 +330,40 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertEqual(
             migrated["volcengine"]?.endpoint,
             "https://ark.cn-beijing.volces.com/api/v3/responses"
+        )
+    }
+
+    func testMigrateLegacyStoredSecretsSkipsAlreadySanitizedPayloads() {
+        let suiteName = "RemoteModelConfigurationTests.migrateLegacyStoredSecrets.skip.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let raw = """
+        [
+          {
+            "providerID": "openAI",
+            "model": "gpt-5.2",
+            "meetingModel": "",
+            "endpoint": "https://example.com/responses",
+            "apiKey": "",
+            "appID": "",
+            "accessToken": ""
+          }
+        ]
+        """
+
+        defaults.set(raw, forKey: AppPreferenceKey.remoteLLMProviderConfigurations)
+
+        RemoteModelConfigurationStore.migrateLegacyStoredSecrets(defaults: defaults)
+
+        XCTAssertEqual(
+            defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations),
+            raw
+        )
+        XCTAssertNil(
+            VoxtSecureStorage.string(
+                for: "remote-provider.openAI.apiKey"
+            )
         )
     }
 

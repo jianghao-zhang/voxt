@@ -18,6 +18,7 @@ struct FeatureSettingsView: View {
     @AppStorage(AppPreferenceKey.featureSettings) private var featureSettingsRaw = ""
     @AppStorage(AppPreferenceKey.remoteASRProviderConfigurations) private var remoteASRProviderConfigurationsRaw = ""
     @AppStorage(AppPreferenceKey.remoteLLMProviderConfigurations) private var remoteLLMProviderConfigurationsRaw = ""
+    @AppStorage(AppPreferenceKey.userMainLanguageCodes) private var userMainLanguageCodesRaw = UserMainLanguageOption.defaultStoredSelectionValue
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
 
     @State private var featureSettings = FeatureSettingsStore.load()
@@ -409,8 +410,13 @@ struct FeatureSettingsView: View {
             featureSettings: featureSettings,
             remoteASRProviderConfigurationsRaw: remoteASRProviderConfigurationsRaw,
             remoteLLMProviderConfigurationsRaw: remoteLLMProviderConfigurationsRaw,
-            appleIntelligenceAvailable: appleIntelligenceAvailable
+            appleIntelligenceAvailable: appleIntelligenceAvailable,
+            primaryUserLanguageCode: selectedUserLanguageCodes.first
         )
+    }
+
+    private var selectedUserLanguageCodes: [String] {
+        UserMainLanguageOption.storedSelection(from: userMainLanguageCodesRaw)
     }
 
     private func selectedSelectionID(for sheet: FeatureModelSelectorSheet) -> FeatureModelSelectionID {

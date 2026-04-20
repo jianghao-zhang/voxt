@@ -75,7 +75,10 @@ final class TranscriptionDetailViewModel: ObservableObject {
     }
 
     var displayMessages: [MeetingSummaryChatMessage] {
-        [seedAssistantMessage] + chatMessages
+        if chatMessages.first?.role == .assistant {
+            return chatMessages
+        }
+        return [seedAssistantMessage] + chatMessages
     }
 
     func refresh(entry: TranscriptionHistoryEntry) {
@@ -138,11 +141,6 @@ final class TranscriptionDetailViewModel: ObservableObject {
     }
 
     private var seedAssistantMessage: MeetingSummaryChatMessage {
-        MeetingSummaryChatMessage(
-            id: entry.id,
-            role: .assistant,
-            content: entry.text,
-            createdAt: entry.createdAt
-        )
+        TranscriptionHistoryConversationSupport.seedMessage(for: entry)
     }
 }

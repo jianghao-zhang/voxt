@@ -317,6 +317,26 @@ extension AppDelegate {
             remoteASREndpointInfo = nil
         }
 
+        if historyKind == .rewrite,
+           let continuedEntryID = continueRewriteHistoryIfPossible(
+                text: trimmed,
+                createdAt: now,
+                audioDurationSeconds: audioDuration,
+                transcriptionProcessingDurationSeconds: processingDuration,
+                llmDurationSeconds: llmDurationSeconds,
+                whisperWordTimings: transcriptionEngine == .whisperKit && whisperTimestampsEnabled
+                    ? whisperTranscriber?.latestWordTimings
+                    : nil,
+                dictionaryHitTerms: dictionaryHitTerms,
+                dictionaryCorrectedTerms: dictionaryCorrectedTerms,
+                dictionarySuggestedTerms: dictionarySuggestedTerms
+           ) {
+            lastEnhancementPromptContext = nil
+            transcriptionResultReceivedAt = nil
+            scheduleAutomaticDictionaryHistorySuggestionScanIfNeeded()
+            return continuedEntryID
+        }
+
         let entryID = historyStore.append(
             text: trimmed,
             transcriptionEngine: transcriptionEngine.title,
@@ -342,6 +362,12 @@ extension AppDelegate {
                 ? whisperTranscriber?.latestWordTimings
                 : nil,
             displayTitle: trimmedDisplayTitle?.isEmpty == false ? trimmedDisplayTitle : nil,
+            transcriptionChatMessages: historyKind == .rewrite
+                ? TranscriptionHistoryConversationSupport.initialChatMessages(
+                    forTranscript: trimmed,
+                    createdAt: now
+                )
+                : nil,
             dictionaryHitTerms: dictionaryHitTerms,
             dictionaryCorrectedTerms: dictionaryCorrectedTerms,
             dictionarySuggestedTerms: dictionarySuggestedTerms
@@ -355,6 +381,69 @@ extension AppDelegate {
         }
 
         return entryID
+    }
+
+    private func continueRewriteHistoryIfPossible(
+        text: String,
+        createdAt: Date,
+        audioDurationSeconds: TimeInterval?,
+        transcriptionProcessingDurationSeconds: TimeInterval?,
+        llmDurationSeconds: TimeInterval?,
+        whisperWordTimings: [WhisperHistoryWordTiming]?,
+        dictionaryHitTerms: [String],
+        dictionaryCorrectedTerms: [String],
+        dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
+    ) -> UUID? {
+        guard overlayState.isRewriteConversationActive,
+              let activeEntryID = overlayState.latestHistoryEntryID,
+              let existingEntry = historyStore.entry(id: activeEntryID),
+              existingEntry.kind == .rewrite
+        else {
+            return nil
+        }
+
+        let mergedSuggestedTerms = existingEntry.dictionarySuggestedTerms + dictionarySuggestedTerms.filter { incoming in
+            !existingEntry.dictionarySuggestedTerms.contains(where: { $0.id == incoming.id })
+        }
+
+        let rewriteConversationMessages = TranscriptionHistoryConversationSupport
+            .rewriteConversationMessages(
+                from: overlayState.rewriteConversationTurns,
+                createdAt: createdAt
+            )
+
+        let mergedEntry = historyStore.updateTranscriptionEntry(
+            activeEntryID,
+            text: text,
+            createdAt: createdAt,
+            audioDurationSeconds: TranscriptionHistoryConversationSupport.accumulatedDuration(
+                existing: existingEntry.audioDurationSeconds,
+                incoming: audioDurationSeconds
+            ),
+            transcriptionProcessingDurationSeconds: TranscriptionHistoryConversationSupport.accumulatedDuration(
+                existing: existingEntry.transcriptionProcessingDurationSeconds,
+                incoming: transcriptionProcessingDurationSeconds
+            ),
+            llmDurationSeconds: TranscriptionHistoryConversationSupport.accumulatedDuration(
+                existing: existingEntry.llmDurationSeconds,
+                incoming: llmDurationSeconds
+            ),
+            whisperWordTimings: whisperWordTimings ?? existingEntry.whisperWordTimings,
+            transcriptionChatMessages: rewriteConversationMessages.isEmpty
+                ? TranscriptionHistoryConversationSupport.bootstrapChatMessages(for: existingEntry)
+                : rewriteConversationMessages,
+            dictionaryHitTerms: TranscriptionHistoryConversationSupport.mergedTerms(
+                existing: existingEntry.dictionaryHitTerms,
+                incoming: dictionaryHitTerms
+            ),
+            dictionaryCorrectedTerms: TranscriptionHistoryConversationSupport.mergedTerms(
+                existing: existingEntry.dictionaryCorrectedTerms,
+                incoming: dictionaryCorrectedTerms
+            ),
+            dictionarySuggestedTerms: mergedSuggestedTerms
+        )
+
+        return mergedEntry == nil ? nil : activeEntryID
     }
 
     private func resolvedHistoryKind(for outputMode: SessionOutputMode) -> TranscriptionHistoryKind {

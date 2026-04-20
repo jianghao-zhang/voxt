@@ -355,10 +355,12 @@ private struct HistoryRow: View {
                         HistoryInfoPopover(entry: entry, locale: locale)
                     }
 
-                    Button(String(localized: "Detail")) {
-                        openDetailWindow()
+                    if supportsDetail {
+                        Button(String(localized: "Detail")) {
+                            openDetailWindow()
+                        }
+                        .buttonStyle(SettingsPillButtonStyle())
                     }
-                    .buttonStyle(SettingsPillButtonStyle())
 
                     Button(role: .destructive, action: onDelete) {
                         Image(systemName: "trash")
@@ -387,6 +389,10 @@ private struct HistoryRow: View {
     private var hasDictionaryActivity: Bool {
         !entry.dictionaryHitTerms.isEmpty ||
         !entry.dictionaryCorrectedTerms.isEmpty
+    }
+
+    private var supportsDetail: Bool {
+        TranscriptionHistoryConversationSupport.supportsDetail(for: entry.kind)
     }
 
     private var metadataText: String {
@@ -477,6 +483,8 @@ private struct HistoryRow: View {
     }
 
     private func openDetailWindow() {
+        guard supportsDetail else { return }
+
         if entry.kind == .meeting {
             guard let appDelegate = AppDelegate.shared else {
                 VoxtLog.warning("History detail open skipped: AppDelegate.shared was unavailable.")

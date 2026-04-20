@@ -88,6 +88,23 @@ final class FeatureModelSelectorFilteringTests: XCTestCase {
         ])
     }
 
+    func testAvailableTagsDoNotExposeMultilingualFilter() {
+        let entries = [
+            makeEntry(
+                id: .mlx("mlx-community/Qwen3-ASR-0.6B-4bit"),
+                filterTags: [localized("Local"), localized("Multilingual"), localized("Fast")]
+            )
+        ]
+
+        let availableTags = FeatureModelSelectorFiltering.availableTags(
+            entries: entries,
+            selectedTags: []
+        )
+
+        XCTAssertFalse(availableTags.contains(localized("Multilingual")))
+        XCTAssertEqual(availableTags, [localized("Local"), localized("Fast")])
+    }
+
     private func makeEntry(
         id: FeatureModelSelectionID,
         filterTags: [String],

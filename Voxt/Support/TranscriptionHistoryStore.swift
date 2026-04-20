@@ -312,6 +312,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         meetingAudioRelativePath: String? = nil,
         meetingSummary: MeetingSummarySnapshot? = nil,
         displayTitle: String? = nil,
+        transcriptionChatMessages: [MeetingSummaryChatMessage]? = nil,
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
         dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
@@ -347,6 +348,7 @@ final class TranscriptionHistoryStore: ObservableObject {
             meetingAudioRelativePath: meetingAudioRelativePath,
             meetingSummary: meetingSummary,
             displayTitle: displayTitle,
+            transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
             dictionaryCorrectedTerms: dictionaryCorrectedTerms,
             dictionarySuggestedTerms: dictionarySuggestedTerms
@@ -448,6 +450,45 @@ final class TranscriptionHistoryStore: ObservableObject {
         entries = Array(allEntries.prefix(loadedCount))
         persist()
         return allEntries[index]
+    }
+
+    @discardableResult
+    func updateTranscriptionEntry(
+        _ entryID: UUID,
+        text: String,
+        createdAt: Date,
+        audioDurationSeconds: TimeInterval?,
+        transcriptionProcessingDurationSeconds: TimeInterval?,
+        llmDurationSeconds: TimeInterval?,
+        whisperWordTimings: [WhisperHistoryWordTiming]?,
+        transcriptionChatMessages: [MeetingSummaryChatMessage],
+        dictionaryHitTerms: [String],
+        dictionaryCorrectedTerms: [String],
+        dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
+    ) -> TranscriptionHistoryEntry? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let index = allEntries.firstIndex(where: { $0.id == entryID })
+        else {
+            return nil
+        }
+
+        allEntries[index] = allEntries[index].updatingTranscriptionEntry(
+            text: trimmed,
+            createdAt: createdAt,
+            audioDurationSeconds: audioDurationSeconds,
+            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
+            llmDurationSeconds: llmDurationSeconds,
+            whisperWordTimings: whisperWordTimings,
+            transcriptionChatMessages: transcriptionChatMessages,
+            dictionaryHitTerms: dictionaryHitTerms,
+            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
+            dictionarySuggestedTerms: dictionarySuggestedTerms
+        )
+        allEntries.sort { $0.createdAt > $1.createdAt }
+        entries = Array(allEntries.prefix(loadedCount))
+        persist()
+        return allEntries.first(where: { $0.id == entryID })
     }
 
     private func persist() {
@@ -665,6 +706,54 @@ private extension TranscriptionHistoryEntry {
     }
 
     func updatingTranscriptionChatMessages(_ transcriptionChatMessages: [MeetingSummaryChatMessage]) -> TranscriptionHistoryEntry {
+        TranscriptionHistoryEntry(
+            id: id,
+            text: text,
+            createdAt: createdAt,
+            transcriptionEngine: transcriptionEngine,
+            transcriptionModel: transcriptionModel,
+            enhancementMode: enhancementMode,
+            enhancementModel: enhancementModel,
+            kind: kind,
+            isTranslation: isTranslation,
+            audioDurationSeconds: audioDurationSeconds,
+            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
+            llmDurationSeconds: llmDurationSeconds,
+            focusedAppName: focusedAppName,
+            matchedGroupID: matchedGroupID,
+            matchedAppGroupName: matchedAppGroupName,
+            matchedURLGroupName: matchedURLGroupName,
+            remoteASRProvider: remoteASRProvider,
+            remoteASRModel: remoteASRModel,
+            remoteASREndpoint: remoteASREndpoint,
+            remoteLLMProvider: remoteLLMProvider,
+            remoteLLMModel: remoteLLMModel,
+            remoteLLMEndpoint: remoteLLMEndpoint,
+            whisperWordTimings: whisperWordTimings,
+            meetingSegments: meetingSegments,
+            meetingAudioRelativePath: meetingAudioRelativePath,
+            meetingSummary: meetingSummary,
+            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            displayTitle: displayTitle,
+            transcriptionChatMessages: transcriptionChatMessages,
+            dictionaryHitTerms: dictionaryHitTerms,
+            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
+            dictionarySuggestedTerms: dictionarySuggestedTerms
+        )
+    }
+
+    func updatingTranscriptionEntry(
+        text: String,
+        createdAt: Date,
+        audioDurationSeconds: TimeInterval?,
+        transcriptionProcessingDurationSeconds: TimeInterval?,
+        llmDurationSeconds: TimeInterval?,
+        whisperWordTimings: [WhisperHistoryWordTiming]?,
+        transcriptionChatMessages: [MeetingSummaryChatMessage],
+        dictionaryHitTerms: [String],
+        dictionaryCorrectedTerms: [String],
+        dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
+    ) -> TranscriptionHistoryEntry {
         TranscriptionHistoryEntry(
             id: id,
             text: text,

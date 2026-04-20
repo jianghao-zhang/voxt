@@ -97,11 +97,17 @@ struct OnboardingSettingsView: View {
     }
 
     var remoteASRConfigurations: [String: RemoteProviderConfiguration] {
-        RemoteModelConfigurationStore.loadConfigurations(from: remoteASRProviderConfigurationsRaw)
+        RemoteModelConfigurationStore.loadConfigurations(
+            from: remoteASRProviderConfigurationsRaw,
+            sensitiveValueLoading: .metadataOnly
+        )
     }
 
     var remoteLLMConfigurations: [String: RemoteProviderConfiguration] {
-        RemoteModelConfigurationStore.loadConfigurations(from: remoteLLMProviderConfigurationsRaw)
+        RemoteModelConfigurationStore.loadConfigurations(
+            from: remoteLLMProviderConfigurationsRaw,
+            sensitiveValueLoading: .metadataOnly
+        )
     }
 
     var selectedUserMainLanguageCodes: [String] {
@@ -466,7 +472,7 @@ struct OnboardingSettingsView: View {
                 testTarget: .asr(provider),
                 configuration: RemoteModelConfigurationStore.resolvedASRConfiguration(
                     provider: provider,
-                    stored: remoteASRConfigurations
+                    stored: RemoteModelConfigurationStore.loadConfigurations(from: remoteASRProviderConfigurationsRaw)
                 )
             ) { configuration in
                 saveRemoteASRConfiguration(configuration)
@@ -480,7 +486,7 @@ struct OnboardingSettingsView: View {
                 testTarget: .llm(provider),
                 configuration: RemoteModelConfigurationStore.resolvedLLMConfiguration(
                     provider: provider,
-                    stored: remoteLLMConfigurations
+                    stored: RemoteModelConfigurationStore.loadConfigurations(from: remoteLLMProviderConfigurationsRaw)
                 )
             ) { configuration in
                 saveRemoteLLMConfiguration(configuration)
