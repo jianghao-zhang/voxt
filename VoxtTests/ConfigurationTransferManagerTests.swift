@@ -35,6 +35,32 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         sourceDefaults.set(false, forKey: AppPreferenceKey.whisperVADEnabled)
         sourceDefaults.set(true, forKey: AppPreferenceKey.whisperTimestampsEnabled)
         sourceDefaults.set(false, forKey: AppPreferenceKey.whisperRealtimeEnabled)
+        sourceDefaults.set(
+            WhisperLocalTuningSettingsStore.storageValue(
+                for: WhisperLocalTuningSettings(
+                    preset: .accuracyFirst,
+                    temperatureFallbackCount: 3,
+                    temperatureIncrementOnFallback: 0.3,
+                    compressionRatioThreshold: 2.1,
+                    logProbThreshold: -1.4,
+                    noSpeechThreshold: 0.4
+                )
+            ),
+            forKey: AppPreferenceKey.whisperLocalASRTuningSettings
+        )
+        sourceDefaults.set(
+            MLXLocalTuningSettingsStore.storageValue(
+                for: [
+                    MLXLocalTuningSettingsStore.familyKey(for: "mlx-community/Qwen3-ASR-0.6B-4bit"): MLXLocalTuningSettings(
+                        preset: .accuracyFirst,
+                        qwenContextBias: "OpenAI Codex",
+                        granitePromptBias: "",
+                        senseVoiceUseITN: false
+                    )
+                ]
+            ),
+            forKey: AppPreferenceKey.mlxLocalASRTuningSettings
+        )
         sourceDefaults.set(TranslationModelProvider.remoteLLM.rawValue, forKey: AppPreferenceKey.translationFallbackModelProvider)
         sourceDefaults.set(TranslationTargetLanguage.japanese.rawValue, forKey: AppPreferenceKey.meetingRealtimeTranslationTargetLanguage)
         sourceDefaults.set("secret-password", forKey: AppPreferenceKey.customProxyPassword)
@@ -117,6 +143,31 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         XCTAssertFalse(targetDefaults.bool(forKey: AppPreferenceKey.whisperVADEnabled))
         XCTAssertTrue(targetDefaults.bool(forKey: AppPreferenceKey.whisperTimestampsEnabled))
         XCTAssertFalse(targetDefaults.bool(forKey: AppPreferenceKey.whisperRealtimeEnabled))
+        XCTAssertEqual(
+            WhisperLocalTuningSettingsStore.resolvedSettings(
+                from: targetDefaults.string(forKey: AppPreferenceKey.whisperLocalASRTuningSettings)
+            ),
+            WhisperLocalTuningSettings(
+                preset: .accuracyFirst,
+                temperatureFallbackCount: 3,
+                temperatureIncrementOnFallback: 0.3,
+                compressionRatioThreshold: 2.1,
+                logProbThreshold: -1.4,
+                noSpeechThreshold: 0.4
+            )
+        )
+        XCTAssertEqual(
+            MLXLocalTuningSettingsStore.resolvedSettings(
+                for: "mlx-community/Qwen3-ASR-0.6B-4bit",
+                rawValue: targetDefaults.string(forKey: AppPreferenceKey.mlxLocalASRTuningSettings)
+            ),
+            MLXLocalTuningSettings(
+                preset: .accuracyFirst,
+                qwenContextBias: "OpenAI Codex",
+                granitePromptBias: "",
+                senseVoiceUseITN: false
+            )
+        )
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.translationFallbackModelProvider), TranslationModelProvider.customLLM.rawValue)
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.meetingRealtimeTranslationTargetLanguage), TranslationTargetLanguage.japanese.rawValue)
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.customProxyUsername) ?? "", "")
@@ -357,6 +408,11 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         XCTAssertTrue(decoded.whisperVADEnabled)
         XCTAssertFalse(decoded.whisperTimestampsEnabled)
         XCTAssertTrue(decoded.whisperRealtimeEnabled)
+        XCTAssertEqual(
+            decoded.whisperLocalASRTuningSettings,
+            WhisperLocalTuningSettingsStore.defaultStoredValue()
+        )
+        XCTAssertEqual(decoded.mlxLocalASRTuningSettings, "{}")
         XCTAssertEqual(decoded.translationFallbackModelProvider, TranslationModelProvider.customLLM.rawValue)
     }
 

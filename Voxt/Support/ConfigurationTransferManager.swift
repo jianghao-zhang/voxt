@@ -333,6 +333,8 @@ enum ConfigurationTransferManager {
         var translationSystemPrompt: String
         var rewriteSystemPrompt: String
         var asrHintSettings: String
+        var whisperLocalASRTuningSettings: String
+        var mlxLocalASRTuningSettings: String
         var mlxModelRepo: String
         var whisperModelID: String
         var whisperTemperature: Double
@@ -361,6 +363,8 @@ enum ConfigurationTransferManager {
             case translationSystemPrompt
             case rewriteSystemPrompt
             case asrHintSettings
+            case whisperLocalASRTuningSettings
+            case mlxLocalASRTuningSettings
             case mlxModelRepo
             case whisperModelID
             case whisperTemperature
@@ -390,6 +394,8 @@ enum ConfigurationTransferManager {
             translationSystemPrompt: String,
             rewriteSystemPrompt: String,
             asrHintSettings: String,
+            whisperLocalASRTuningSettings: String,
+            mlxLocalASRTuningSettings: String,
             mlxModelRepo: String,
             whisperModelID: String,
             whisperTemperature: Double,
@@ -417,6 +423,8 @@ enum ConfigurationTransferManager {
             self.translationSystemPrompt = translationSystemPrompt
             self.rewriteSystemPrompt = rewriteSystemPrompt
             self.asrHintSettings = asrHintSettings
+            self.whisperLocalASRTuningSettings = whisperLocalASRTuningSettings
+            self.mlxLocalASRTuningSettings = mlxLocalASRTuningSettings
             self.mlxModelRepo = MLXModelManager.canonicalModelRepo(mlxModelRepo)
             self.whisperModelID = whisperModelID
             self.whisperTemperature = whisperTemperature
@@ -447,6 +455,10 @@ enum ConfigurationTransferManager {
             translationSystemPrompt = try container.decode(String.self, forKey: .translationSystemPrompt)
             rewriteSystemPrompt = try container.decode(String.self, forKey: .rewriteSystemPrompt)
             asrHintSettings = try container.decodeIfPresent(String.self, forKey: .asrHintSettings) ?? ASRHintSettingsStore.defaultStoredValue()
+            whisperLocalASRTuningSettings = try container.decodeIfPresent(String.self, forKey: .whisperLocalASRTuningSettings)
+                ?? WhisperLocalTuningSettingsStore.defaultStoredValue()
+            mlxLocalASRTuningSettings = try container.decodeIfPresent(String.self, forKey: .mlxLocalASRTuningSettings)
+                ?? "{}"
             mlxModelRepo = MLXModelManager.canonicalModelRepo(
                 try container.decode(String.self, forKey: .mlxModelRepo)
             )
@@ -469,6 +481,12 @@ enum ConfigurationTransferManager {
             useHfMirror = try container.decode(Bool.self, forKey: .useHfMirror)
             remoteASRProviderConfigurations = try container.decode([SanitizedRemoteProviderConfiguration].self, forKey: .remoteASRProviderConfigurations)
             remoteLLMProviderConfigurations = try container.decode([SanitizedRemoteProviderConfiguration].self, forKey: .remoteLLMProviderConfigurations)
+            whisperLocalASRTuningSettings = WhisperLocalTuningSettingsStore.storageValue(
+                for: WhisperLocalTuningSettingsStore.resolvedSettings(from: whisperLocalASRTuningSettings)
+            )
+            mlxLocalASRTuningSettings = MLXLocalTuningSettingsStore.storageValue(
+                for: MLXLocalTuningSettingsStore.load(from: mlxLocalASRTuningSettings)
+            )
         }
     }
 
@@ -848,7 +866,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 18,
+            version: 19,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -858,6 +876,9 @@ enum ConfigurationTransferManager {
                 translationSystemPrompt: defaults.string(forKey: AppPreferenceKey.translationSystemPrompt) ?? AppPreferenceKey.defaultTranslationPrompt,
                 rewriteSystemPrompt: defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt) ?? AppPreferenceKey.defaultRewritePrompt,
                 asrHintSettings: defaults.string(forKey: AppPreferenceKey.asrHintSettings) ?? ASRHintSettingsStore.defaultStoredValue(),
+                whisperLocalASRTuningSettings: defaults.string(forKey: AppPreferenceKey.whisperLocalASRTuningSettings)
+                    ?? WhisperLocalTuningSettingsStore.defaultStoredValue(),
+                mlxLocalASRTuningSettings: defaults.string(forKey: AppPreferenceKey.mlxLocalASRTuningSettings) ?? "{}",
                 mlxModelRepo: MLXModelManager.canonicalModelRepo(
                     defaults.string(forKey: AppPreferenceKey.mlxModelRepo) ?? MLXModelManager.defaultModelRepo
                 ),
@@ -990,6 +1011,8 @@ enum ConfigurationTransferManager {
         defaults.set(model.translationSystemPrompt, forKey: AppPreferenceKey.translationSystemPrompt)
         defaults.set(model.rewriteSystemPrompt, forKey: AppPreferenceKey.rewriteSystemPrompt)
         defaults.set(model.asrHintSettings, forKey: AppPreferenceKey.asrHintSettings)
+        defaults.set(model.whisperLocalASRTuningSettings, forKey: AppPreferenceKey.whisperLocalASRTuningSettings)
+        defaults.set(model.mlxLocalASRTuningSettings, forKey: AppPreferenceKey.mlxLocalASRTuningSettings)
         defaults.set(MLXModelManager.canonicalModelRepo(model.mlxModelRepo), forKey: AppPreferenceKey.mlxModelRepo)
         defaults.set(WhisperKitModelManager.canonicalModelID(model.whisperModelID), forKey: AppPreferenceKey.whisperModelID)
         defaults.set(model.whisperTemperature, forKey: AppPreferenceKey.whisperTemperature)

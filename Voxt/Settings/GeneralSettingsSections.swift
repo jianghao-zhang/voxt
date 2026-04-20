@@ -19,7 +19,7 @@ struct GeneralConfigurationCard: View {
                 }
             }
 
-            Text("Export your current general, model, dictionary, voice end command, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import.")
+            Text("Export or import your setup as JSON. Sensitive fields are cleared and need to be filled in again after import.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

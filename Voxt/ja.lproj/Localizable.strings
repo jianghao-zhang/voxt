@@ -546,6 +546,7 @@
 "Configuration" = "設定ファイル";
 "Export Configuration" = "設定をエクスポート";
 "Import Configuration" = "設定をインポート";
+"Export or import your setup as JSON. Sensitive fields are cleared and need to be filled in again after import." = "設定を JSON として書き出し・読み込みできます。機密項目は空になるため、読み込み後に再入力が必要です。";
 "Export your current general, model, dictionary, voice end command, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import." = "現在の一般設定、モデル設定、辞書設定、音声終了コマンド、アプリ分岐設定、ショートカット設定を JSON ファイルとしてエクスポートします。機密情報はエクスポート時にプレースホルダーへ置き換えられ、インポート後に再入力が必要です。";
 "Configuration exported successfully." = "設定のエクスポートが完了しました。";
 "Configuration import failed: %@" = "設定のインポートに失敗しました: %@";
