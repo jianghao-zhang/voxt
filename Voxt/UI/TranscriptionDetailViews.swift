@@ -10,6 +10,10 @@ struct TranscriptionDetailContentView: View {
     let locale: Locale
     let style: TranscriptionDetailPresentationStyle
 
+    private var preferredContentWidth: CGFloat? {
+        style == .popover ? 360 : nil
+    }
+
     private var stackSpacing: CGFloat {
         style == .popover ? 10 : 14
     }
@@ -45,6 +49,8 @@ struct TranscriptionDetailContentView: View {
                     Text(entry.text)
                         .font(.system(size: style == .popover ? 13 : 14, weight: .medium))
                         .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                 }
@@ -119,6 +125,7 @@ struct TranscriptionDetailContentView: View {
             }
             .padding(.horizontal, contentPadding)
             .padding(.vertical, style == .popover ? 10 : 18)
+            .frame(width: preferredContentWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -155,6 +162,8 @@ struct TranscriptionDetailContentView: View {
             Text(verbatim: value)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
@@ -177,6 +186,8 @@ struct TranscriptionDetailContentView: View {
             Text(values.joined(separator: ", "))
                 .font(.subheadline)
                 .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
