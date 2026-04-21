@@ -6,6 +6,19 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.9.10] - 2026-04-21
+
+### Fixed
+- EN: Fixed long history info popovers so detailed text now wraps cleanly instead of stretching the panel too wide.
+- 简体中文：修复了历史记录信息弹层的长文本显示问题，详细内容现在会自动换行，不会再把弹层横向撑得过宽。
+- 日本語：履歴情報ポップオーバーの長文表示を修正し、詳細テキストが自動で折り返されてパネルが横に広がりすぎないようにしました。
+- EN: Fixed the main window's first-launch positioning so it opens centered on the current primary screen instead of appearing offset near the top-right area.
+- 简体中文：修复了主窗口首次启动时的定位问题，现在会直接居中显示在当前主屏上，不会再偏到顶部靠右的位置。
+- 日本語：メインウィンドウの初回起動時の位置を修正し、右上寄りにずれて表示されることなく、現在のメイン画面中央に開くようにしました。
+- EN: Fixed reopened main windows so they preserve the user's last window position, only falling back to recentering when the saved frame is invalid or off-screen.
+- 简体中文：修复了主窗口重新打开时的定位行为，现在会保留用户上次摆放的位置，只有在保存的位置无效或跑出屏幕时才会回退到居中。
+- 日本語：メインウィンドウを再表示した際の位置復元を修正し、前回の配置を保持しつつ、保存位置が無効または画面外の場合にのみ中央へ戻すようにしました。
+
 ## [1.9.9] - 2026-04-20
 
 ### Changed
