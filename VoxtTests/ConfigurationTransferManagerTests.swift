@@ -409,8 +409,8 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         XCTAssertFalse(decoded.whisperTimestampsEnabled)
         XCTAssertTrue(decoded.whisperRealtimeEnabled)
         XCTAssertEqual(
-            decoded.whisperLocalASRTuningSettings,
-            WhisperLocalTuningSettingsStore.defaultStoredValue()
+            WhisperLocalTuningSettingsStore.resolvedSettings(from: decoded.whisperLocalASRTuningSettings),
+            WhisperLocalTuningSettings.defaults(for: .balanced)
         )
         XCTAssertEqual(decoded.mlxLocalASRTuningSettings, "{}")
         XCTAssertEqual(decoded.translationFallbackModelProvider, TranslationModelProvider.customLLM.rawValue)
