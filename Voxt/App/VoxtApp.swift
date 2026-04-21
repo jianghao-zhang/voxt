@@ -519,6 +519,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         VoxtLog.info("Voxt launching.")
         VoxtLog.info("Runtime system version: \(currentSystemVersionLogDescription)")
+        UserDefaults.standard.set(false, forKey: "NSQuitAlwaysKeepsWindows")
         migrateLegacyPreferences()
         remoteASRTranscriber.doubaoDictionaryEntryProvider = { [weak self] in
             guard let self else { return [] }
