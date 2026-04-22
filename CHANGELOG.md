@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.9.11] - 2026-04-22
+
+### Changed
+- EN: Improved macOS permission guidance so Settings and onboarding now lead Accessibility and Input Monitoring through clearer System Settings flows, including direct guided handoff where drag-in authorization is required.
+- 简体中文：优化了 macOS 权限引导，现在设置页和 onboarding 会以更清晰的系统设置流程引导辅助功能和输入监控权限，并在需要拖入授权的页面提供直接引导。
+- 日本語：macOS の権限案内を改善し、Settings とオンボーディングからアクセシビリティ権限と入力監視権限をより分かりやすいシステム設定フローへ案内し、ドラッグでの許可が必要な画面ではそのまま誘導できるようにしました。
+
+### Fixed
+- EN: Fixed system audio capture permission guidance so features that need macOS audio capture now open the correct Privacy & Security page instead of leaving you at a generic settings screen.
+- 简体中文：修复了系统音频捕获权限的引导流程，现在需要 macOS 音频捕获权限的功能会直接打开正确的“隐私与安全性”页面，而不是停留在通用设置首页。
+- 日本語：システム音声キャプチャ権限の案内を修正し、macOS の音声キャプチャを必要とする機能が汎用設定画面ではなく、正しい「プライバシーとセキュリティ」のページを直接開くようにしました。
+
 ## [1.9.10] - 2026-04-21
 
 ### Fixed
