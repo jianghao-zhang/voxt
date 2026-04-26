@@ -13,11 +13,11 @@ extension RemoteProviderConfigurationSheet {
                 width: 240
             )
 
-            if llmProviderForPicker != nil && resolvedSelectionForPicker == customModelOptionID {
+            if shouldShowCustomProviderModelField {
                 Text(AppLocalization.localizedString("Custom Model ID (Optional)"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                TextField(AppLocalization.localizedString("e.g. doubao-seed-2-0-pro-260215"), text: $customModelID)
+                TextField(customProviderModelPlaceholder, text: $customModelID)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
             }

@@ -193,7 +193,8 @@ enum RemoteModelConfigurationStore {
         let allowedModelIDs = Set(provider.modelOptions.map(\.id))
         if let existing = stored[provider.rawValue] {
             var normalized = existing
-            if !allowedModelIDs.contains(normalized.model) {
+            if !allowedModelIDs.contains(normalized.model),
+               !allowsCustomASRModel(provider: provider, model: normalized.model) {
                 normalized.model = provider.suggestedModel
             }
             if provider != .openAIWhisper {
@@ -208,6 +209,11 @@ enum RemoteModelConfigurationStore {
             endpoint: "",
             apiKey: ""
         )
+    }
+
+    private static func allowsCustomASRModel(provider: RemoteASRProvider, model: String) -> Bool {
+        guard provider == .openAIWhisper else { return false }
+        return !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     static func resolvedLLMConfiguration(

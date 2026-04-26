@@ -3,20 +3,41 @@ import SwiftUI
 extension RemoteProviderConfigurationSheet {
     var providerModelMenuOptions: [SettingsMenuOption<String>] {
         if let llmProvider = llmProviderForPicker {
-            return (
+            var options = (
                 llmProvider.latestModelOptions +
                 llmProvider.basicModelOptions +
                 llmProvider.advancedModelOptions
-            ).map { SettingsMenuOption(value: $0.id, title: $0.title) } + [
-                SettingsMenuOption(value: customModelOptionID, title: AppLocalization.localizedString("Custom..."))
-            ]
+            ).map { SettingsMenuOption(value: $0.id, title: $0.title) }
+            if supportsCustomProviderModelSelection {
+                options.append(SettingsMenuOption(value: customModelOptionID, title: AppLocalization.localizedString("Custom...")))
+            }
+            return options
         }
-        return providerModelOptions.map { SettingsMenuOption(value: $0.id, title: $0.title) }
+        var options = providerModelOptions.map { SettingsMenuOption(value: $0.id, title: $0.title) }
+        if supportsCustomProviderModelSelection {
+            options.append(SettingsMenuOption(value: customModelOptionID, title: AppLocalization.localizedString("Custom...")))
+        }
+        return options
     }
 
     var providerModelSelectedTitle: String {
         providerModelMenuOptions.first(where: { $0.value == resolvedSelectionForPicker })?.title
             ?? AppLocalization.localizedString("Custom...")
+    }
+
+    var supportsCustomProviderModelSelection: Bool {
+        RemoteProviderConfigurationPolicy.supportsCustomModelSelection(target: testTarget)
+    }
+
+    var shouldShowCustomProviderModelField: Bool {
+        supportsCustomProviderModelSelection && resolvedSelectionForPicker == customModelOptionID
+    }
+
+    var customProviderModelPlaceholder: String {
+        if isOpenAIASRTest {
+            return AppLocalization.localizedString("e.g. gpt-4o-transcribe-xxx")
+        }
+        return AppLocalization.localizedString("e.g. doubao-seed-2-0-pro-260215")
     }
 
     var meetingModelMenuOptions: [SettingsMenuOption<String>] {
@@ -109,19 +130,7 @@ extension RemoteProviderConfigurationSheet {
         Binding(
             get: { resolvedSelectionForPicker },
             set: {
-                let previousModel = resolvedModelValue()
-                selectedProviderModel = $0
-                if llmProviderForPicker != nil,
-                   $0 != customModelOptionID,
-                   customModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    customModelID = $0
-                }
-                endpoint = RemoteProviderConfigurationPolicy.remappedEndpointOnModelChange(
-                    target: testTarget,
-                    previousModel: previousModel,
-                    newModel: resolvedModelValue(),
-                    currentEndpoint: endpoint
-                )
+                handleProviderModelSelectionChange($0)
             }
         )
     }
@@ -138,6 +147,27 @@ extension RemoteProviderConfigurationSheet {
         selectedProviderModel = RemoteProviderConfigurationPolicy.initialSelection(
             target: testTarget,
             configuredModel: configuration.model
+        )
+    }
+
+    func handleProviderModelSelectionChange(_ newValue: String) {
+        let previousModel = resolvedModelValue()
+        selectedProviderModel = newValue
+
+        if newValue == customModelOptionID {
+            if customModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                customModelID = previousModel
+            }
+        } else if supportsCustomProviderModelSelection,
+                  customModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            customModelID = newValue
+        }
+
+        endpoint = RemoteProviderConfigurationPolicy.remappedEndpointOnModelChange(
+            target: testTarget,
+            previousModel: previousModel,
+            newModel: resolvedModelValue(),
+            currentEndpoint: endpoint
         )
     }
 
@@ -183,13 +213,22 @@ extension RemoteProviderConfigurationSheet {
         Binding(
             get: { resolvedMeetingSelectionForPicker },
             set: {
-                selectedMeetingModel = $0
-                if $0 != customModelOptionID,
-                   customMeetingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    customMeetingModelID = $0
-                }
+                handleMeetingModelSelectionChange($0)
             }
         )
+    }
+
+    func handleMeetingModelSelectionChange(_ newValue: String) {
+        let previousModel = resolvedMeetingModelValue()
+        selectedMeetingModel = newValue
+
+        if newValue == customModelOptionID {
+            if customMeetingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                customMeetingModelID = previousModel
+            }
+        } else if customMeetingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            customMeetingModelID = newValue
+        }
     }
 
     func resolvedMeetingModelValue() -> String {

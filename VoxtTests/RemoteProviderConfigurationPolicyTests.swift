@@ -2,6 +2,34 @@ import XCTest
 @testable import Voxt
 
 final class RemoteProviderConfigurationPolicyTests: XCTestCase {
+    func testOpenAIASRSupportsCustomModelSelection() {
+        XCTAssertTrue(
+            RemoteProviderConfigurationPolicy.supportsCustomModelSelection(
+                target: .asr(.openAIWhisper)
+            )
+        )
+        XCTAssertFalse(
+            RemoteProviderConfigurationPolicy.supportsCustomModelSelection(
+                target: .asr(.glmASR)
+            )
+        )
+    }
+
+    func testOpenAIASRPickerIncludesCustomOption() {
+        XCTAssertEqual(
+            RemoteProviderConfigurationPolicy.pickerModelOptionIDs(
+                target: .asr(.openAIWhisper),
+                configuredModel: "whisper-1"
+            ),
+            [
+                "whisper-1",
+                "gpt-4o-mini-transcribe",
+                "gpt-4o-transcribe",
+                RemoteProviderConfigurationPolicy.customModelOptionID
+            ]
+        )
+    }
+
     func testResolvedSelectionPrefersKnownSelectionThenConfiguredValue() {
         let target = RemoteProviderTestTarget.llm(.openAI)
 
@@ -24,10 +52,39 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
         )
     }
 
+    func testResolvedSelectionUsesCustomForUnknownOpenAIASRConfiguredModel() {
+        let resolved = RemoteProviderConfigurationPolicy.resolvedSelection(
+            target: .asr(.openAIWhisper),
+            selectedProviderModel: "",
+            configuredModel: "gpt-4o-transcribe-preview"
+        )
+
+        XCTAssertEqual(resolved, RemoteProviderConfigurationPolicy.customModelOptionID)
+    }
+
+    func testResolvedSelectionKeepsFirstBuiltinForUnknownNonCustomASRModel() {
+        let resolved = RemoteProviderConfigurationPolicy.resolvedSelection(
+            target: .asr(.glmASR),
+            selectedProviderModel: "",
+            configuredModel: "glm-asr-custom"
+        )
+
+        XCTAssertEqual(resolved, "glm-asr-2512")
+    }
+
     func testInitialSelectionFallsBackToCustomForUnknownLLMModel() {
         let selection = RemoteProviderConfigurationPolicy.initialSelection(
             target: .llm(.openAI),
             configuredModel: "my-custom-model"
+        )
+
+        XCTAssertEqual(selection, RemoteProviderConfigurationPolicy.customModelOptionID)
+    }
+
+    func testInitialSelectionFallsBackToCustomForUnknownOpenAIASRModel() {
+        let selection = RemoteProviderConfigurationPolicy.initialSelection(
+            target: .asr(.openAIWhisper),
+            configuredModel: "gpt-4o-transcribe-preview"
         )
 
         XCTAssertEqual(selection, RemoteProviderConfigurationPolicy.customModelOptionID)
@@ -41,6 +98,131 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
         )
 
         XCTAssertEqual(resolved, RemoteLLMProvider.anthropic.suggestedModel)
+    }
+
+    func testResolvedModelValueUsesSuggestedModelWhenOpenAIASRCustomValueEmpty() {
+        let resolved = RemoteProviderConfigurationPolicy.resolvedModelValue(
+            target: .asr(.openAIWhisper),
+            resolvedSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
+            customModelID: "   "
+        )
+
+        XCTAssertEqual(resolved, RemoteASRProvider.openAIWhisper.suggestedModel)
+    }
+
+    func testResolvedASRConfigurationPreservesCustomOpenAIModel() {
+        let stored = [
+            RemoteASRProvider.openAIWhisper.rawValue: RemoteProviderConfiguration(
+                providerID: RemoteASRProvider.openAIWhisper.rawValue,
+                model: "whisper-large-v3-turbo",
+                endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
+                apiKey: ""
+            )
+        ]
+
+        let resolved = RemoteModelConfigurationStore.resolvedASRConfiguration(
+            provider: .openAIWhisper,
+            stored: stored
+        )
+
+        XCTAssertEqual(resolved.model, "whisper-large-v3-turbo")
+    }
+
+    func testResolvedASRConfigurationStillNormalizesUnknownNonOpenAIModel() {
+        let stored = [
+            RemoteASRProvider.glmASR.rawValue: RemoteProviderConfiguration(
+                providerID: RemoteASRProvider.glmASR.rawValue,
+                model: "glm-asr-custom",
+                endpoint: "",
+                apiKey: ""
+            )
+        ]
+
+        let resolved = RemoteModelConfigurationStore.resolvedASRConfiguration(
+            provider: .glmASR,
+            stored: stored
+        )
+
+        XCTAssertEqual(resolved.model, RemoteASRProvider.glmASR.suggestedModel)
+    }
+
+    func testOpenAIASRSheetShowsCustomFieldForCustomSelection() {
+        let sheet = makeSheet(
+            target: .asr(.openAIWhisper),
+            model: "gpt-4o-transcribe-preview"
+        )
+
+        XCTAssertTrue(sheet.supportsCustomProviderModelSelection)
+        XCTAssertTrue(sheet.shouldShowCustomProviderModelField)
+        XCTAssertEqual(sheet.customProviderModelPlaceholder, "e.g. gpt-4o-transcribe-xxx")
+    }
+
+    func testNonOpenAIASRSheetDoesNotShowCustomField() {
+        let sheet = makeSheet(
+            target: .asr(.glmASR),
+            model: "glm-asr-1"
+        )
+
+        XCTAssertFalse(sheet.supportsCustomProviderModelSelection)
+        XCTAssertFalse(sheet.shouldShowCustomProviderModelField)
+    }
+
+    func testSelectingCustomProviderModelPrefillsCurrentBuiltinModel() {
+        var sheet = makeSheet(
+            target: .asr(.openAIWhisper),
+            model: "whisper-1"
+        )
+        sheet.selectedProviderModel = "gpt-4o-transcribe"
+        sheet.customModelID = ""
+
+        sheet.handleProviderModelSelectionChange(RemoteProviderConfigurationPolicy.customModelOptionID)
+
+        XCTAssertEqual(sheet.customModelID, "gpt-4o-transcribe")
+        XCTAssertEqual(sheet.resolvedModelValue(), "gpt-4o-transcribe")
+    }
+
+    func testSelectingCustomProviderModelKeepsExistingCustomValue() {
+        var sheet = makeSheet(
+            target: .asr(.openAIWhisper),
+            model: "whisper-1"
+        )
+        sheet.selectedProviderModel = "gpt-4o-transcribe"
+        sheet.customModelID = "gpt-4o-transcribe-preview"
+
+        sheet.handleProviderModelSelectionChange(RemoteProviderConfigurationPolicy.customModelOptionID)
+
+        XCTAssertEqual(sheet.customModelID, "gpt-4o-transcribe-preview")
+        XCTAssertEqual(sheet.resolvedModelValue(), "gpt-4o-transcribe-preview")
+    }
+
+    func testSelectingCustomMeetingModelPrefillsCurrentBuiltinModel() {
+        var sheet = makeSheet(
+            target: .meetingASR(.aliyunBailianASR),
+            model: RemoteASRProvider.aliyunBailianASR.suggestedModel,
+            meetingModel: "qwen3-asr-flash-filetrans"
+        )
+        sheet.selectedMeetingModel = "qwen3-asr-flash"
+        sheet.customMeetingModelID = ""
+
+        sheet.handleMeetingModelSelectionChange(RemoteProviderConfigurationPolicy.customModelOptionID)
+
+        XCTAssertEqual(sheet.customMeetingModelID, "qwen3-asr-flash")
+        XCTAssertEqual(sheet.resolvedMeetingModelValue(), "qwen3-asr-flash")
+    }
+
+    func testSelectingCustomMeetingModelKeepsExistingCustomValue() {
+        var sheet = makeSheet(
+            target: .meetingASR(.aliyunBailianASR),
+            model: RemoteASRProvider.aliyunBailianASR.suggestedModel,
+            meetingModel: "qwen3-asr-flash-filetrans"
+        )
+        sheet.selectedMeetingModel = "qwen3-asr-flash"
+        sheet.customMeetingModelID = "qwen3-asr-flash-2026-03-01"
+
+        sheet.handleMeetingModelSelectionChange(RemoteProviderConfigurationPolicy.customModelOptionID)
+
+        XCTAssertEqual(sheet.customMeetingModelID, "qwen3-asr-flash-2026-03-01")
+        XCTAssertEqual(sheet.resolvedMeetingModelValue(), "qwen3-asr-flash-2026-03-01")
     }
 
     func testAliyunEndpointPresetsDependOnModelType() {
@@ -118,5 +300,44 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
         )
 
         XCTAssertEqual(endpoint, "wss://dashscope.aliyuncs.com/api-ws/v1/inference")
+    }
+
+    private func makeSheet(
+        target: RemoteProviderTestTarget,
+        model: String,
+        meetingModel: String = ""
+    ) -> RemoteProviderConfigurationSheet {
+        RemoteProviderConfigurationSheet(
+            providerTitle: providerTitle(for: target),
+            credentialHint: nil,
+            showsDoubaoFields: false,
+            testTarget: target,
+            configuration: RemoteProviderConfiguration(
+                providerID: providerID(for: target),
+                model: model,
+                meetingModel: meetingModel,
+                endpoint: "",
+                apiKey: ""
+            ),
+            onSave: { _ in }
+        )
+    }
+
+    private func providerTitle(for target: RemoteProviderTestTarget) -> String {
+        switch target {
+        case .asr(let provider), .meetingASR(let provider):
+            return provider.title
+        case .llm(let provider):
+            return provider.title
+        }
+    }
+
+    private func providerID(for target: RemoteProviderTestTarget) -> String {
+        switch target {
+        case .asr(let provider), .meetingASR(let provider):
+            return provider.rawValue
+        case .llm(let provider):
+            return provider.rawValue
+        }
     }
 }

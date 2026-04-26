@@ -58,11 +58,29 @@ enum RemoteProviderConfigurationPolicy {
         }
     }
 
+    static func supportsCustomModelSelection(target: RemoteProviderTestTarget) -> Bool {
+        if llmProvider(for: target) != nil {
+            return true
+        }
+        if case .asr(let provider) = target {
+            return provider == .openAIWhisper
+        }
+        return false
+    }
+
     static func pickerModelOptionIDs(target: RemoteProviderTestTarget, configuredModel: String) -> [String] {
         if let llmProvider = llmProvider(for: target) {
-            return (llmProvider.latestModelOptions + llmProvider.basicModelOptions + llmProvider.advancedModelOptions).map(\.id) + [customModelOptionID]
+            var ids = (llmProvider.latestModelOptions + llmProvider.basicModelOptions + llmProvider.advancedModelOptions).map(\.id)
+            if supportsCustomModelSelection(target: target) {
+                ids.append(customModelOptionID)
+            }
+            return ids
         }
-        return providerModelOptions(target: target, configuredModel: configuredModel).map(\.id)
+        var ids = providerModelOptions(target: target, configuredModel: configuredModel).map(\.id)
+        if supportsCustomModelSelection(target: target) {
+            ids.append(customModelOptionID)
+        }
+        return ids
     }
 
     static func resolvedSelection(
@@ -79,7 +97,7 @@ enum RemoteProviderConfigurationPolicy {
         if ids.contains(trimmedConfigured) {
             return trimmedConfigured
         }
-        if llmProvider(for: target) != nil {
+        if supportsCustomModelSelection(target: target) {
             return customModelOptionID
         }
         return ids.first ?? trimmedSelected
@@ -87,7 +105,7 @@ enum RemoteProviderConfigurationPolicy {
 
     static func initialSelection(target: RemoteProviderTestTarget, configuredModel: String) -> String {
         let ids = pickerModelOptionIDs(target: target, configuredModel: configuredModel)
-        if llmProvider(for: target) != nil {
+        if supportsCustomModelSelection(target: target) {
             let trimmedConfigured = configuredModel.trimmingCharacters(in: .whitespacesAndNewlines)
             return ids.contains(trimmedConfigured) ? trimmedConfigured : customModelOptionID
         }
@@ -99,9 +117,10 @@ enum RemoteProviderConfigurationPolicy {
         resolvedSelection: String,
         customModelID: String
     ) -> String {
-        if let llmProvider = llmProvider(for: target), resolvedSelection == customModelOptionID {
+        if resolvedSelection == customModelOptionID,
+           let fallbackModel = suggestedModelForCustomSelection(target: target) {
             let trimmedCustom = customModelID.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmedCustom.isEmpty ? llmProvider.suggestedModel : trimmedCustom
+            return trimmedCustom.isEmpty ? fallbackModel : trimmedCustom
         }
         return resolvedSelection
     }
@@ -179,6 +198,16 @@ enum RemoteProviderConfigurationPolicy {
         model.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .hasPrefix("qwen3-asr-flash-realtime")
+    }
+
+    private static func suggestedModelForCustomSelection(target: RemoteProviderTestTarget) -> String? {
+        if let llmProvider = llmProvider(for: target) {
+            return llmProvider.suggestedModel
+        }
+        if case .asr(let provider) = target, provider == .openAIWhisper {
+            return provider.suggestedModel
+        }
+        return nil
     }
 
     private static func hostMatchesAnyPreset(_ endpoint: String, presets: [RemoteEndpointPreset]) -> Bool {

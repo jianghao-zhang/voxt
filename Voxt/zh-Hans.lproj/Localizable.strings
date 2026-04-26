@@ -1231,3 +1231,5 @@
 "Summary Mode" = "摘要模式";
 "The selected translation model does not support follow-up questions yet." = "当前选择的翻译模型暂不支持继续追问。";
 "Translation Mode" = "翻译模式";
+"Aliyun Bailian" = "阿里云百炼";
+"Aliyun Bailian ASR" = "阿里云百炼";
