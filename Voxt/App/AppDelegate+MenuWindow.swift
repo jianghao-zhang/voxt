@@ -8,19 +8,20 @@ extension AppDelegate {
     }
 
     private func setMainWindowVisibility(_ isVisible: Bool) {
-        syncMainWindowActivationPolicy(isVisible: isVisible)
+        synchronizeAppActivationPolicy(mainWindowVisible: isVisible)
         guard mainWindowVisibilityState.isVisible != isVisible else { return }
         mainWindowVisibilityState.isVisible = isVisible
     }
 
-    private func syncMainWindowActivationPolicy(isVisible: Bool) {
-        guard !showInDock else { return }
+    func synchronizeAppActivationPolicy() {
+        synchronizeAppActivationPolicy(mainWindowVisible: mainWindowVisibilityState.isVisible)
+    }
 
-        let targetPolicy: NSApplication.ActivationPolicy = isVisible ? .regular : .accessory
-        guard NSApp.activationPolicy() != targetPolicy else { return }
-
-        NSApp.setActivationPolicy(targetPolicy)
-        VoxtLog.info("Main window activation policy updated. visible=\(isVisible), policy=\(targetPolicy.rawValue)")
+    private func synchronizeAppActivationPolicy(mainWindowVisible: Bool) {
+        AppBehaviorController.applyDockVisibility(
+            showInDock: showInDock,
+            mainWindowVisible: mainWindowVisible
+        )
     }
 
     private func repairedMainWindowFrame(for window: NSWindow) -> NSRect {

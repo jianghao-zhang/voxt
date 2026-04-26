@@ -1207,7 +1207,14 @@ struct OnboardingSettingsView: View {
             let text = try String(contentsOf: url, encoding: .utf8)
             try ConfigurationTransferManager.importConfiguration(from: text)
             let defaults = UserDefaults.standard
-            AppBehaviorController.applyDockVisibility(showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock))
+            if let appDelegate = AppDelegate.shared {
+                appDelegate.synchronizeAppActivationPolicy()
+            } else {
+                AppBehaviorController.applyDockVisibility(
+                    showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock),
+                    mainWindowVisible: true
+                )
+            }
             try? AppBehaviorController.setLaunchAtLogin(defaults.bool(forKey: AppPreferenceKey.launchAtLogin))
             appUpdateManager.syncAutomaticallyChecksForUpdates(defaults.bool(forKey: AppPreferenceKey.autoCheckForUpdates))
             NotificationCenter.default.post(name: .voxtConfigurationDidImport, object: nil)

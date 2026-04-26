@@ -2,10 +2,31 @@ import AppKit
 import ServiceManagement
 
 enum AppBehaviorController {
+    static func resolvedActivationPolicy(
+        showInDock: Bool,
+        mainWindowVisible: Bool
+    ) -> NSApplication.ActivationPolicy {
+        if showInDock {
+            return .regular
+        }
+        return mainWindowVisible ? .regular : .accessory
+    }
+
     @MainActor
-    static func applyDockVisibility(showInDock: Bool) {
-        NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
-        VoxtLog.info("Dock visibility changed: showInDock=\(showInDock)")
+    static func applyDockVisibility(
+        showInDock: Bool,
+        mainWindowVisible: Bool
+    ) {
+        let targetPolicy = resolvedActivationPolicy(
+            showInDock: showInDock,
+            mainWindowVisible: mainWindowVisible
+        )
+        guard NSApp.activationPolicy() != targetPolicy else { return }
+
+        NSApp.setActivationPolicy(targetPolicy)
+        VoxtLog.info(
+            "Dock visibility changed: showInDock=\(showInDock), mainWindowVisible=\(mainWindowVisible), policy=\(targetPolicy.rawValue)"
+        )
     }
 
     @MainActor

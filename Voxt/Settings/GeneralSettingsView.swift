@@ -177,7 +177,6 @@ struct GeneralSettingsView: View {
             if autoCheckForUpdates != appUpdateManager.automaticallyChecksForUpdates {
                 autoCheckForUpdates = appUpdateManager.automaticallyChecksForUpdates
             }
-            AppBehaviorController.applyDockVisibility(showInDock: showInDock)
             refreshProxyCredentials()
         }
         .onChange(of: launchAtLogin) { _, newValue in
@@ -196,7 +195,14 @@ struct GeneralSettingsView: View {
             }
         }
         .onChange(of: showInDock) { _, newValue in
-            AppBehaviorController.applyDockVisibility(showInDock: newValue)
+            if let appDelegate = AppDelegate.shared {
+                appDelegate.synchronizeAppActivationPolicy()
+            } else {
+                AppBehaviorController.applyDockVisibility(
+                    showInDock: newValue,
+                    mainWindowVisible: true
+                )
+            }
         }
         .onChange(of: autoCheckForUpdates) { _, newValue in
             appUpdateManager.syncAutomaticallyChecksForUpdates(newValue)
@@ -331,7 +337,14 @@ struct GeneralSettingsView: View {
             let text = try String(contentsOf: url, encoding: .utf8)
             try ConfigurationTransferManager.importConfiguration(from: text)
             let defaults = UserDefaults.standard
-            AppBehaviorController.applyDockVisibility(showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock))
+            if let appDelegate = AppDelegate.shared {
+                appDelegate.synchronizeAppActivationPolicy()
+            } else {
+                AppBehaviorController.applyDockVisibility(
+                    showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock),
+                    mainWindowVisible: true
+                )
+            }
             try? AppBehaviorController.setLaunchAtLogin(defaults.bool(forKey: AppPreferenceKey.launchAtLogin))
             appUpdateManager.syncAutomaticallyChecksForUpdates(defaults.bool(forKey: AppPreferenceKey.autoCheckForUpdates))
             NotificationCenter.default.post(name: .voxtConfigurationDidImport, object: nil)

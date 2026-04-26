@@ -34,6 +34,7 @@ struct EnhancementPromptResolver {
         let globalPrompt: String
         let rawTranscription: String
         let userMainLanguagePromptValue: String
+        let userOtherLanguagesPromptValue: String
         let dictionaryGlossary: String?
         let appEnhancementEnabled: Bool
         let groups: [AppBranchGroup]
@@ -63,6 +64,7 @@ struct EnhancementPromptResolver {
                     template: fallbackPrompt,
                     rawTranscription: input.rawTranscription,
                     userMainLanguagePromptValue: input.userMainLanguagePromptValue,
+                    userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue,
                     glossary: input.dictionaryGlossary
                 ),
                 delivery: .systemPrompt,
@@ -100,6 +102,7 @@ struct EnhancementPromptResolver {
                         template: match.prompt,
                         rawTranscription: input.rawTranscription,
                         userMainLanguagePromptValue: input.userMainLanguagePromptValue,
+                        userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue,
                         glossary: input.dictionaryGlossary
                     ),
                     delivery: .userMessage,
@@ -147,6 +150,7 @@ struct EnhancementPromptResolver {
                         template: prompt,
                         rawTranscription: input.rawTranscription,
                         userMainLanguagePromptValue: input.userMainLanguagePromptValue,
+                        userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue,
                         glossary: input.dictionaryGlossary
                     ),
                     delivery: .userMessage,
@@ -185,15 +189,55 @@ struct EnhancementPromptResolver {
         template: String,
         rawTranscription: String,
         userMainLanguagePromptValue: String,
+        userOtherLanguagesPromptValue: String,
         glossary: String?
     ) -> String {
         let resolved = template
             .replacingOccurrences(of: rawTranscriptionTemplateVariable, with: rawTranscription)
             .replacingOccurrences(of: userMainLanguageTemplateVariable, with: userMainLanguagePromptValue)
+        let promptWithLanguageRules = [
+            resolved,
+            enhancementLanguagePreservationRules(
+                userMainLanguagePromptValue: userMainLanguagePromptValue,
+                userOtherLanguagesPromptValue: userOtherLanguagesPromptValue
+            )
+        ]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
         return DictionaryGlossaryPromptComposer.append(
-            prompt: resolved,
+            prompt: promptWithLanguageRules,
             glossary: glossary,
             purpose: .enhancement
         )
+    }
+
+    private static func enhancementLanguagePreservationRules(
+        userMainLanguagePromptValue: String,
+        userOtherLanguagesPromptValue: String
+    ) -> String {
+        let otherLanguages = normalizedOtherLanguagesPromptValue(userOtherLanguagesPromptValue)
+        let otherLanguagesLine = otherLanguages.map {
+            "Other frequently used user languages: \($0)."
+        } ?? "Other frequently used user languages: None."
+
+        return """
+        Runtime language preservation rules:
+        - User main language: \(userMainLanguagePromptValue).
+        - \(otherLanguagesLine)
+        - The user main language is guidance for punctuation, formatting, filler-word cleanup, and semantic disambiguation only.
+        - It is not a target output language and must not trigger translation.
+        - If the raw transcription is in another user language or mixes multiple user languages, preserve the original language distribution and wording.
+        - Enhancement must not translate, summarize, paraphrase, or rewrite the text into the user main language.
+        """
+    }
+
+    private static func normalizedOtherLanguagesPromptValue(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard trimmed.caseInsensitiveCompare(DictionaryHistoryScanPromptLanguageSupport.noneValue) != .orderedSame else {
+            return nil
+        }
+        return trimmed
     }
 }

@@ -535,7 +535,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         RemoteModelConfigurationStore.migrateLegacyStoredSecrets()
 
-        AppBehaviorController.applyDockVisibility(showInDock: showInDock)
+        synchronizeAppActivationPolicy()
 
         if #available(macOS 26.0, *), TextEnhancer.isAvailable {
             enhancer = TextEnhancer()

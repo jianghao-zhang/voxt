@@ -52,6 +52,7 @@ extension AppDelegate {
                 globalPrompt: resolvedGlobalEnhancementPrompt(),
                 rawTranscription: rawTranscription,
                 userMainLanguagePromptValue: userMainLanguagePromptValue,
+                userOtherLanguagesPromptValue: userOtherMainLanguagesPromptValue,
                 dictionaryGlossary: glossary,
                 appEnhancementEnabled: appEnhancementEnabled,
                 groups: groups,

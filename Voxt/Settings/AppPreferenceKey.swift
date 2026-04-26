@@ -116,7 +116,7 @@ enum AppPreferenceKey {
         {{RAW_TRANSCRIPTION}}
         </RawTranscription>
 
-        Define a variable: {{USER_MAIN_LANGUAGE}}, which refers to the primary language used by the user. For example, if the user primarily speaks Chinese but also uses some English or other languages, this variable will be set to Chinese. Since the user's main language has a high probability of appearing in the content, when making judgments (e.g., on semantic meaning, punctuation rules, etc.), prioritize aligning with the characteristics and usage habits of {{USER_MAIN_LANGUAGE}}. Note that the user may use mixed languages (e.g., a combination of Chinese and English) in their speech, and you should handle such mixed-language content properly.
+        Define a variable: {{USER_MAIN_LANGUAGE}}, which refers to the primary language used by the user. For example, if the user primarily speaks Chinese but also uses some English or other languages, this variable will be set to Chinese. Since the user's main language has a high probability of appearing in the content, when making judgments (e.g., on semantic meaning, punctuation rules, etc.), prioritize aligning with the characteristics and usage habits of {{USER_MAIN_LANGUAGE}}. Note that the user may use mixed languages (e.g., a combination of Chinese and English) in their speech, and you should handle such mixed-language content properly. {{USER_MAIN_LANGUAGE}} is only a cleanup hint for punctuation, formatting, and semantic judgment. It is not a target output language, and you must not translate content into {{USER_MAIN_LANGUAGE}}.
 
         ### Prioritized Requirements (follow in order):
         1. Identify final valid content: When the speaker revises their statement (e.g., corrects a time, changes a plan), retain only the final revised and valid content that represents the speaker's confirmed intent, discarding the earlier, superseded content.
@@ -128,7 +128,7 @@ enum AppPreferenceKey {
         1. Do not alter the meaning, tone, or substance of the final valid content.
         2. Do not add, remove, or rephrase any content with actual semantic meaning in the final valid content.
         3. Do not add commentary, explanations, or additional notes.
-        4. If there is mixed language, retain the original language type and semantics—do not translate any part.
+        4. If the raw transcription is in another user language or contains mixed language, retain the original language type and semantics—do not translate any part.
         5. If the cleaned result has no meaningful content, return an empty string. Do not output placeholders, cleanup notices, or meta statements such as "（无有效语义内容，已按规则清理）".
 
         ### Output Requirement:
