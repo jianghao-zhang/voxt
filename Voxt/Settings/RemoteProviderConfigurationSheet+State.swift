@@ -153,15 +153,12 @@ extension RemoteProviderConfigurationSheet {
     func handleProviderModelSelectionChange(_ newValue: String) {
         let previousModel = resolvedModelValue()
         selectedProviderModel = newValue
-
-        if newValue == customModelOptionID {
-            if customModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                customModelID = previousModel
-            }
-        } else if supportsCustomProviderModelSelection,
-                  customModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            customModelID = newValue
-        }
+        customModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
+            previousResolvedModel: previousModel,
+            newSelection: newValue,
+            currentCustomModelID: customModelID,
+            supportsCustomSelection: supportsCustomProviderModelSelection
+        )
 
         endpoint = RemoteProviderConfigurationPolicy.remappedEndpointOnModelChange(
             target: testTarget,
@@ -197,16 +194,11 @@ extension RemoteProviderConfigurationSheet {
     }
 
     var resolvedMeetingSelectionForPicker: String {
-        let trimmed = selectedMeetingModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let optionIDs = Set(meetingModelOptions.map(\.id))
-        if optionIDs.contains(trimmed) {
-            return trimmed
-        }
-        let configured = configuration.meetingModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        if optionIDs.contains(configured) {
-            return configured
-        }
-        return customModelOptionID
+        RemoteProviderConfigurationPolicy.resolvedMeetingSelection(
+            selectedMeetingModel: selectedMeetingModel,
+            configuredMeetingModel: configuration.meetingModel,
+            meetingOptionIDs: meetingModelOptions.map(\.id)
+        )
     }
 
     var meetingModelSelectionBinding: Binding<String> {
@@ -221,14 +213,12 @@ extension RemoteProviderConfigurationSheet {
     func handleMeetingModelSelectionChange(_ newValue: String) {
         let previousModel = resolvedMeetingModelValue()
         selectedMeetingModel = newValue
-
-        if newValue == customModelOptionID {
-            if customMeetingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                customMeetingModelID = previousModel
-            }
-        } else if customMeetingModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            customMeetingModelID = newValue
-        }
+        customMeetingModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
+            previousResolvedModel: previousModel,
+            newSelection: newValue,
+            currentCustomModelID: customMeetingModelID,
+            supportsCustomSelection: true
+        )
     }
 
     func resolvedMeetingModelValue() -> String {

@@ -1001,6 +1001,7 @@ class HotkeyManager {
                 !flags.contains(.maskSecondaryFn)
             if isFunctionReleaseEvent && !isKeyDown {
                 if !sawNonModifierKeyDuringFunctionChord,
+                   !hasUnexpectedModifiers,
                    !isTranslationKeyDown,
                    !isRewriteKeyDown,
                    !isMeetingKeyDown {
@@ -1008,7 +1009,7 @@ class HotkeyManager {
                     emitKeyDown()
                 } else {
                     VoxtLog.hotkey(
-                        "Hotkey transcription fn-only release ignored. sawNonModifier=\(sawNonModifierKeyDuringFunctionChord), isTranslationKeyDown=\(isTranslationKeyDown), isRewriteKeyDown=\(isRewriteKeyDown), isMeetingKeyDown=\(isMeetingKeyDown)"
+                        "Hotkey transcription fn-only release ignored. sawNonModifier=\(sawNonModifierKeyDuringFunctionChord), hasUnexpectedModifiers=\(hasUnexpectedModifiers), isTranslationKeyDown=\(isTranslationKeyDown), isRewriteKeyDown=\(isRewriteKeyDown), isMeetingKeyDown=\(isMeetingKeyDown)"
                     )
                 }
                 sawNonModifierKeyDuringFunctionChord = false

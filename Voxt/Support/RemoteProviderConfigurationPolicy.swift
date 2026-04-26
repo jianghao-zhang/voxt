@@ -125,6 +125,41 @@ enum RemoteProviderConfigurationPolicy {
         return resolvedSelection
     }
 
+    static func resolvedMeetingSelection(
+        selectedMeetingModel: String,
+        configuredMeetingModel: String,
+        meetingOptionIDs: [String]
+    ) -> String {
+        let optionIDs = Set(meetingOptionIDs)
+        let trimmedSelected = selectedMeetingModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedSelected == customModelOptionID || optionIDs.contains(trimmedSelected) {
+            return trimmedSelected
+        }
+
+        let trimmedConfigured = configuredMeetingModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedConfigured == customModelOptionID || optionIDs.contains(trimmedConfigured) {
+            return trimmedConfigured
+        }
+
+        return customModelOptionID
+    }
+
+    static func nextCustomModelID(
+        previousResolvedModel: String,
+        newSelection: String,
+        currentCustomModelID: String,
+        supportsCustomSelection: Bool
+    ) -> String {
+        let trimmedCurrent = currentCustomModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if newSelection == customModelOptionID {
+            return trimmedCurrent.isEmpty ? previousResolvedModel.trimmingCharacters(in: .whitespacesAndNewlines) : currentCustomModelID
+        }
+        if supportsCustomSelection && trimmedCurrent.isEmpty {
+            return newSelection
+        }
+        return currentCustomModelID
+    }
+
     static func endpointPresets(target: RemoteProviderTestTarget, resolvedModel: String) -> [RemoteEndpointPreset] {
         switch target {
         case .asr(let provider):

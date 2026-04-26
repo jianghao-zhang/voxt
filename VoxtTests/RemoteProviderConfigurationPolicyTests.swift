@@ -168,61 +168,75 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
     }
 
     func testSelectingCustomProviderModelPrefillsCurrentBuiltinModel() {
-        var sheet = makeSheet(
-            target: .asr(.openAIWhisper),
-            model: "whisper-1"
+        let customModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
+            previousResolvedModel: "gpt-4o-transcribe",
+            newSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
+            currentCustomModelID: "",
+            supportsCustomSelection: true
         )
-        sheet.selectedProviderModel = "gpt-4o-transcribe"
-        sheet.customModelID = ""
 
-        sheet.handleProviderModelSelectionChange(RemoteProviderConfigurationPolicy.customModelOptionID)
-
-        XCTAssertEqual(sheet.customModelID, "gpt-4o-transcribe")
-        XCTAssertEqual(sheet.resolvedModelValue(), "gpt-4o-transcribe")
+        XCTAssertEqual(customModelID, "gpt-4o-transcribe")
+        XCTAssertEqual(
+            RemoteProviderConfigurationPolicy.resolvedModelValue(
+                target: .asr(.openAIWhisper),
+                resolvedSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
+                customModelID: customModelID
+            ),
+            "gpt-4o-transcribe"
+        )
     }
 
     func testSelectingCustomProviderModelKeepsExistingCustomValue() {
-        var sheet = makeSheet(
-            target: .asr(.openAIWhisper),
-            model: "whisper-1"
+        let customModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
+            previousResolvedModel: "gpt-4o-transcribe",
+            newSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
+            currentCustomModelID: "gpt-4o-transcribe-preview",
+            supportsCustomSelection: true
         )
-        sheet.selectedProviderModel = "gpt-4o-transcribe"
-        sheet.customModelID = "gpt-4o-transcribe-preview"
 
-        sheet.handleProviderModelSelectionChange(RemoteProviderConfigurationPolicy.customModelOptionID)
-
-        XCTAssertEqual(sheet.customModelID, "gpt-4o-transcribe-preview")
-        XCTAssertEqual(sheet.resolvedModelValue(), "gpt-4o-transcribe-preview")
+        XCTAssertEqual(customModelID, "gpt-4o-transcribe-preview")
+        XCTAssertEqual(
+            RemoteProviderConfigurationPolicy.resolvedModelValue(
+                target: .asr(.openAIWhisper),
+                resolvedSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
+                customModelID: customModelID
+            ),
+            "gpt-4o-transcribe-preview"
+        )
     }
 
     func testSelectingCustomMeetingModelPrefillsCurrentBuiltinModel() {
-        var sheet = makeSheet(
-            target: .meetingASR(.aliyunBailianASR),
-            model: RemoteASRProvider.aliyunBailianASR.suggestedModel,
-            meetingModel: "qwen3-asr-flash-filetrans"
+        let customMeetingModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
+            previousResolvedModel: "qwen3-asr-flash",
+            newSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
+            currentCustomModelID: "",
+            supportsCustomSelection: true
         )
-        sheet.selectedMeetingModel = "qwen3-asr-flash"
-        sheet.customMeetingModelID = ""
+        let resolvedSelection = RemoteProviderConfigurationPolicy.resolvedMeetingSelection(
+            selectedMeetingModel: RemoteProviderConfigurationPolicy.customModelOptionID,
+            configuredMeetingModel: "qwen3-asr-flash-filetrans",
+            meetingOptionIDs: RemoteASRMeetingConfiguration.meetingModelOptions(for: .aliyunBailianASR).map(\.id)
+        )
 
-        sheet.handleMeetingModelSelectionChange(RemoteProviderConfigurationPolicy.customModelOptionID)
-
-        XCTAssertEqual(sheet.customMeetingModelID, "qwen3-asr-flash")
-        XCTAssertEqual(sheet.resolvedMeetingModelValue(), "qwen3-asr-flash")
+        XCTAssertEqual(customMeetingModelID, "qwen3-asr-flash")
+        XCTAssertEqual(resolvedSelection, RemoteProviderConfigurationPolicy.customModelOptionID)
     }
 
     func testSelectingCustomMeetingModelKeepsExistingCustomValue() {
-        var sheet = makeSheet(
-            target: .meetingASR(.aliyunBailianASR),
-            model: RemoteASRProvider.aliyunBailianASR.suggestedModel,
-            meetingModel: "qwen3-asr-flash-filetrans"
+        let customMeetingModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
+            previousResolvedModel: "qwen3-asr-flash",
+            newSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
+            currentCustomModelID: "qwen3-asr-flash-2026-03-01",
+            supportsCustomSelection: true
         )
-        sheet.selectedMeetingModel = "qwen3-asr-flash"
-        sheet.customMeetingModelID = "qwen3-asr-flash-2026-03-01"
+        let resolvedSelection = RemoteProviderConfigurationPolicy.resolvedMeetingSelection(
+            selectedMeetingModel: RemoteProviderConfigurationPolicy.customModelOptionID,
+            configuredMeetingModel: "qwen3-asr-flash-filetrans",
+            meetingOptionIDs: RemoteASRMeetingConfiguration.meetingModelOptions(for: .aliyunBailianASR).map(\.id)
+        )
 
-        sheet.handleMeetingModelSelectionChange(RemoteProviderConfigurationPolicy.customModelOptionID)
-
-        XCTAssertEqual(sheet.customMeetingModelID, "qwen3-asr-flash-2026-03-01")
-        XCTAssertEqual(sheet.resolvedMeetingModelValue(), "qwen3-asr-flash-2026-03-01")
+        XCTAssertEqual(customMeetingModelID, "qwen3-asr-flash-2026-03-01")
+        XCTAssertEqual(resolvedSelection, RemoteProviderConfigurationPolicy.customModelOptionID)
     }
 
     func testAliyunEndpointPresetsDependOnModelType() {
