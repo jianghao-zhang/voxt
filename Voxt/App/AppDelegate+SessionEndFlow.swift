@@ -75,7 +75,7 @@ extension AppDelegate {
         }
     }
 
-    static func sessionEndExecutionDecision(
+    nonisolated static func sessionEndExecutionDecision(
         requestedSessionID: UUID,
         currentEndingSessionID: UUID?,
         lastCompletedSessionEndSessionID: UUID?
