@@ -60,4 +60,49 @@ final class SessionTextIOTests: XCTestCase {
             )
         )
     }
+
+    func testSelectedTextTranslationAlwaysUsesAnswerOverlayAfterTranslation() {
+        XCTAssertTrue(
+            AppDelegate.shouldPresentSelectedTextTranslationAnswerOverlay(
+                sessionOutputMode: .translation,
+                isSelectedTextTranslationFlow: true
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldPresentSelectedTextTranslationAnswerOverlay(
+                sessionOutputMode: .translation,
+                isSelectedTextTranslationFlow: false
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldPresentSelectedTextTranslationAnswerOverlay(
+                sessionOutputMode: .transcription,
+                isSelectedTextTranslationFlow: true
+            )
+        )
+    }
+
+    func testSelectedTextTranslationAutoInjectRequiresFocusedInput() {
+        XCTAssertTrue(
+            AppDelegate.shouldAutoInjectSelectedTextTranslationResult(
+                sessionOutputMode: .translation,
+                isSelectedTextTranslationFlow: true,
+                hadWritableFocusedInput: true
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldAutoInjectSelectedTextTranslationResult(
+                sessionOutputMode: .translation,
+                isSelectedTextTranslationFlow: true,
+                hadWritableFocusedInput: false
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldAutoInjectSelectedTextTranslationResult(
+                sessionOutputMode: .translation,
+                isSelectedTextTranslationFlow: false,
+                hadWritableFocusedInput: true
+            )
+        )
+    }
 }

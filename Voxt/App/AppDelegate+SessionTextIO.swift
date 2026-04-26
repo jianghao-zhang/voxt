@@ -8,6 +8,7 @@ extension AppDelegate {
     private enum SessionOutputDelivery {
         case typeText
         case answerOverlay
+        case selectedTextTranslationResult(autoInject: Bool)
     }
 
     private struct DictionaryResolutionPlan {
@@ -359,10 +360,23 @@ extension AppDelegate {
         _ context: SessionFinalizeContext,
         completion: (() -> Void)? = nil
     ) {
+        let delivery = resolvedOutputDelivery(for: context)
+        let deliveryLabel: String
+        switch delivery {
+        case .typeText:
+            deliveryLabel = "typeText"
+        case .answerOverlay:
+            deliveryLabel = "answerOverlay"
+        case .selectedTextTranslationResult(let autoInject):
+            deliveryLabel = autoInject
+                ? "selectedTextTranslationResult(autoInject)"
+                : "selectedTextTranslationResult(overlayOnly)"
+        }
         VoxtLog.info(
-            "Deliver committed output started. delivery=\(resolvedOutputDelivery(for: context) == .typeText ? "typeText" : "answerOverlay"), characters=\(context.outputText.count)"
+            "Deliver committed output started. delivery=\(deliveryLabel), characters=\(context.outputText.count)"
         )
-        switch resolvedOutputDelivery(for: context) {
+
+        switch delivery {
         case .typeText:
             beginOverlayOutputDelivery()
             typeText(context.outputText) { [weak self] in
@@ -377,6 +391,16 @@ extension AppDelegate {
                 presentRewriteAnswerOverlay(title: payload.title, content: payload.content)
             }
             completion?()
+        case .selectedTextTranslationResult(let autoInject):
+            presentSelectedTextTranslationAnswerOverlay(
+                content: context.outputText,
+                canInject: autoInject
+            )
+            if autoInject {
+                typeText(context.outputText, completion: completion)
+            } else {
+                completion?()
+            }
         }
     }
 
@@ -452,9 +476,48 @@ extension AppDelegate {
     }
 
     private func resolvedOutputDelivery(for context: SessionFinalizeContext) -> SessionOutputDelivery {
-        shouldPresentRewriteAnswerOverlay(hasSelectedSourceText: rewriteSessionHasSelectedSourceText)
-            ? .answerOverlay
-            : .typeText
+        if shouldPresentSelectedTextTranslationAnswerOverlay() {
+            return .selectedTextTranslationResult(
+                autoInject: shouldAutoInjectSelectedTextTranslationResult()
+            )
+        }
+
+        return shouldPresentRewriteAnswerOverlay(hasSelectedSourceText: rewriteSessionHasSelectedSourceText)
+            ? SessionOutputDelivery.answerOverlay
+            : SessionOutputDelivery.typeText
+    }
+
+    static func shouldPresentSelectedTextTranslationAnswerOverlay(
+        sessionOutputMode: SessionOutputMode,
+        isSelectedTextTranslationFlow: Bool
+    ) -> Bool {
+        sessionOutputMode == .translation && isSelectedTextTranslationFlow
+    }
+
+    func shouldPresentSelectedTextTranslationAnswerOverlay() -> Bool {
+        Self.shouldPresentSelectedTextTranslationAnswerOverlay(
+            sessionOutputMode: sessionOutputMode,
+            isSelectedTextTranslationFlow: isSelectedTextTranslationFlow
+        )
+    }
+
+    static func shouldAutoInjectSelectedTextTranslationResult(
+        sessionOutputMode: SessionOutputMode,
+        isSelectedTextTranslationFlow: Bool,
+        hadWritableFocusedInput: Bool
+    ) -> Bool {
+        shouldPresentSelectedTextTranslationAnswerOverlay(
+            sessionOutputMode: sessionOutputMode,
+            isSelectedTextTranslationFlow: isSelectedTextTranslationFlow
+        ) && hadWritableFocusedInput
+    }
+
+    func shouldAutoInjectSelectedTextTranslationResult() -> Bool {
+        Self.shouldAutoInjectSelectedTextTranslationResult(
+            sessionOutputMode: sessionOutputMode,
+            isSelectedTextTranslationFlow: isSelectedTextTranslationFlow,
+            hadWritableFocusedInput: selectedTextTranslationHadWritableFocusedInput
+        )
     }
 
     static func shouldPresentRewriteAnswerOverlay(
@@ -524,6 +587,26 @@ extension AppDelegate {
                 : resolvedPayload.trimmedTitle,
             content: trimmedContent,
             canInject: canInjectIntoFocusedInput
+        )
+        overlayWindow.show(state: overlayState, position: overlayPosition)
+    }
+
+    private func presentSelectedTextTranslationAnswerOverlay(content: String, canInject: Bool) {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedContent.isEmpty else { return }
+
+        if !canInject && autoCopyWhenNoFocusedInput {
+            writeTextToPasteboard(trimmedContent)
+        }
+
+        overlayState.configureSessionTranslationTargetLanguage(
+            translationTargetLanguage,
+            allowsSwitching: true
+        )
+        overlayState.presentAnswer(
+            title: String(localized: "Translation"),
+            content: trimmedContent,
+            canInject: canInject
         )
         overlayWindow.show(state: overlayState, position: overlayPosition)
     }

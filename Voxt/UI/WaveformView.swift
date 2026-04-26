@@ -27,7 +27,7 @@ struct WaveformView: View {
         isHovering: Bool,
         isPickerPresented: Bool
     ) -> Bool {
-        displayMode == .recording &&
+        (displayMode == .recording || displayMode == .answer) &&
             allowsSwitching &&
             sessionTranslationTargetLanguage != nil &&
             (isHovering || isPickerPresented)
@@ -146,7 +146,7 @@ struct WaveformView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !isAnswerMode && isSessionTranslationTargetPickerPresented {
+            if isSessionTranslationTargetPickerPresented {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
 
@@ -154,6 +154,18 @@ struct WaveformView: View {
                         .transition(
                             .opacity.combined(with: .scale(scale: 0.92, anchor: .bottom))
                         )
+
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+
+            if isAnswerMode && (showsSessionTranslationLanguagePill || isSessionTranslationTargetPickerPresented) {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+
+                    sessionTranslationLanguagePill
+                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
 
                     Spacer(minLength: 0)
                 }

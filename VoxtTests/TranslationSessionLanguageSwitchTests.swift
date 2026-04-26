@@ -121,6 +121,16 @@ final class TranslationSessionLanguageSwitchTests: XCTestCase {
             )
         )
 
+        XCTAssertTrue(
+            WaveformView.shouldShowSessionTranslationLanguagePill(
+                displayMode: .answer,
+                allowsSwitching: true,
+                sessionTranslationTargetLanguage: .japanese,
+                isHovering: true,
+                isPickerPresented: false
+            )
+        )
+
         XCTAssertFalse(
             WaveformView.shouldShowSessionTranslationLanguagePill(
                 displayMode: .recording,

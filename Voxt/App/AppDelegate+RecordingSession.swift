@@ -71,6 +71,8 @@ extension AppDelegate {
         didCommitSessionOutput = false
         isSessionCancellationRequested = false
         activeRecordingSessionID = UUID()
+        currentEndingSessionID = nil
+        lastCompletedSessionEndSessionID = nil
         sessionOutputMode = outputMode
         enhancementContextSnapshot = nil
         rewriteSessionHasSelectedSourceText = false
@@ -230,7 +232,7 @@ extension AppDelegate {
         stopActiveRecordingTranscriber()
 
         VoxtLog.info("Cancelled session invalidated. sessionID=\(cancelledSessionID.uuidString)", verbose: true)
-        executeSessionEndPipeline()
+        executeSessionEndPipeline(for: cancelledSessionID, trigger: "cancel")
     }
 
     func processTranscription(_ rawText: String) {
@@ -371,6 +373,7 @@ extension AppDelegate {
         cancelSessionControlTasks()
 
         let resolvedDelay = delay ?? sessionFinishDelay
+        let finishingSessionID = activeRecordingSessionID
         VoxtLog.info("Finish session scheduled. delayMs=\(Int(resolvedDelay * 1000)), displayMode=\(overlayState.displayMode), isRecording=\(overlayState.isRecording), isEnhancing=\(overlayState.isEnhancing), isRequesting=\(overlayState.isRequesting)")
         overlayState.isCompleting = resolvedDelay > 0
         if overlayState.displayMode != .answer {
@@ -389,8 +392,14 @@ extension AppDelegate {
             }
 
             guard !Task.isCancelled else { return }
+            guard self.activeRecordingSessionID == finishingSessionID else {
+                VoxtLog.info(
+                    "Finish session ignored because session ID changed before execution. scheduledSessionID=\(finishingSessionID.uuidString), currentSessionID=\(self.activeRecordingSessionID.uuidString)"
+                )
+                return
+            }
             VoxtLog.info("Finish session executing now. displayMode=\(self.overlayState.displayMode)")
-            self.executeSessionEndPipeline()
+            self.executeSessionEndPipeline(for: finishingSessionID, trigger: "finish")
         }
     }
 
@@ -639,6 +648,8 @@ extension AppDelegate {
         isSessionCancellationRequested = false
         didCommitSessionOutput = false
         activeRecordingSessionID = UUID()
+        currentEndingSessionID = nil
+        lastCompletedSessionEndSessionID = nil
         sessionOutputMode = .transcription
         recordingStartedAt = nil
         recordingStoppedAt = nil
@@ -649,6 +660,7 @@ extension AppDelegate {
         sessionTargetApplicationBundleID = nil
         enhancementContextSnapshot = nil
         lastEnhancementPromptContext = nil
+        selectedTextTranslationHadWritableFocusedInput = false
         rewriteSessionHasSelectedSourceText = false
         rewriteSessionHadWritableFocusedInput = false
         resetVoiceEndCommandState()

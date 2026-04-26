@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 extension AppDelegate {
     private struct TranslateStage: SessionPipelineStage {
@@ -200,6 +201,17 @@ extension AppDelegate {
         pauseLLMTask = nil
         resetSessionTranslationState()
         overlayState.reset()
+        let frontmostApplication = NSWorkspace.shared.frontmostApplication
+        let frontmostBundleID = frontmostApplication?.bundleIdentifier
+        let ownBundleID = Bundle.main.bundleIdentifier
+        if let frontmostBundleID,
+           frontmostBundleID != ownBundleID {
+            sessionTargetApplicationBundleID = frontmostBundleID
+        } else {
+            sessionTargetApplicationBundleID = nil
+        }
+        sessionTargetApplicationPID = sessionTargetApplicationBundleID == nil ? nil : frontmostApplication?.processIdentifier
+        selectedTextTranslationHadWritableFocusedInput = hasWritableFocusedTextInput()
         overlayState.transcribedText = selectedText
         overlayState.statusMessage = ""
         overlayState.presentRecording(iconMode: .translation)
@@ -211,6 +223,8 @@ extension AppDelegate {
         didCommitSessionOutput = false
         isSessionCancellationRequested = false
         activeRecordingSessionID = UUID()
+        currentEndingSessionID = nil
+        lastCompletedSessionEndSessionID = nil
         sessionOutputMode = .translation
         recordingStartedAt = startedAt
         recordingStoppedAt = startedAt
@@ -736,7 +750,11 @@ extension AppDelegate {
 
     func selectSessionTranslationTargetLanguage(_ language: TranslationTargetLanguage) {
         guard overlayState.allowsSessionTranslationLanguageSwitching else { return }
-        sessionTranslationTargetLanguageOverride = language
+        if isSessionActive {
+            sessionTranslationTargetLanguageOverride = language
+        } else {
+            UserDefaults.standard.set(language.rawValue, forKey: AppPreferenceKey.translationTargetLanguage)
+        }
         overlayState.configureSessionTranslationTargetLanguage(language, allowsSwitching: true)
         overlayState.dismissSessionTranslationTargetPicker()
     }
@@ -881,7 +899,6 @@ extension AppDelegate {
         Task {
             defer {
                 self.setEnhancingState(false)
-                self.isSelectedTextTranslationFlow = false
             }
 
             let llmStartedAt = Date()

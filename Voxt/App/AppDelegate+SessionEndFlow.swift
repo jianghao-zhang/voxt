@@ -2,6 +2,12 @@ import AppKit
 import Foundation
 
 extension AppDelegate {
+    enum SessionEndExecutionDecision: Equatable {
+        case execute
+        case skipDuplicateInFlight
+        case skipAlreadyCompleted
+    }
+
     @MainActor
     private protocol SessionEndStage {
         var name: String { get }
@@ -40,16 +46,27 @@ extension AppDelegate {
         var name: String { "resetSessionState" }
 
         func run(delegate: AppDelegate) {
+            let shouldPreserveTranslationAnswerControls =
+                delegate.sessionOutputMode == .translation &&
+                delegate.overlayState.displayMode == .answer
+
+            delegate.activeRecordingSessionID = UUID()
             delegate.isSessionActive = false
             delegate.sessionOutputMode = .transcription
             delegate.isSelectedTextTranslationFlow = false
             delegate.sessionTargetApplicationPID = nil
             delegate.sessionTargetApplicationBundleID = nil
             delegate.enhancementContextSnapshot = nil
+            delegate.selectedTextTranslationHadWritableFocusedInput = false
             delegate.rewriteSessionHasSelectedSourceText = false
             delegate.rewriteSessionHadWritableFocusedInput = false
             delegate.rewriteSessionFallbackInjectBundleID = nil
-            delegate.resetSessionTranslationState()
+            delegate.sessionTranslationTargetLanguageOverride = nil
+            delegate.activeSessionTranslationProviderResolution = nil
+            delegate.sessionUsesWhisperDirectTranslation = false
+            if !shouldPreserveTranslationAnswerControls {
+                delegate.overlayState.configureSessionTranslationTargetLanguage(nil, allowsSwitching: false)
+            }
             delegate.overlayState.isCompleting = false
             if delegate.overlayState.displayMode != .answer {
                 delegate.overlayState.reset()
@@ -58,9 +75,60 @@ extension AppDelegate {
         }
     }
 
+    static func sessionEndExecutionDecision(
+        requestedSessionID: UUID,
+        currentEndingSessionID: UUID?,
+        lastCompletedSessionEndSessionID: UUID?
+    ) -> SessionEndExecutionDecision {
+        if currentEndingSessionID == requestedSessionID {
+            return .skipDuplicateInFlight
+        }
+        if lastCompletedSessionEndSessionID == requestedSessionID {
+            return .skipAlreadyCompleted
+        }
+        return .execute
+    }
+
+    private func beginSessionEndExecution(for sessionID: UUID, trigger: String) -> Bool {
+        let decision = Self.sessionEndExecutionDecision(
+            requestedSessionID: sessionID,
+            currentEndingSessionID: currentEndingSessionID,
+            lastCompletedSessionEndSessionID: lastCompletedSessionEndSessionID
+        )
+        switch decision {
+        case .execute:
+            currentEndingSessionID = sessionID
+            return true
+        case .skipDuplicateInFlight:
+            VoxtLog.info(
+                "Session end pipeline ignored because the same session is already ending. sessionID=\(sessionID.uuidString), trigger=\(trigger)"
+            )
+            return false
+        case .skipAlreadyCompleted:
+            VoxtLog.info(
+                "Session end pipeline ignored because the same session has already ended. sessionID=\(sessionID.uuidString), trigger=\(trigger)"
+            )
+            return false
+        }
+    }
+
+    private func completeSessionEndExecution(for sessionID: UUID) {
+        if currentEndingSessionID == sessionID {
+            currentEndingSessionID = nil
+        }
+        lastCompletedSessionEndSessionID = sessionID
+    }
+
     @MainActor
-    func executeSessionEndPipeline() {
-        VoxtLog.info("Session end pipeline started. displayMode=\(overlayState.displayMode), overlayVisible=\(overlayWindow.isVisible)")
+    func executeSessionEndPipeline(for sessionID: UUID, trigger: String) {
+        guard beginSessionEndExecution(for: sessionID, trigger: trigger) else { return }
+        defer {
+            completeSessionEndExecution(for: sessionID)
+        }
+
+        VoxtLog.info(
+            "Session end pipeline started. sessionID=\(sessionID.uuidString), trigger=\(trigger), displayMode=\(overlayState.displayMode), overlayVisible=\(overlayWindow.isVisible)"
+        )
         let stages: [any SessionEndStage] = [
             HideOverlayStage(),
             RestoreSystemAudioStage(),
@@ -70,6 +138,8 @@ extension AppDelegate {
         for stage in stages {
             stage.run(delegate: self)
         }
-        VoxtLog.info("Session end pipeline completed. overlayVisible=\(overlayWindow.isVisible)")
+        VoxtLog.info(
+            "Session end pipeline completed. sessionID=\(sessionID.uuidString), overlayVisible=\(overlayWindow.isVisible)"
+        )
     }
 }

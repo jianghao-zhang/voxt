@@ -716,7 +716,7 @@ class RecordingOverlayWindow: NSPanel {
         case .recording, .processing:
             return CGSize(width: 360, height: state.isSessionTranslationTargetPickerPresented ? 388 : 140)
         case .answer:
-            return CGSize(width: 560, height: 340)
+            return CGSize(width: 560, height: state.isSessionTranslationTargetPickerPresented ? 540 : 340)
         }
     }
 
