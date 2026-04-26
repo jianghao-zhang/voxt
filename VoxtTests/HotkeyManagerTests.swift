@@ -20,6 +20,7 @@ final class HotkeyManagerTests: XCTestCase {
         AppPreferenceKey.meetingHotkeyKeyCode,
         AppPreferenceKey.meetingHotkeyModifiers,
         AppPreferenceKey.meetingHotkeySidedModifiers,
+        AppPreferenceKey.meetingNotesBetaEnabled,
         AppPreferenceKey.hotkeyTriggerMode,
         AppPreferenceKey.hotkeyDistinguishModifierSides,
         AppPreferenceKey.hotkeyPreset,
@@ -46,6 +47,7 @@ final class HotkeyManagerTests: XCTestCase {
 
         managedDefaultKeys.forEach { defaults.removeObject(forKey: $0) }
         HotkeyPreference.registerDefaults()
+        defaults.set(false, forKey: AppPreferenceKey.meetingNotesBetaEnabled)
         defaults.set(HotkeyPreference.TriggerMode.tap.rawValue, forKey: AppPreferenceKey.hotkeyTriggerMode)
         defaults.set(false, forKey: AppPreferenceKey.hotkeyCaptureInProgress)
     }
@@ -253,6 +255,8 @@ final class HotkeyManagerTests: XCTestCase {
     }
 
     func testDefaultMeetingModifierTapEmitsDedicatedCallback() async {
+        UserDefaults.standard.set(true, forKey: AppPreferenceKey.meetingNotesBetaEnabled)
+
         let manager = makeManager()
         var transcriptionDownCount = 0
         var meetingDownCount = 0
@@ -287,6 +291,77 @@ final class HotkeyManagerTests: XCTestCase {
 
         XCTAssertEqual(transcriptionDownCount, 0)
         XCTAssertEqual(meetingDownCount, 1)
+    }
+
+    func testDisabledMeetingModeDoesNotEmitMeetingCallback() {
+        UserDefaults.standard.set(false, forKey: AppPreferenceKey.meetingNotesBetaEnabled)
+
+        let manager = makeManager()
+        var meetingDownCount = 0
+        manager.onMeetingKeyDown = {
+            meetingDownCount += 1
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Option),
+            flags: .maskAlternate
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: combinedFlags(.maskAlternate, .maskSecondaryFn)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskAlternate
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Option),
+            flags: []
+        )
+
+        XCTAssertEqual(meetingDownCount, 0)
+    }
+
+    func testDisabledMeetingModeFnOptionDoesNotFallBackToTranscription() {
+        UserDefaults.standard.set(false, forKey: AppPreferenceKey.meetingNotesBetaEnabled)
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        var meetingDownCount = 0
+        manager.onKeyDown = {
+            transcriptionDownCount += 1
+        }
+        manager.onMeetingKeyDown = {
+            meetingDownCount += 1
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Option),
+            flags: .maskAlternate
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: combinedFlags(.maskAlternate, .maskSecondaryFn)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskAlternate
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Option),
+            flags: []
+        )
+
+        XCTAssertEqual(transcriptionDownCount, 0)
+        XCTAssertEqual(meetingDownCount, 0)
     }
 
     func testIdleGapRecoveryClearsStaleChordStateBeforeFnRelease() async {

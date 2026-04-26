@@ -4,6 +4,10 @@ import AVFoundation
 
 extension AppDelegate {
     func handleMeetingHotkeyDown() {
+        guard meetingNotesBetaEnabled else {
+            VoxtLog.info("Meeting hotkey ignored because Meeting Notes is disabled.")
+            return
+        }
         VoxtLog.info(
             "Meeting hotkey invoked. isMeetingActive=\(meetingSessionCoordinator.isActive), isSessionActive=\(isSessionActive)"
         )
