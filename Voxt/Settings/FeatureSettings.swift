@@ -1,4 +1,6 @@
 import Foundation
+import AppKit
+import Carbon
 
 struct FeatureModelSelectionID: RawRepresentable, Codable, Hashable, Sendable, Identifiable {
     let rawValue: String
@@ -123,22 +125,128 @@ struct FeatureModelSelectionID: RawRepresentable, Codable, Hashable, Sendable, I
     }
 }
 
+struct TranscriptionNoteTriggerSettings: Codable, Hashable, Sendable {
+    var keyCode: UInt16
+    var modifiersRawValue: UInt
+    var sidedModifiersRawValue: Int
+
+    init(
+        keyCode: UInt16 = UInt16(kVK_Space),
+        modifiers: NSEvent.ModifierFlags = [],
+        sidedModifiers: SidedModifierFlags = []
+    ) {
+        self.keyCode = keyCode
+        self.modifiersRawValue = modifiers.intersection(.hotkeyRelevant).rawValue
+        self.sidedModifiersRawValue = sidedModifiers.rawValue
+    }
+
+    var modifiers: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: modifiersRawValue).intersection(.hotkeyRelevant)
+    }
+
+    var sidedModifiers: SidedModifierFlags {
+        SidedModifierFlags(rawValue: sidedModifiersRawValue).filtered(by: modifiers)
+    }
+
+    var hotkey: HotkeyPreference.Hotkey {
+        HotkeyPreference.Hotkey(
+            keyCode: keyCode,
+            modifiers: modifiers,
+            sidedModifiers: sidedModifiers
+        )
+    }
+
+    static let defaultShortcut = Self(keyCode: UInt16(kVK_Space))
+}
+
+struct TranscriptionNoteFeatureSettings: Codable, Hashable, Sendable {
+    var enabled: Bool
+    var triggerShortcut: TranscriptionNoteTriggerSettings
+    var titleModelSelectionID: FeatureModelSelectionID
+    var soundEnabled: Bool
+    var soundPreset: InteractionSoundPreset
+
+    init(
+        enabled: Bool = false,
+        triggerShortcut: TranscriptionNoteTriggerSettings = .defaultShortcut,
+        titleModelSelectionID: FeatureModelSelectionID,
+        soundEnabled: Bool = false,
+        soundPreset: InteractionSoundPreset = .soft
+    ) {
+        self.enabled = enabled
+        self.triggerShortcut = triggerShortcut
+        self.titleModelSelectionID = titleModelSelectionID
+        self.soundEnabled = soundEnabled
+        self.soundPreset = soundPreset
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled
+        case triggerShortcut
+        case titleModelSelectionID
+        case soundEnabled
+        case soundPreset
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        triggerShortcut = try container.decodeIfPresent(TranscriptionNoteTriggerSettings.self, forKey: .triggerShortcut) ?? .defaultShortcut
+        titleModelSelectionID = try container.decode(FeatureModelSelectionID.self, forKey: .titleModelSelectionID)
+        soundEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? false
+        soundPreset = try container.decodeIfPresent(InteractionSoundPreset.self, forKey: .soundPreset) ?? .soft
+    }
+}
+
 struct TranscriptionFeatureSettings: Codable, Hashable, Sendable {
     var asrSelectionID: FeatureModelSelectionID
     var llmEnabled: Bool
     var llmSelectionID: FeatureModelSelectionID
     var prompt: String
+    var notes: TranscriptionNoteFeatureSettings
 
     init(
         asrSelectionID: FeatureModelSelectionID,
         llmEnabled: Bool,
         llmSelectionID: FeatureModelSelectionID,
-        prompt: String
+        prompt: String,
+        notes: TranscriptionNoteFeatureSettings? = nil
     ) {
         self.asrSelectionID = asrSelectionID
         self.llmEnabled = llmEnabled
         self.llmSelectionID = llmSelectionID
         self.prompt = prompt
+        self.notes = notes ?? TranscriptionNoteFeatureSettings(
+            enabled: false,
+            triggerShortcut: .defaultShortcut,
+            titleModelSelectionID: llmSelectionID.textSelection == nil
+                ? .localLLM(CustomLLMModelManager.defaultModelRepo)
+                : llmSelectionID
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case asrSelectionID
+        case llmEnabled
+        case llmSelectionID
+        case prompt
+        case notes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let asrSelectionID = try container.decode(FeatureModelSelectionID.self, forKey: .asrSelectionID)
+        let llmEnabled = try container.decode(Bool.self, forKey: .llmEnabled)
+        let llmSelectionID = try container.decode(FeatureModelSelectionID.self, forKey: .llmSelectionID)
+        let prompt = try container.decode(String.self, forKey: .prompt)
+        let decodedNotes = try container.decodeIfPresent(TranscriptionNoteFeatureSettings.self, forKey: .notes)
+        self.init(
+            asrSelectionID: asrSelectionID,
+            llmEnabled: llmEnabled,
+            llmSelectionID: llmSelectionID,
+            prompt: prompt,
+            notes: decodedNotes
+        )
     }
 }
 
@@ -270,6 +378,7 @@ enum FeatureSettingsStore {
             defaults.set(raw, forKey: AppPreferenceKey.featureSettings)
         }
         syncLegacyMirror(from: sanitized, defaults: defaults)
+        NotificationCenter.default.post(name: .voxtFeatureSettingsDidChange, object: nil)
     }
 
     static func update(defaults: UserDefaults = .standard, _ mutate: (inout FeatureSettings) -> Void) {
@@ -295,7 +404,12 @@ enum FeatureSettingsStore {
                 asrSelectionID: transcriptionASR,
                 llmEnabled: (EnhancementMode(rawValue: defaults.string(forKey: AppPreferenceKey.enhancementMode) ?? "") ?? .off) != .off,
                 llmSelectionID: transcriptionText,
-                prompt: defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt) ?? AppPreferenceKey.defaultEnhancementPrompt
+                prompt: defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt) ?? AppPreferenceKey.defaultEnhancementPrompt,
+                notes: TranscriptionNoteFeatureSettings(
+                    enabled: false,
+                    triggerShortcut: .defaultShortcut,
+                    titleModelSelectionID: transcriptionText
+                )
             ),
             translation: TranslationFeatureSettings(
                 asrSelectionID: transcriptionASR,
@@ -456,7 +570,11 @@ enum FeatureSettingsStore {
                 asrSelectionID: settings.transcription.asrSelectionID.asrSelection == nil ? fallback.transcription.asrSelectionID : settings.transcription.asrSelectionID,
                 llmEnabled: settings.transcription.llmEnabled,
                 llmSelectionID: settings.transcription.llmSelectionID.textSelection == nil ? fallback.transcription.llmSelectionID : settings.transcription.llmSelectionID,
-                prompt: sanitizedPrompt(settings.transcription.prompt, fallback: AppPreferenceKey.defaultEnhancementPrompt)
+                prompt: sanitizedPrompt(settings.transcription.prompt, fallback: AppPreferenceKey.defaultEnhancementPrompt),
+                notes: sanitizedNotesSettings(
+                    settings.transcription.notes,
+                    fallbackSelectionID: fallback.transcription.notes.titleModelSelectionID
+                )
             ),
             translation: TranslationFeatureSettings(
                 asrSelectionID: settings.translation.asrSelectionID.asrSelection == nil ? fallback.translation.asrSelectionID : settings.translation.asrSelectionID,
@@ -487,6 +605,29 @@ enum FeatureSettingsStore {
     private static func sanitizedPrompt(_ prompt: String, fallback: String) -> String {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? fallback : prompt
+    }
+
+    private static func sanitizedNotesSettings(
+        _ settings: TranscriptionNoteFeatureSettings,
+        fallbackSelectionID: FeatureModelSelectionID
+    ) -> TranscriptionNoteFeatureSettings {
+        let resolvedSelectionID = settings.titleModelSelectionID.textSelection == nil
+            ? fallbackSelectionID
+            : settings.titleModelSelectionID
+        let resolvedShortcut = settings.triggerShortcut.keyCode == HotkeyPreference.modifierOnlyKeyCode
+            ? TranscriptionNoteTriggerSettings.defaultShortcut
+            : TranscriptionNoteTriggerSettings(
+                keyCode: settings.triggerShortcut.keyCode,
+                modifiers: settings.triggerShortcut.modifiers,
+                sidedModifiers: settings.triggerShortcut.sidedModifiers
+            )
+        return TranscriptionNoteFeatureSettings(
+            enabled: settings.enabled,
+            triggerShortcut: resolvedShortcut,
+            titleModelSelectionID: resolvedSelectionID,
+            soundEnabled: settings.soundEnabled,
+            soundPreset: settings.soundPreset
+        )
     }
 
     private static func legacyASRSelection(defaults: UserDefaults) -> FeatureModelSelectionID {

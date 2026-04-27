@@ -7,6 +7,7 @@ private func localized(_ key: String) -> String {
 enum FeatureModelSelectorSheet: String, Identifiable {
     case transcriptionASR
     case transcriptionLLM
+    case transcriptionNoteTitle
     case translationASR
     case translationModel
     case rewriteASR
@@ -20,6 +21,7 @@ enum FeatureModelSelectorSheet: String, Identifiable {
         switch self {
         case .transcriptionASR: return localized("Choose Transcription ASR")
         case .transcriptionLLM: return localized("Choose Transcription LLM")
+        case .transcriptionNoteTitle: return localized("Choose Note Title Model")
         case .translationASR: return localized("Choose Translation ASR")
         case .translationModel: return localized("Choose Translation Model")
         case .rewriteASR: return localized("Choose Rewrite ASR")

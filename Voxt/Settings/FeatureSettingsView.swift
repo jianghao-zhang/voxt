@@ -23,12 +23,15 @@ struct FeatureSettingsView: View {
 
     @State private var featureSettings = FeatureSettingsStore.load()
     @State private var selectorSheet: FeatureModelSelectorSheet?
+    @State private var interactionSoundPlayer = InteractionSoundPlayer()
 
     var body: some View {
         Group {
             switch selectedTab {
             case .transcription:
                 transcriptionContent
+            case .note:
+                noteContent
             case .translation:
                 translationContent
             case .rewrite:
@@ -87,6 +90,15 @@ struct FeatureSettingsView: View {
                     )
                 )
 
+                FeatureToggleRow(
+                    title: localized("Enable Notes"),
+                    detail: localized("Add segmented notes during transcription. Once enabled, Notes appears in the Feature menu and supports a dedicated trigger key."),
+                    isOn: binding(
+                        get: { featureSettings.transcription.notes.enabled },
+                        set: { featureSettings.transcription.notes.enabled = $0 }
+                    )
+                )
+
                 if featureSettings.transcription.llmEnabled {
                     FeatureSettingSection(title: localized("Text Enhancement"), detail: localized("Only configured and installed models can be selected here.")) {
                         FeatureSelectorRow(
@@ -103,6 +115,76 @@ struct FeatureSettingsView: View {
                             defaultText: AppPreferenceKey.defaultEnhancementPrompt,
                             variables: ModelSettingsPromptVariables.enhancement
                         )
+                    }
+                }
+
+                if featureSettings.transcription.notes.enabled {
+                    FeatureHintBanner(
+                        title: localized("Notes"),
+                        detail: localized("Notes configuration moved here after transcription-level enablement.")
+                    )
+                }
+            }
+        }
+    }
+
+    private var noteContent: some View {
+        featurePage(
+            title: localized("Notes"),
+            subtitle: localized("Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title."),
+            icon: "note.text",
+            pills: notePills
+        ) {
+            FeatureSettingsCard(title: localized("Notes Workflow")) {
+                FeatureNoteShortcutRow(
+                    title: localized("Note Trigger"),
+                    detail: localized("Use this key while a live transcription session is recording to save the current transcript tail as a note and insert a note marker into the OverLazy preview."),
+                    shortcut: binding(
+                        get: { featureSettings.transcription.notes.triggerShortcut },
+                        set: { featureSettings.transcription.notes.triggerShortcut = $0 }
+                    )
+                )
+
+                FeatureSettingSection(title: localized("Title Generation"), detail: localized("This model generates the short floating-card title for each saved note.")) {
+                    FeatureSelectorRow(
+                        title: localized("Note Title Model"),
+                        value: llmSelectionSummary(featureSettings.transcription.notes.titleModelSelectionID),
+                        action: { selectorSheet = .transcriptionNoteTitle }
+                    )
+                }
+
+                FeatureToggleRow(
+                    title: localized("Note Audio"),
+                    detail: localized("Play a short reminder sound each time the note trigger is pressed during a live transcription session."),
+                    isOn: binding(
+                        get: { featureSettings.transcription.notes.soundEnabled },
+                        set: { featureSettings.transcription.notes.soundEnabled = $0 }
+                    )
+                )
+
+                if featureSettings.transcription.notes.soundEnabled {
+                    FeatureInlinePickerRow(
+                        title: localized("Note Sound Preset"),
+                        detail: localized("Choose the reminder sound used when a note is captured, and preview it here.")
+                    ) {
+                        HStack(spacing: 8) {
+                            SettingsMenuPicker(
+                                selection: binding(
+                                    get: { featureSettings.transcription.notes.soundPreset },
+                                    set: { featureSettings.transcription.notes.soundPreset = $0 }
+                                ),
+                                options: InteractionSoundPreset.allCases.map { preset in
+                                    SettingsMenuOption(value: preset, title: preset.title)
+                                },
+                                selectedTitle: featureSettings.transcription.notes.soundPreset.title,
+                                width: 220
+                            )
+
+                            Button(localized("Try Sound")) {
+                                interactionSoundPlayer.playPreview(preset: featureSettings.transcription.notes.soundPreset)
+                            }
+                            .buttonStyle(SettingsPillButtonStyle())
+                        }
                     }
                 }
             }
@@ -323,6 +405,24 @@ struct FeatureSettingsView: View {
         return pills
     }
 
+    private var notePills: [FeatureSummaryPill] {
+        [
+            FeatureSummaryPill(
+                title: localized("Trigger"),
+                value: shortSummary(
+                    HotkeyPreference.displayString(
+                        for: featureSettings.transcription.notes.triggerShortcut.hotkey,
+                        distinguishModifierSides: false
+                    )
+                )
+            ),
+            FeatureSummaryPill(
+                title: localized("Model"),
+                value: shortSummary(llmSelectionSummary(featureSettings.transcription.notes.titleModelSelectionID))
+            )
+        ]
+    }
+
     private var translationPills: [FeatureSummaryPill] {
         [
             FeatureSummaryPill(title: localized("ASR"), value: shortSummary(asrSelectionSummary(featureSettings.translation.asrSelectionID))),
@@ -425,6 +525,8 @@ struct FeatureSettingsView: View {
             return featureSettings.transcription.asrSelectionID
         case .transcriptionLLM:
             return featureSettings.transcription.llmSelectionID
+        case .transcriptionNoteTitle:
+            return featureSettings.transcription.notes.titleModelSelectionID
         case .translationASR:
             return featureSettings.translation.asrSelectionID
         case .translationModel:
@@ -447,6 +549,8 @@ struct FeatureSettingsView: View {
                 settings.transcription.asrSelectionID = selectionID
             case .transcriptionLLM:
                 settings.transcription.llmSelectionID = selectionID
+            case .transcriptionNoteTitle:
+                settings.transcription.notes.titleModelSelectionID = selectionID
             case .translationASR:
                 settings.translation.asrSelectionID = selectionID
             case .translationModel:

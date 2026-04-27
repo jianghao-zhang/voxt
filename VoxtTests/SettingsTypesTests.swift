@@ -255,13 +255,18 @@ final class SettingsTypesTests: XCTestCase {
     }
 
     func testFeatureVisibleTabsHideAppEnhancementWhenDisabled() {
-        XCTAssertFalse(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: false, meetingEnabled: true).contains(.appEnhancement))
-        XCTAssertTrue(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: true, meetingEnabled: true).contains(.appEnhancement))
+        XCTAssertFalse(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: false, meetingEnabled: true, noteEnabled: false).contains(.appEnhancement))
+        XCTAssertTrue(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: true, meetingEnabled: true, noteEnabled: false).contains(.appEnhancement))
     }
 
     func testFeatureVisibleTabsHideMeetingWhenDisabled() {
-        XCTAssertFalse(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: true, meetingEnabled: false).contains(.meeting))
-        XCTAssertTrue(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: true, meetingEnabled: true).contains(.meeting))
+        XCTAssertFalse(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: true, meetingEnabled: false, noteEnabled: false).contains(.meeting))
+        XCTAssertTrue(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: true, meetingEnabled: true, noteEnabled: false).contains(.meeting))
+    }
+
+    func testFeatureVisibleTabsHideNotesWhenDisabled() {
+        XCTAssertFalse(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: true, meetingEnabled: true, noteEnabled: false).contains(.note))
+        XCTAssertTrue(FeatureSettingsTab.visibleTabs(appEnhancementEnabled: true, meetingEnabled: true, noteEnabled: true).contains(.note))
     }
 
     func testHotkeyShortcutVisibilityHidesMeetingWhenDisabled() {

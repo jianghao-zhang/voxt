@@ -22,6 +22,11 @@ final class InteractionSoundPlayer {
         return play(named: sounds.start)
     }
 
+    @discardableResult
+    func playNote(preset: InteractionSoundPreset) -> TimeInterval {
+        playPreview(preset: preset)
+    }
+
     private func currentPreset() -> InteractionSoundPreset {
         let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.interactionSoundPreset) ?? ""
         return InteractionSoundPreset(rawValue: raw) ?? .soft

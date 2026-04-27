@@ -302,11 +302,12 @@ struct HotkeySettingsView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    shortcutInput(
-                        titleKey: "Transcription",
+                    SettingsShortcutCaptureField(
+                        title: "Transcription",
                         hotkey: displayedHotkey(for: .transcription, current: currentHotkey),
                         isRecording: recordingField == .transcription,
                         isPendingConfirmation: isPendingConfirmation(for: .transcription),
+                        distinguishModifierSides: distinguishModifierSides,
                         onFocus: { beginRecording(.transcription) },
                         onReset: {
                             hotkeyBinding.wrappedValue = HotkeyPreference.defaultKeyCode
@@ -318,11 +319,12 @@ struct HotkeySettingsView: View {
                         onConfirmPending: confirmPendingCapture
                     )
 
-                    shortcutInput(
-                        titleKey: "Translation",
+                    SettingsShortcutCaptureField(
+                        title: "Translation",
                         hotkey: displayedHotkey(for: .translation, current: currentTranslationHotkey),
                         isRecording: recordingField == .translation,
                         isPendingConfirmation: isPendingConfirmation(for: .translation),
+                        distinguishModifierSides: distinguishModifierSides,
                         onFocus: { beginRecording(.translation) },
                         onReset: {
                             translationHotkeyBinding.wrappedValue = HotkeyPreference.defaultTranslationKeyCode
@@ -334,11 +336,12 @@ struct HotkeySettingsView: View {
                         onConfirmPending: confirmPendingCapture
                     )
 
-                    shortcutInput(
-                        titleKey: "Content Rewrite",
+                    SettingsShortcutCaptureField(
+                        title: "Content Rewrite",
                         hotkey: displayedHotkey(for: .rewrite, current: currentRewriteHotkey),
                         isRecording: recordingField == .rewrite,
                         isPendingConfirmation: isPendingConfirmation(for: .rewrite),
+                        distinguishModifierSides: distinguishModifierSides,
                         onFocus: { beginRecording(.rewrite) },
                         onReset: {
                             rewriteHotkeyBinding.wrappedValue = HotkeyPreference.defaultRewriteKeyCode
@@ -351,11 +354,12 @@ struct HotkeySettingsView: View {
                     )
 
                     if meetingEnabled {
-                        shortcutInput(
-                            titleKey: "Meeting",
+                        SettingsShortcutCaptureField(
+                            title: "Meeting",
                             hotkey: displayedHotkey(for: .meeting, current: currentMeetingHotkey),
                             isRecording: recordingField == .meeting,
                             isPendingConfirmation: isPendingConfirmation(for: .meeting),
+                            distinguishModifierSides: distinguishModifierSides,
                             onFocus: { beginRecording(.meeting) },
                             onReset: {
                                 meetingHotkeyBinding.wrappedValue = HotkeyPreference.defaultMeetingKeyCode
@@ -568,91 +572,6 @@ struct HotkeySettingsView: View {
         meetingHotkeyKeyCode = Int(values.meeting.keyCode)
         meetingHotkeyModifiers = Int(values.meeting.modifiers.rawValue)
         meetingHotkeySidedModifiers = values.meeting.sidedModifiers.rawValue
-    }
-
-    @ViewBuilder
-    private func shortcutInput(
-        titleKey: LocalizedStringKey,
-        hotkey: HotkeyPreference.Hotkey,
-        isRecording: Bool,
-        isPendingConfirmation: Bool,
-        onFocus: @escaping () -> Void,
-        onReset: @escaping () -> Void,
-        onCancelPending: @escaping () -> Void,
-        onConfirmPending: @escaping () -> Void
-    ) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(titleKey)
-                .font(.body)
-                .foregroundStyle(.secondary)
-            Spacer()
-
-            HStack(spacing: 8) {
-                Text(isRecording && !isPendingConfirmation ? localized("Listening...") : HotkeyPreference.displayString(for: hotkey, distinguishModifierSides: distinguishModifierSides))
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .minimumScaleFactor(0.9)
-                    .layoutPriority(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if isPendingConfirmation {
-                    Button(localized("Cancel"), action: onCancelPending)
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .frame(height: 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
-                        )
-                    Button(localized("Confirm"), action: onConfirmPending)
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .frame(height: 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.18))
-                        )
-                } else if isRecording {
-                    Button(localized("Cancel"), action: onCancelPending)
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .frame(height: 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
-                        )
-                } else {
-                    Button(action: onReset) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help(Text(localized("Reset shortcut")))
-                }
-            }
-            .frame(height: 16)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(SettingsUIStyle.controlFillColor)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onFocus)
-            .frame(width: 320, alignment: .trailing)
-        }
     }
 
     private func beginRecording(_ field: RecordingField) {

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
@@ -250,6 +251,198 @@ struct FeatureSelectorRow: View {
                     .truncationMode(.tail)
             }
         }
+    }
+}
+
+struct SettingsShortcutCaptureField: View {
+    let title: LocalizedStringKey
+    let hotkey: HotkeyPreference.Hotkey
+    let isRecording: Bool
+    let isPendingConfirmation: Bool
+    let distinguishModifierSides: Bool
+    let onFocus: () -> Void
+    let onReset: () -> Void
+    let onCancelPending: () -> Void
+    let onConfirmPending: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(title)
+                .font(.body)
+                .foregroundStyle(.secondary)
+            Spacer()
+
+            HStack(spacing: 8) {
+                Text(
+                    isRecording && !isPendingConfirmation
+                        ? localized("Listening...")
+                        : HotkeyPreference.displayString(for: hotkey, distinguishModifierSides: distinguishModifierSides)
+                )
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.9)
+                .layoutPriority(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if isPendingConfirmation {
+                    Button(localized("Cancel"), action: onCancelPending)
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .frame(height: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
+                        )
+                    Button(localized("Confirm"), action: onConfirmPending)
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .frame(height: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.18))
+                        )
+                } else if isRecording {
+                    Button(localized("Cancel"), action: onCancelPending)
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .frame(height: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
+                        )
+                } else {
+                    Button(action: onReset) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(Text(localized("Reset shortcut")))
+                }
+            }
+            .frame(height: 16)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(SettingsUIStyle.controlFillColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onFocus)
+            .frame(width: 320, alignment: .trailing)
+        }
+    }
+}
+
+struct FeatureNoteShortcutRow: View {
+    let title: String
+    let detail: String
+    @Binding var shortcut: TranscriptionNoteTriggerSettings
+
+    @State private var isRecording = false
+    @State private var recorderMessage: String?
+    @State private var pendingCapturedHotkey: HotkeyPreference.Hotkey?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            SettingsShortcutCaptureField(
+                title: LocalizedStringKey(title),
+                hotkey: pendingCapturedHotkey ?? shortcut.hotkey,
+                isRecording: isRecording,
+                isPendingConfirmation: pendingCapturedHotkey != nil,
+                distinguishModifierSides: false,
+                onFocus: {
+                    pendingCapturedHotkey = nil
+                    isRecording = true
+                },
+                onReset: {
+                    shortcut = .defaultShortcut
+                    pendingCapturedHotkey = nil
+                    isRecording = false
+                    recorderMessage = nil
+                },
+                onCancelPending: {
+                    pendingCapturedHotkey = nil
+                    isRecording = false
+                    recorderMessage = nil
+                },
+                onConfirmPending: {
+                    if let pendingCapturedHotkey {
+                        shortcut = TranscriptionNoteTriggerSettings(
+                            keyCode: pendingCapturedHotkey.keyCode,
+                            modifiers: pendingCapturedHotkey.modifiers,
+                            sidedModifiers: pendingCapturedHotkey.sidedModifiers
+                        )
+                    }
+                    self.pendingCapturedHotkey = nil
+                    isRecording = false
+                    recorderMessage = nil
+                }
+            )
+
+            if let recorderMessage, !recorderMessage.isEmpty {
+                Text(localized(recorderMessage))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if pendingCapturedHotkey != nil {
+                Text(localized("Shortcut captured. Press another shortcut to replace it, or choose Confirm / Cancel."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if isRecording {
+                Text(localized("Type your shortcut now. Press Esc to cancel recording."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HotkeyRecorderView(
+                isRecording: $isRecording,
+                onCapture: { capturedHotkey in
+                    pendingCapturedHotkey = capturedHotkey
+                    recorderMessage = nil
+                },
+                onCancelCapture: {
+                    pendingCapturedHotkey = nil
+                    isRecording = false
+                    recorderMessage = nil
+                },
+                onRecorderMessageChange: { messageKey in
+                    DispatchQueue.main.async {
+                        recorderMessage = messageKey
+                    }
+                }
+            )
+            .frame(width: 0, height: 0)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                .fill(SettingsUIStyle.groupedFillColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+        )
     }
 }
 

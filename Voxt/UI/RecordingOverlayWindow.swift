@@ -58,6 +58,8 @@ class OverlayState: ObservableObject {
     @Published var allowsSessionTranslationLanguageSwitching = false
 
     private var cancellables = Set<AnyCancellable>()
+    private var latestSourceTranscribedText = ""
+    private var transcribedTextTransformer: ((String) -> String)?
 
     deinit {
         // Keep an explicit deinit here. On macOS 26 test hosts, the synthesized
@@ -151,7 +153,22 @@ class OverlayState: ObservableObject {
         isSessionTranslationTargetPickerPresented = false
         isSessionTranslationLanguageHovering = false
         allowsSessionTranslationLanguageSwitching = false
+        latestSourceTranscribedText = ""
+        transcribedTextTransformer = nil
         cancellables.removeAll()
+    }
+
+    func setTranscribedTextTransformer(_ transformer: ((String) -> String)?) {
+        transcribedTextTransformer = transformer
+        refreshDisplayedTranscribedText()
+    }
+
+    func refreshDisplayedTranscribedText() {
+        transcribedText = transformedTranscribedText(from: latestSourceTranscribedText)
+    }
+
+    func clearDisplayedTranscribedText() {
+        transcribedText = ""
     }
 
     func presentRecording(iconMode: OverlaySessionIconMode? = nil) {
@@ -489,7 +506,9 @@ class OverlayState: ObservableObject {
             .removeDuplicates()
             .throttle(for: .milliseconds(70), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] text in
-                self?.transcribedText = text
+                guard let self else { return }
+                self.latestSourceTranscribedText = text
+                self.transcribedText = self.transformedTranscribedText(from: text)
             }
             .store(in: &cancellables)
 
@@ -519,6 +538,10 @@ class OverlayState: ObservableObject {
         let clamped = max(0, min(rawLevel, 1))
         let steps: Float = 20
         return (clamped * steps).rounded() / steps
+    }
+
+    private func transformedTranscribedText(from sourceText: String) -> String {
+        transcribedTextTransformer?(sourceText) ?? sourceText
     }
 }
 

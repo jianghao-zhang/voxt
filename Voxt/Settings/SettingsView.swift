@@ -17,6 +17,7 @@ struct SettingsView: View {
     @ObservedObject var whisperModelManager: WhisperKitModelManager
     @ObservedObject var customLLMManager: CustomLLMModelManager
     @ObservedObject var historyStore: TranscriptionHistoryStore
+    @ObservedObject var noteStore: VoxtNoteStore
     @ObservedObject var dictionaryStore: DictionaryStore
     @ObservedObject var dictionarySuggestionStore: DictionarySuggestionStore
     @ObservedObject var appUpdateManager: AppUpdateManager
@@ -46,6 +47,7 @@ struct SettingsView: View {
         whisperModelManager: WhisperKitModelManager,
         customLLMManager: CustomLLMModelManager,
         historyStore: TranscriptionHistoryStore,
+        noteStore: VoxtNoteStore,
         dictionaryStore: DictionaryStore,
         dictionarySuggestionStore: DictionarySuggestionStore,
         appUpdateManager: AppUpdateManager,
@@ -60,6 +62,7 @@ struct SettingsView: View {
         self.whisperModelManager = whisperModelManager
         self.customLLMManager = customLLMManager
         self.historyStore = historyStore
+        self.noteStore = noteStore
         self.dictionaryStore = dictionaryStore
         self.dictionarySuggestionStore = dictionarySuggestionStore
         self.appUpdateManager = appUpdateManager
@@ -162,6 +165,10 @@ struct SettingsView: View {
         .onChange(of: featureSettingsRaw) { _, _ in
             refreshPermissionBadge()
             refreshModelConfigurationBadge()
+            if !noteEnabled, selectedTab == .feature, selectedFeatureTab == .note {
+                navigationRequest = nil
+                selectedFeatureTab = .transcription
+            }
             if !meetingEnabled, selectedTab == .feature, selectedFeatureTab == .meeting {
                 navigationRequest = nil
                 selectedFeatureTab = .transcription
@@ -197,6 +204,7 @@ struct SettingsView: View {
                 },
                 appEnhancementEnabled: appEnhancementEnabled,
                 meetingEnabled: meetingEnabled,
+                noteEnabled: noteEnabled,
                 hasMissingPermissions: hasMissingPermissions,
                 hasNoAvailableMicrophones: hasNoAvailableMicrophones,
                 activeModelDownloadCount: activeModelDownloadCount,
@@ -269,6 +277,10 @@ struct SettingsView: View {
         featureSettings.meeting.enabled
     }
 
+    private var noteEnabled: Bool {
+        featureSettings.transcription.notes.enabled
+    }
+
     private var onboardingStepBinding: Binding<OnboardingStep> {
         Binding(
             get: {
@@ -333,6 +345,7 @@ struct SettingsView: View {
                 staticTabLayer(for: .history) {
                     HistorySettingsView(
                         historyStore: historyStore,
+                        noteStore: noteStore,
                         dictionaryStore: dictionaryStore,
                         dictionarySuggestionStore: dictionarySuggestionStore,
                         navigationRequest: navigationRequest
@@ -519,7 +532,11 @@ struct SettingsView: View {
     private func applyNavigationTarget(_ target: SettingsNavigationTarget) {
         navigationRequest = SettingsNavigationRequest(target: target)
         if let featureTab = target.featureTab {
-            if FeatureSettingsTab.visibleTabs(appEnhancementEnabled: appEnhancementEnabled, meetingEnabled: meetingEnabled).contains(featureTab) {
+            if FeatureSettingsTab.visibleTabs(
+                appEnhancementEnabled: appEnhancementEnabled,
+                meetingEnabled: meetingEnabled,
+                noteEnabled: noteEnabled
+            ).contains(featureTab) {
                 selectedFeatureTab = featureTab
             } else {
                 selectedFeatureTab = .transcription
@@ -538,7 +555,11 @@ struct SettingsView: View {
         if tab == .feature {
             selectedTab = .feature
             sidebarMode = .feature
-            if !FeatureSettingsTab.visibleTabs(appEnhancementEnabled: appEnhancementEnabled, meetingEnabled: meetingEnabled).contains(selectedFeatureTab) {
+            if !FeatureSettingsTab.visibleTabs(
+                appEnhancementEnabled: appEnhancementEnabled,
+                meetingEnabled: meetingEnabled,
+                noteEnabled: noteEnabled
+            ).contains(selectedFeatureTab) {
                 selectedFeatureTab = .transcription
             }
             return
@@ -572,6 +593,7 @@ private struct SettingsSidebar: View {
     let onReturnToRoot: () -> Void
     let appEnhancementEnabled: Bool
     let meetingEnabled: Bool
+    let noteEnabled: Bool
     let hasMissingPermissions: Bool
     let hasNoAvailableMicrophones: Bool
     let activeModelDownloadCount: Int
@@ -744,7 +766,11 @@ private struct SettingsSidebar: View {
     }
 
     private var visibleFeatureTabs: [FeatureSettingsTab] {
-        FeatureSettingsTab.visibleTabs(appEnhancementEnabled: appEnhancementEnabled, meetingEnabled: meetingEnabled)
+        FeatureSettingsTab.visibleTabs(
+            appEnhancementEnabled: appEnhancementEnabled,
+            meetingEnabled: meetingEnabled,
+            noteEnabled: noteEnabled
+        )
     }
 }
 

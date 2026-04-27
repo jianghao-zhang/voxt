@@ -27,6 +27,10 @@ extension AppDelegate {
         featureSettings.transcription
     }
 
+    var noteFeatureSettings: TranscriptionNoteFeatureSettings {
+        featureSettings.transcription.notes
+    }
+
     var translationFeatureSettings: TranslationFeatureSettings {
         featureSettings.translation
     }

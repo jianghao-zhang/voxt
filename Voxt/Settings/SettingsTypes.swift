@@ -9,6 +9,7 @@ extension Notification.Name {
     static let voxtSelectedInputDeviceDidChange = Notification.Name("voxt.selectedInputDevice.didChange")
     static let voxtAudioInputDevicesDidChange = Notification.Name("voxt.audioInputDevices.didChange")
     static let voxtOverlayAppearanceDidChange = Notification.Name("voxt.overlayAppearance.didChange")
+    static let voxtFeatureSettingsDidChange = Notification.Name("voxt.feature-settings.did-change")
 }
 
 enum SettingsDisplayMode: Equatable {
@@ -445,6 +446,7 @@ enum SettingsSidebarMode: Equatable {
 
 enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     case transcription
+    case note
     case translation
     case rewrite
     case appEnhancement
@@ -455,6 +457,7 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     var titleKey: LocalizedStringKey {
         switch self {
         case .transcription: return "Transcription"
+        case .note: return "Notes"
         case .translation: return "Translation"
         case .rewrite: return "Rewrite"
         case .appEnhancement: return "App Enhancement"
@@ -469,6 +472,7 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     private var rawTitleKey: String {
         switch self {
         case .transcription: return "Transcription"
+        case .note: return "Notes"
         case .translation: return "Translation"
         case .rewrite: return "Rewrite"
         case .appEnhancement: return "App Enhancement"
@@ -479,6 +483,7 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .transcription: return "waveform.and.mic"
+        case .note: return "note.text"
         case .translation: return "globe"
         case .rewrite: return "text.badge.star"
         case .appEnhancement: return "sparkles.rectangle.stack"
@@ -486,9 +491,11 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    static func visibleTabs(appEnhancementEnabled: Bool, meetingEnabled: Bool) -> [FeatureSettingsTab] {
+    static func visibleTabs(appEnhancementEnabled: Bool, meetingEnabled: Bool, noteEnabled: Bool) -> [FeatureSettingsTab] {
         allCases.filter { tab in
             switch tab {
+            case .note:
+                return noteEnabled
             case .appEnhancement:
                 return appEnhancementEnabled
             case .meeting:
@@ -956,7 +963,7 @@ enum HistoryRetentionPeriod: String, CaseIterable, Identifiable {
     }
 }
 
-enum InteractionSoundPreset: String, CaseIterable, Identifiable {
+enum InteractionSoundPreset: String, CaseIterable, Identifiable, Codable, Sendable {
     case soft
     case glass
     case funk

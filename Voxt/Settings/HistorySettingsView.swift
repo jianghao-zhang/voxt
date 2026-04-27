@@ -7,6 +7,7 @@ private enum HistoryFilterTab: String, CaseIterable, Identifiable {
     case translation
     case rewrite
     case meeting
+    case note
 
     var id: String { rawValue }
 
@@ -22,6 +23,8 @@ private enum HistoryFilterTab: String, CaseIterable, Identifiable {
             return String(localized: "Rewrite")
         case .meeting:
             return String(localized: "Meeting")
+        case .note:
+            return String(localized: "Notes")
         }
     }
 
@@ -37,6 +40,8 @@ private enum HistoryFilterTab: String, CaseIterable, Identifiable {
             return entry.kind == .rewrite
         case .meeting:
             return entry.kind == .meeting
+        case .note:
+            return false
         }
     }
 }
@@ -48,13 +53,15 @@ struct HistorySettingsView: View {
     @AppStorage(AppPreferenceKey.historyRetentionPeriod) private var historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
 
     @ObservedObject var historyStore: TranscriptionHistoryStore
+    @ObservedObject var noteStore: VoxtNoteStore
     @ObservedObject var dictionaryStore: DictionaryStore
     @ObservedObject var dictionarySuggestionStore: DictionarySuggestionStore
     let navigationRequest: SettingsNavigationRequest?
     @State private var copiedEntryID: UUID?
+    @State private var copiedNoteID: UUID?
     @State private var showRetentionInfo = false
     @State private var selectedFilter: HistoryFilterTab = .all
-    @State private var visibleEntryLimit = pageSize
+    @State private var visibleItemLimit = pageSize
 
     private var historyRetentionPeriod: HistoryRetentionPeriod {
         HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) ?? .thirtyDays
@@ -68,12 +75,28 @@ struct HistorySettingsView: View {
         allEntries.filter { selectedFilter.matches($0) }
     }
 
+    private var allNotes: [VoxtNoteItem] {
+        noteStore.items
+    }
+
+    private var visibleNotes: [VoxtNoteItem] {
+        Array(allNotes.prefix(visibleItemLimit))
+    }
+
     private var visibleEntries: [TranscriptionHistoryEntry] {
-        Array(filteredEntries.prefix(visibleEntryLimit))
+        Array(filteredEntries.prefix(visibleItemLimit))
     }
 
     private var hasMoreFilteredEntries: Bool {
-        visibleEntryLimit < filteredEntries.count
+        visibleItemLimit < filteredEntries.count
+    }
+
+    private var hasMoreVisibleNotes: Bool {
+        visibleItemLimit < allNotes.count
+    }
+
+    private var isNoteTabSelected: Bool {
+        selectedFilter == .note
     }
 
     var body: some View {
@@ -131,25 +154,76 @@ struct HistorySettingsView: View {
                                 Spacer(minLength: 12)
                                 Button(String(localized: "Clean All"), role: .destructive) {
                                     copiedEntryID = nil
-                                    resetVisibleEntryLimit()
-                                    historyStore.clearAll()
+                                    copiedNoteID = nil
+                                    resetVisibleItemLimit()
+                                    if isNoteTabSelected {
+                                        noteStore.clearAll()
+                                    } else {
+                                        historyStore.clearAll()
+                                    }
                                 }
                                 .buttonStyle(SettingsPillButtonStyle())
-                                .disabled(allEntries.isEmpty)
+                                .disabled(isNoteTabSelected ? allNotes.isEmpty : allEntries.isEmpty)
                             }
 
-                            if allEntries.isEmpty && !historyEnabled {
+                            if isNoteTabSelected && allNotes.isEmpty {
+                                Text(String(localized: "No notes yet."))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else if allEntries.isEmpty && !historyEnabled {
                                 Text(String(localized: "History is currently disabled."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                            } else if allEntries.isEmpty {
+                            } else if !isNoteTabSelected && allEntries.isEmpty {
                                 Text(String(localized: "No history yet."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                            } else if filteredEntries.isEmpty {
+                            } else if !isNoteTabSelected && filteredEntries.isEmpty {
                                 Text(String(localized: "No entries in this category yet."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                            } else if isNoteTabSelected {
+                                ScrollView {
+                                    LazyVStack(spacing: 8) {
+                                        ForEach(visibleNotes) { item in
+                                            NoteHistoryRow(
+                                                item: item,
+                                                isCopied: copiedNoteID == item.id,
+                                                onCopy: {
+                                                    copyToPasteboard(item.text)
+                                                    copiedNoteID = item.id
+                                                    Task {
+                                                        try? await Task.sleep(for: .seconds(1.2))
+                                                        if copiedNoteID == item.id {
+                                                            copiedNoteID = nil
+                                                        }
+                                                    }
+                                                },
+                                                onToggleCompletion: {
+                                                    _ = noteStore.updateCompletion(!item.isCompleted, for: item.id)
+                                                },
+                                                onDelete: {
+                                                    copiedNoteID = nil
+                                                    noteStore.delete(id: item.id)
+                                                }
+                                            )
+                                            .onAppear {
+                                                if item.id == visibleNotes.last?.id {
+                                                    loadNextPageIfNeeded()
+                                                }
+                                            }
+                                        }
+
+                                        if hasMoreVisibleNotes {
+                                            Button(String(localized: "Load More")) {
+                                                loadNextPageIfNeeded()
+                                            }
+                                            .buttonStyle(SettingsPillButtonStyle())
+                                            .padding(.top, 4)
+                                        }
+                                    }
+                                }
+                                .frame(maxHeight: .infinity, alignment: .top)
                             } else {
                                 ScrollView {
                                     LazyVStack(spacing: 8) {
@@ -212,25 +286,28 @@ struct HistorySettingsView: View {
             if HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) == nil {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
             }
-            resetVisibleEntryLimit()
+            resetVisibleItemLimit()
             historyStore.reloadAsync()
         }
         .onChange(of: historyEnabled) { _, _ in
-            resetVisibleEntryLimit()
+            resetVisibleItemLimit()
             historyStore.reloadAsync()
         }
         .onChange(of: historyRetentionPeriodRaw) { _, newValue in
             if HistoryRetentionPeriod(rawValue: newValue) == nil {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
             }
-            resetVisibleEntryLimit()
+            resetVisibleItemLimit()
             historyStore.reloadAsync()
         }
         .onChange(of: selectedFilter) { _, _ in
-            resetVisibleEntryLimit()
+            resetVisibleItemLimit()
         }
         .onReceive(historyStore.$entries) { _ in
-            visibleEntryLimit = min(max(visibleEntryLimit, Self.pageSize), max(filteredEntries.count, Self.pageSize))
+            visibleItemLimit = min(max(visibleItemLimit, Self.pageSize), max(filteredEntries.count, Self.pageSize))
+        }
+        .onReceive(noteStore.$items) { _ in
+            visibleItemLimit = min(max(visibleItemLimit, Self.pageSize), max(allNotes.count, Self.pageSize))
         }
     }
 
@@ -255,13 +332,19 @@ struct HistorySettingsView: View {
         pasteboard.setString(text, forType: .string)
     }
 
-    private func resetVisibleEntryLimit() {
-        visibleEntryLimit = Self.pageSize
+    private func resetVisibleItemLimit() {
+        visibleItemLimit = Self.pageSize
     }
 
     private func loadNextPageIfNeeded() {
+        if isNoteTabSelected {
+            guard hasMoreVisibleNotes else { return }
+            visibleItemLimit = min(visibleItemLimit + Self.pageSize, allNotes.count)
+            return
+        }
+
         guard hasMoreFilteredEntries else { return }
-        visibleEntryLimit = min(visibleEntryLimit + Self.pageSize, filteredEntries.count)
+        visibleItemLimit = min(visibleItemLimit + Self.pageSize, filteredEntries.count)
     }
 }
 
@@ -547,5 +630,86 @@ private struct HistoryInfoPopover: View {
             style: .popover
         )
         .frame(maxHeight: 460)
+    }
+}
+
+private struct NoteHistoryRow: View {
+    let item: VoxtNoteItem
+    let isCopied: Bool
+    let onCopy: () -> Void
+    let onToggleCompletion: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button(action: onCopy) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(item.title)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 8)
+
+                        Text(RelativeNoteTimestampFormatter.noteHistoryTimestamp(for: item.createdAt))
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+
+                        noteStatusBadge
+                    }
+
+                    Text(item.text)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(3)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(spacing: 8) {
+                    Button(action: onToggleCompletion) {
+                        Image(systemName: item.isCompleted ? "arrow.uturn.backward.circle" : "checkmark.circle")
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if isCopied {
+                    Text(String(localized: "Copied"))
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.75))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        )
+    }
+
+    private var noteStatusBadge: some View {
+        Text(item.isCompleted ? AppLocalization.localizedString("Completed") : AppLocalization.localizedString("Incomplete"))
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule(style: .continuous)
+                    .fill((item.isCompleted ? Color.green : Color.orange).opacity(0.16))
+            )
+            .foregroundStyle(item.isCompleted ? Color.green : Color.orange)
     }
 }

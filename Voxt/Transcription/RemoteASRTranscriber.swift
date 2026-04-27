@@ -40,6 +40,19 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         preferredInputDeviceID = deviceID
     }
 
+    func activeRealtimeDebugSummary() -> String? {
+        if let context = doubaoStreamingContext {
+            return "doubao{\(context.debugSummary())}"
+        }
+        if aliyunStreamingContext != nil {
+            return "aliyun-fun{active=true}"
+        }
+        if aliyunQwenStreamingContext != nil {
+            return "aliyun-qwen{active=true}"
+        }
+        return nil
+    }
+
     func requestPermissions() async -> Bool {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
@@ -188,9 +201,16 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
     func restartCaptureForPreferredInputDevice() throws {
         if let context = doubaoStreamingContext {
+            VoxtLog.warning(
+                "Doubao audio capture restart requested. preferredDeviceID=\(preferredInputDeviceID.map(String.init(describing:)) ?? "default"), state=\(context.debugSummary())"
+            )
             stopDoubaoAudioCapture()
             try startDoubaoAudioCapture()
-            _ = context
+            context.audioCaptureStartCount += 1
+            context.lastAudioCaptureStartReason = "preferred-input-change"
+            VoxtLog.warning(
+                "Doubao audio capture restart completed. preferredDeviceID=\(preferredInputDeviceID.map(String.init(describing:)) ?? "default"), state=\(context.debugSummary())"
+            )
             return
         }
 
@@ -217,7 +237,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         isRecording = false
         stopDoubaoAudioCapture()
         flushBufferedDoubaoAudioIfNeeded(context: context, includeTrailingPartial: true)
-        VoxtLog.info("Doubao streaming stop requested. sentAudioPackets=\(context.audioPacketCount)", verbose: true)
+        VoxtLog.info("Doubao streaming stop requested. state=\(context.debugSummary())", verbose: true)
 
         let finalSequence = DoubaoASRConfiguration.finalStreamingSequence(
             nextAudioSequence: context.nextAudioSequence
@@ -1408,6 +1428,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         audioEngine.prepare()
         try audioEngine.start()
         isRecording = true
+        VoxtLog.info(
+            "Doubao audio capture engine started. sampleRate=\(Int(inputFormat.sampleRate)), channels=\(inputFormat.channelCount), deviceID=\(preferredInputDeviceID.map(String.init(describing:)) ?? "default")",
+            verbose: true
+        )
     }
 
     private func stopDoubaoAudioCapture() {
@@ -1427,7 +1451,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
         try startDoubaoAudioCapture()
         context.didStartAudioStream = true
-        VoxtLog.info("Doubao audio capture started. reason=\(reason)", verbose: true)
+        context.audioCaptureStartCount += 1
+        context.lastAudioCaptureStartReason = reason
+        VoxtLog.info("Doubao audio capture started. reason=\(reason), state=\(context.debugSummary())", verbose: true)
     }
 
     private func applyPreferredInputDeviceIfNeeded(inputNode: AVAudioInputNode) {
@@ -1464,6 +1490,15 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                           self.doubaoStreamingContext === context
                     else { return }
                     do {
+                        context.serverPacketCount += 1
+                        let now = Date()
+                        if context.firstServerPacketAt == nil {
+                            context.firstServerPacketAt = now
+                        }
+                        context.lastServerPacketAt = now
+                        if context.serverPacketCount == 1 {
+                            VoxtLog.info("Doubao first server packet received. state=\(context.debugSummary(now: now))", verbose: true)
+                        }
                         if case .data(let payloadData) = message,
                            let parsed = try self.parseDoubaoServerPacket(payloadData) {
                             if !context.didStartAudioStream {
@@ -1492,7 +1527,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                             await context.responseState.markSocketClosed()
                         } else {
                             context.isClosed = true
-                            VoxtLog.warning("Doubao stream receive parse failed. detail=\(error.localizedDescription)")
+                            VoxtLog.warning("Doubao stream receive failed. detail=\(error.localizedDescription), state=\(context.debugSummary())")
                             await context.responseState.markCompletedWithError(error)
                         }
                     }
@@ -1527,7 +1562,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                     ) {
                         context.isClosed = true
                         await MainActor.run {
-                            VoxtLog.warning("Doubao stream receive failed. detail=\(detail)")
+                            VoxtLog.warning("Doubao stream receive failed. detail=\(detail), state=\(context.debugSummary())")
                         }
                         let detailedError = NSError(
                             domain: "Voxt.RemoteASR",
@@ -1693,6 +1728,13 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     }
 
     private func queueDoubaoAudioData(_ pcmData: Data, context: DoubaoStreamingContext) {
+        let now = Date()
+        context.pcmCallbackCount += 1
+        if context.firstPCMCallbackAt == nil {
+            context.firstPCMCallbackAt = now
+            VoxtLog.info("Doubao first PCM callback received. bytes=\(pcmData.count), state=\(context.debugSummary(now: now))", verbose: true)
+        }
+        context.lastPCMCallbackAt = now
         context.pendingPCMData.append(pcmData)
         flushBufferedDoubaoAudioIfNeeded(context: context, includeTrailingPartial: false)
     }
@@ -1712,6 +1754,11 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     private func sendBufferedDoubaoAudioPacket(_ pcmData: Data, context: DoubaoStreamingContext) {
         guard !pcmData.isEmpty, !context.isClosed else { return }
         context.audioPacketCount += 1
+        let now = Date()
+        if context.firstAudioPacketSentAt == nil {
+            context.firstAudioPacketSentAt = now
+        }
+        context.lastAudioPacketSentAt = now
         let sequence = context.nextAudioSequence
         context.nextAudioSequence += 1
         context.lastAudioSequence = sequence
@@ -1724,6 +1771,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             sequence: sequence,
             payload: audioPayload
         )
+        if context.audioPacketCount == 1 {
+            VoxtLog.info("Doubao first audio packet sent. bytes=\(pcmData.count), sequence=\(sequence), state=\(context.debugSummary(now: now))", verbose: true)
+        }
         sendDoubaoPacket(packet, through: context.ws) { error, isBenign in
             Task { [responseState = context.responseState] in
                 if isBenign {

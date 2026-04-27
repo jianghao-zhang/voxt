@@ -92,7 +92,10 @@ final class FeatureModelCatalogBuilderTests: XCTestCase {
         XCTAssertTrue(translationLLMEntry.displayTags.contains(AppLocalization.localizedString("Configured")))
         XCTAssertTrue(translationLLMEntry.usageLocations.contains(AppLocalization.localizedString("Translation")))
         XCTAssertEqual(builder.llmSelectionSummary(.remoteLLM(.openAI)), "OpenAI · gpt-5.2")
-        XCTAssertEqual(builder.asrSelectionSummary(.remoteASR(.aliyunBailianASR)), "Aliyun Bailian ASR · fun-asr-realtime")
+        XCTAssertEqual(
+            builder.asrSelectionSummary(.remoteASR(.aliyunBailianASR)),
+            "\(RemoteASRProvider.aliyunBailianASR.title) · fun-asr-realtime"
+        )
     }
 
     func testUnconfiguredRemoteLLMEntryRemainsNotConfiguredInSelector() throws {
