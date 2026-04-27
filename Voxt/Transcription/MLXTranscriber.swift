@@ -65,6 +65,24 @@ enum MLXTranscriptionPlanning {
             quickPassSampleCount: quickPassSampleCount
         )
     }
+
+    static func automaticBiases(
+        for family: MLXModelFamily,
+        multilingualContext: String?
+    ) -> (qwenContextBias: String?, granitePromptBias: String?) {
+        guard let multilingualContext, !multilingualContext.isEmpty else {
+            return (nil, nil)
+        }
+
+        switch family {
+        case .qwen3ASR, .graniteSpeech:
+            // Local streaming MLX models may echo prompt/context guidance back into the
+            // partial transcript UI, so multilingual guidance stays in the language hint only.
+            return (nil, nil)
+        case .senseVoice, .cohereTranscribe, .generic:
+            return (nil, nil)
+        }
+    }
 }
 
 @MainActor
@@ -676,6 +694,10 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             from: UserDefaults.standard.string(forKey: AppPreferenceKey.userMainLanguageCodes)
         )
         let family = MLXModelFamily.family(for: modelManager.currentModelRepo)
+        let automaticBiases = MLXTranscriptionPlanning.automaticBiases(
+            for: family,
+            multilingualContext: hintPayload.multilingualContext
+        )
         let chunkDuration: Float
         let minChunkDuration: Float
         switch tuningSettings.preset {
@@ -712,11 +734,11 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             languageHint: languageHint,
             qwenContextBias: mergedBiasText(
                 resolvedBiasTemplate(tuningSettings.qwenContextBias, userLanguageCodes: userLanguageCodes),
-                autoBias: family == .qwen3ASR ? hintPayload.multilingualContext : nil
+                autoBias: automaticBiases.qwenContextBias
             ),
             granitePromptBias: mergedOptionalBiasText(
                 resolvedBiasTemplate(tuningSettings.granitePromptBias, userLanguageCodes: userLanguageCodes),
-                autoBias: family == .graniteSpeech ? hintPayload.multilingualContext : nil
+                autoBias: automaticBiases.granitePromptBias
             ),
             senseVoiceUseITN: tuningSettings.senseVoiceUseITN
         )
