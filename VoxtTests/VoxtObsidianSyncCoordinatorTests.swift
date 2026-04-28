@@ -155,11 +155,12 @@ final class VoxtObsidianSyncCoordinatorTests: XCTestCase {
         _ = noteStore.updateCompletion(true, for: item.id)
         try await Task.sleep(for: .milliseconds(700))
 
-        let (updatedFileURL, updatedContent) = try await Self.waitForManagedSingleNoteFileUpdate(
+        let (_, updatedContent) = try await Self.waitForManagedSingleNoteFileUpdate(
             exportStore: exportStore,
             noteID: item.id,
             vaultURL: vaultURL,
-            originalFileURL: fileURL
+            originalFileURL: fileURL,
+            expectedBody: editedBody
         )
         XCTAssertTrue(updatedContent.contains("# Updated title"))
         XCTAssertTrue(updatedContent.contains("status: \"completed\""))
@@ -431,6 +432,7 @@ final class VoxtObsidianSyncCoordinatorTests: XCTestCase {
         noteID: UUID,
         vaultURL: URL,
         originalFileURL: URL,
+        expectedBody: String? = nil,
         timeout: Duration = .seconds(4)
     ) async throws -> (URL, String) {
         let deadline = ContinuousClock.now + timeout
@@ -440,6 +442,8 @@ final class VoxtObsidianSyncCoordinatorTests: XCTestCase {
                 let fileURL = vaultURL.appendingPathComponent(record.relativeFilePath)
                 if let content = try? String(contentsOf: fileURL, encoding: .utf8),
                    content.contains("status: \"completed\""),
+                   expectedBody.map({ content.contains($0) }) ?? true,
+                   !content.contains("Original body from Voxt."),
                    !FileManager.default.fileExists(atPath: originalFileURL.path) {
                     return (fileURL, content)
                 }
