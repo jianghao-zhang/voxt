@@ -24,13 +24,23 @@ final class DoubaoStreamingContext {
     let ws: URLSessionWebSocketTask
     let responseState: DoubaoResponseState
     let generationID: UUID
+    let createdAt = Date()
     var isClosed = false
     var didStartAudioStream = false
+    var audioCaptureStartCount = 0
     var audioPacketCount = 0
     var serverPacketCount = 0
+    var pcmCallbackCount = 0
     var nextAudioSequence: Int32 = 2
     var lastAudioSequence: Int32 = 0
     var pendingPCMData = Data()
+    var firstPCMCallbackAt: Date?
+    var lastPCMCallbackAt: Date?
+    var firstAudioPacketSentAt: Date?
+    var lastAudioPacketSentAt: Date?
+    var firstServerPacketAt: Date?
+    var lastServerPacketAt: Date?
+    var lastAudioCaptureStartReason = "not-started"
 
     init(
         session: URLSession,
@@ -42,6 +52,16 @@ final class DoubaoStreamingContext {
         self.ws = ws
         self.responseState = responseState
         self.generationID = generationID
+    }
+
+    func debugSummary(now: Date = Date()) -> String {
+        let age = String(format: "%.2f", now.timeIntervalSince(createdAt))
+        let sinceLastPCM = lastPCMCallbackAt.map { String(format: "%.2f", now.timeIntervalSince($0)) } ?? "none"
+        let sinceLastSent = lastAudioPacketSentAt.map { String(format: "%.2f", now.timeIntervalSince($0)) } ?? "none"
+        let sinceLastServer = lastServerPacketAt.map { String(format: "%.2f", now.timeIntervalSince($0)) } ?? "none"
+        return """
+        ageSec=\(age), captureStarts=\(audioCaptureStartCount), captureReason=\(lastAudioCaptureStartReason), pcmCallbacks=\(pcmCallbackCount), audioPackets=\(audioPacketCount), serverPackets=\(serverPacketCount), pendingPCMBytes=\(pendingPCMData.count), lastSeq=\(lastAudioSequence), nextSeq=\(nextAudioSequence), sinceLastPCM=\(sinceLastPCM), sinceLastSent=\(sinceLastSent), sinceLastServer=\(sinceLastServer), isClosed=\(isClosed)
+        """
     }
 }
 

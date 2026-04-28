@@ -54,6 +54,7 @@ struct VoxtApp: App {
 
 struct MainWindowNavigationCommands: Commands {
     @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
+    @AppStorage(AppPreferenceKey.featureSettings) private var featureSettingsRaw = ""
     let appDelegate: AppDelegate
 
     var body: some Commands {
@@ -101,6 +102,11 @@ struct MainWindowNavigationCommands: Commands {
                 Divider()
                 Button(AppLocalization.localizedString("Transcription")) {
                     appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .feature, featureTab: .transcription))
+                }
+                if noteEnabled {
+                    Button(AppLocalization.localizedString("Notes")) {
+                        appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .feature, featureTab: .note))
+                    }
                 }
                 Button(AppLocalization.localizedString("Translation")) {
                     appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .feature, featureTab: .translation))
@@ -164,6 +170,10 @@ struct MainWindowNavigationCommands: Commands {
             }
 
         }
+    }
+
+    private var noteEnabled: Bool {
+        FeatureSettingsStore.load(defaults: .standard).transcription.notes.enabled
     }
 }
 
@@ -270,6 +280,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let whisperModelManager: WhisperKitModelManager
     let customLLMManager: CustomLLMModelManager
     let historyStore = TranscriptionHistoryStore()
+    let noteStore = VoxtNoteStore()
+    let noteObsidianExportStore = VoxtNoteObsidianExportStore()
+    let noteRemindersExportStore = VoxtNoteRemindersExportStore()
     let dictionaryStore = DictionaryStore()
     let dictionarySuggestionStore = DictionarySuggestionStore()
     let appUpdateManager = AppUpdateManager()
@@ -281,6 +294,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let meetingOverlayWindow = MeetingOverlayWindow()
     let meetingDetailWindowManager = MeetingDetailWindowManager.shared
     let overlayState = OverlayState()
+    lazy var noteWindowManager = VoxtNoteWindowManager(store: noteStore)
+    lazy var noteObsidianSyncCoordinator = VoxtObsidianSyncCoordinator(
+        noteStore: noteStore,
+        settingsProvider: { [weak self] in
+            self?.noteFeatureSettings.obsidianSync ?? .init()
+        },
+        exportStore: noteObsidianExportStore
+    )
+    lazy var noteRemindersSyncCoordinator = VoxtRemindersSyncCoordinator(
+        noteStore: noteStore,
+        settingsProvider: { [weak self] in
+            self?.noteFeatureSettings.remindersSync ?? .init()
+        },
+        exportStore: noteRemindersExportStore
+    )
     lazy var meetingSessionCoordinator = MeetingSessionCoordinator(
         whisperModelManager: whisperModelManager,
         mlxModelManager: mlxModelManager,
@@ -303,6 +331,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var interfaceLanguageObserver: NSObjectProtocol?
     private var updateAvailabilityObserver: NSObjectProtocol?
     private var selectedInputDeviceObserver: NSObjectProtocol?
+    private var featureSettingsObserver: NSObjectProtocol?
     private var workspaceWillSleepObserver: NSObjectProtocol?
     private var workspaceDidWakeObserver: NSObjectProtocol?
     private var workspaceSessionDidBecomeActiveObserver: NSObjectProtocol?
@@ -352,6 +381,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var rewriteSessionHasSelectedSourceText = false
     var rewriteSessionHadWritableFocusedInput = false
     var rewriteSessionFallbackInjectBundleID: String?
+    var transcriptionCaptureSessionMode: TranscriptionCaptureSessionMode = .standard
+    var liveTranscriptSegmentationState = LiveTranscriptSegmentationState()
     var sessionUsesWhisperDirectTranslation = false
     var sessionTranslationTargetLanguageOverride: TranslationTargetLanguage?
     var activeSessionTranslationProviderResolution: TranslationProviderResolution?
@@ -426,8 +457,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.rewriteRemoteLLMProvider: "",
             AppPreferenceKey.launchAtLogin: false,
             AppPreferenceKey.showInDock: false,
-            AppPreferenceKey.historyEnabled: false,
-            AppPreferenceKey.historyRetentionPeriod: HistoryRetentionPeriod.thirtyDays.rawValue,
+            AppPreferenceKey.historyEnabled: true,
+            AppPreferenceKey.historyCleanupEnabled: true,
+            AppPreferenceKey.historyRetentionPeriod: HistoryRetentionPeriod.ninetyDays.rawValue,
             AppPreferenceKey.dictionaryRecognitionEnabled: true,
             AppPreferenceKey.dictionaryAutoLearningEnabled: false,
             AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled: true,
@@ -520,6 +552,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = noteObsidianSyncCoordinator
+        _ = noteRemindersSyncCoordinator
         VoxtLog.info("Voxt launching.")
         VoxtLog.info("Runtime system version: \(currentSystemVersionLogDescription)")
         UserDefaults.standard.set(false, forKey: "NSQuitAlwaysKeepsWindows")
@@ -596,6 +630,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         updateAvailabilityObserver = NotificationCenter.default.addObserver(
             forName: .voxtUpdateAvailabilityDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.buildMenu()
+            }
+        }
+        featureSettingsObserver = NotificationCenter.default.addObserver(
+            forName: .voxtFeatureSettingsDidChange,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -720,6 +763,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         pendingMeetingStartupTask?.cancel()
         meetingDetailWindowManager.closeLiveWindow()
+        noteWindowManager.hide()
         systemAudioMuteController.restoreSystemAudioIfNeeded()
     }
 
@@ -732,6 +776,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let selectedInputDeviceObserver {
             NotificationCenter.default.removeObserver(selectedInputDeviceObserver)
+        }
+        if let featureSettingsObserver {
+            NotificationCenter.default.removeObserver(featureSettingsObserver)
         }
         let workspaceNotificationCenter = NSWorkspace.shared.notificationCenter
         if let workspaceWillSleepObserver {
@@ -905,8 +952,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleOverlayShortcutEvent(_ event: NSEvent, shouldConsume: Bool = false) -> NSEvent? {
-        if shouldHandleAnswerOverlaySpaceShortcut(event),
+        if shouldHandleAnswerOverlayContinueShortcut(event),
            overlayWindow.handleAnswerSpaceShortcut() {
+            return shouldConsume ? nil : event
+        }
+
+        if shouldHandleLiveTranscriptNoteShortcut(event),
+           captureLiveTranscriptNoteIfPossible(reason: "note-shortcut") {
             return shouldConsume ? nil : event
         }
 
@@ -933,12 +985,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return shouldConsume ? nil : event
     }
 
-    private func shouldHandleAnswerOverlaySpaceShortcut(_ event: NSEvent) -> Bool {
+    private func shouldHandleAnswerOverlayContinueShortcut(_ event: NSEvent) -> Bool {
         guard event.type == .keyDown else { return false }
-        guard event.keyCode == UInt16(kVK_Space) else { return false }
         guard !event.isARepeat else { return false }
+        let shortcut = rewriteContinueShortcutSettings.hotkey
+        guard event.keyCode == shortcut.keyCode else { return false }
         let modifiers = event.modifierFlags.intersection(.hotkeyRelevant)
-        guard modifiers.isEmpty else { return false }
+        guard modifiers == shortcut.modifiers else { return false }
         return overlayState.answerSpaceShortcutAction != nil
     }
 

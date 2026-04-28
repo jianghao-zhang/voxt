@@ -19,7 +19,7 @@ struct FeatureModelCatalogBuilder {
         switch sheet {
         case .transcriptionASR, .translationASR, .rewriteASR, .meetingASR:
             return asrEntries()
-        case .transcriptionLLM, .rewriteLLM, .meetingSummary:
+        case .transcriptionLLM, .transcriptionNoteTitle, .rewriteLLM, .meetingSummary:
             return llmEntries(includeAppleIntelligence: true)
         case .translationModel:
             return translationEntries(
@@ -349,6 +349,10 @@ struct FeatureModelCatalogBuilder {
         if featureSettings.transcription.asrSelectionID == selectionID ||
             (featureSettings.transcription.llmEnabled && featureSettings.transcription.llmSelectionID == selectionID) {
             labels.append(localized("Transcription"))
+        }
+        if featureSettings.transcription.notes.enabled &&
+            featureSettings.transcription.notes.titleModelSelectionID == selectionID {
+            labels.append(localized("Notes"))
         }
         if featureSettings.translation.asrSelectionID == selectionID ||
             featureSettings.translation.modelSelectionID == selectionID {

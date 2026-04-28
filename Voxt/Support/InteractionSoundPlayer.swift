@@ -22,6 +22,11 @@ final class InteractionSoundPlayer {
         return play(named: sounds.start)
     }
 
+    @discardableResult
+    func playNote(preset: InteractionSoundPreset) -> TimeInterval {
+        playPreview(preset: preset)
+    }
+
     private func currentPreset() -> InteractionSoundPreset {
         let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.interactionSoundPreset) ?? ""
         return InteractionSoundPreset(rawValue: raw) ?? .soft
@@ -37,6 +42,18 @@ final class InteractionSoundPlayer {
             return ("Morse", "Morse")
         case .submarine:
             return ("Submarine", "Submarine")
+        case .basso:
+            return ("Basso", "Basso")
+        case .bottle:
+            return ("Bottle", "Bottle")
+        case .frog:
+            return ("Frog", "Frog")
+        case .hero:
+            return ("Hero", "Hero")
+        case .purr:
+            return ("Purr", "Purr")
+        case .sosumi:
+            return ("Sosumi", "Sosumi")
         }
     }
 

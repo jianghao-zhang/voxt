@@ -9,6 +9,7 @@ extension Notification.Name {
     static let voxtSelectedInputDeviceDidChange = Notification.Name("voxt.selectedInputDevice.didChange")
     static let voxtAudioInputDevicesDidChange = Notification.Name("voxt.audioInputDevices.didChange")
     static let voxtOverlayAppearanceDidChange = Notification.Name("voxt.overlayAppearance.didChange")
+    static let voxtFeatureSettingsDidChange = Notification.Name("voxt.feature-settings.did-change")
 }
 
 enum SettingsDisplayMode: Equatable {
@@ -445,6 +446,7 @@ enum SettingsSidebarMode: Equatable {
 
 enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     case transcription
+    case note
     case translation
     case rewrite
     case appEnhancement
@@ -455,6 +457,7 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     var titleKey: LocalizedStringKey {
         switch self {
         case .transcription: return "Transcription"
+        case .note: return "Notes"
         case .translation: return "Translation"
         case .rewrite: return "Rewrite"
         case .appEnhancement: return "App Enhancement"
@@ -469,6 +472,7 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     private var rawTitleKey: String {
         switch self {
         case .transcription: return "Transcription"
+        case .note: return "Notes"
         case .translation: return "Translation"
         case .rewrite: return "Rewrite"
         case .appEnhancement: return "App Enhancement"
@@ -479,6 +483,7 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .transcription: return "waveform.and.mic"
+        case .note: return "note.text"
         case .translation: return "globe"
         case .rewrite: return "text.badge.star"
         case .appEnhancement: return "sparkles.rectangle.stack"
@@ -486,9 +491,11 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    static func visibleTabs(appEnhancementEnabled: Bool, meetingEnabled: Bool) -> [FeatureSettingsTab] {
+    static func visibleTabs(appEnhancementEnabled: Bool, meetingEnabled: Bool, noteEnabled: Bool) -> [FeatureSettingsTab] {
         allCases.filter { tab in
             switch tab {
+            case .note:
+                return noteEnabled
             case .appEnhancement:
                 return appEnhancementEnabled
             case .meeting:
@@ -906,14 +913,25 @@ enum TranslationTargetLanguage: String, CaseIterable, Identifiable {
     }
 }
 
-enum HistoryRetentionPeriod: String, CaseIterable, Identifiable {
+enum HistoryRetentionPeriod: String, Identifiable {
     case oneDay
     case sevenDays
     case fifteenDays
     case thirtyDays
     case ninetyDays
     case oneHundredEightyDays
+    case oneYear
     case forever
+
+    static var allCases: [HistoryRetentionPeriod] {
+        [
+            .oneYear,
+            .oneHundredEightyDays,
+            .ninetyDays,
+            .thirtyDays,
+            .sevenDays
+        ]
+    }
 
     var id: String { rawValue }
 
@@ -931,6 +949,8 @@ enum HistoryRetentionPeriod: String, CaseIterable, Identifiable {
             return 90
         case .oneHundredEightyDays:
             return 180
+        case .oneYear:
+            return 365
         case .forever:
             return nil
         }
@@ -941,26 +961,34 @@ enum HistoryRetentionPeriod: String, CaseIterable, Identifiable {
         case .oneDay:
             return AppLocalization.localizedString("1 Day")
         case .sevenDays:
-            return AppLocalization.localizedString("7 Days")
+            return AppLocalization.localizedString("1 Week")
         case .fifteenDays:
             return AppLocalization.localizedString("15 Days")
         case .thirtyDays:
             return AppLocalization.localizedString("30 Days")
         case .ninetyDays:
-            return AppLocalization.localizedString("90 Days")
+            return AppLocalization.localizedString("3 Months")
         case .oneHundredEightyDays:
-            return AppLocalization.localizedString("180 Days")
+            return AppLocalization.localizedString("6 Months")
+        case .oneYear:
+            return AppLocalization.localizedString("1 Year")
         case .forever:
             return AppLocalization.localizedString("Forever")
         }
     }
 }
 
-enum InteractionSoundPreset: String, CaseIterable, Identifiable {
+enum InteractionSoundPreset: String, CaseIterable, Identifiable, Codable, Sendable {
     case soft
     case glass
     case funk
     case submarine
+    case basso
+    case bottle
+    case frog
+    case hero
+    case purr
+    case sosumi
 
     var id: String { rawValue }
 
@@ -970,6 +998,12 @@ enum InteractionSoundPreset: String, CaseIterable, Identifiable {
         case .glass: return "Ping"
         case .funk: return "Morse"
         case .submarine: return "Submarine"
+        case .basso: return "Basso"
+        case .bottle: return "Bottle"
+        case .frog: return "Frog"
+        case .hero: return "Hero"
+        case .purr: return "Purr"
+        case .sosumi: return "Sosumi"
         }
     }
 
@@ -981,6 +1015,12 @@ enum InteractionSoundPreset: String, CaseIterable, Identifiable {
         case .glass: return "Ping"
         case .funk: return "Morse"
         case .submarine: return "Submarine"
+        case .basso: return "Basso"
+        case .bottle: return "Bottle"
+        case .frog: return "Frog"
+        case .hero: return "Hero"
+        case .purr: return "Purr"
+        case .sosumi: return "Sosumi"
         }
     }
 }

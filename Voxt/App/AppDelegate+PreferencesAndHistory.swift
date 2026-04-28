@@ -27,6 +27,14 @@ extension AppDelegate {
         featureSettings.transcription
     }
 
+    var rewriteContinueShortcutSettings: TranscriptionContinueShortcutSettings {
+        featureSettings.rewrite.continueShortcut
+    }
+
+    var noteFeatureSettings: TranscriptionNoteFeatureSettings {
+        featureSettings.transcription.notes
+    }
+
     var translationFeatureSettings: TranslationFeatureSettings {
         featureSettings.translation
     }
@@ -246,7 +254,7 @@ extension AppDelegate {
     }
 
     var historyEnabled: Bool {
-        defaults.bool(forKey: AppPreferenceKey.historyEnabled)
+        true
     }
 
     var dictionaryAutoLearningEnabled: Bool {

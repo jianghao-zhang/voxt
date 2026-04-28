@@ -111,6 +111,7 @@ extension AppDelegate {
         enhancementContextSnapshot = nil
         rewriteSessionHasSelectedSourceText = false
         resetSessionTranslationState()
+        configureVoxtNoteSessionRuntimeStateForNewRecording()
         let frontmostApplication = NSWorkspace.shared.frontmostApplication
         let frontmostBundleID = frontmostApplication?.bundleIdentifier
         let sessionTargetBundleID = fallbackInjectBundleID(from: frontmostBundleID)
@@ -287,13 +288,18 @@ extension AppDelegate {
         let displayText = normalizedTranscriptionDisplayText(rawText)
         let text = sanitizedFinalTranscriptionText(displayText)
         guard !text.isEmpty else {
+            if isCurrentTranscriptionNoteSessionActive {
+                _ = captureTrailingVoxtNoteIfNeeded(finalRawText: currentSessionRawTranscribedText())
+                setEnhancingState(false)
+                finishSession(after: 0)
+                return
+            }
             VoxtLog.info("Transcription result is empty; finishing session.")
             setEnhancingState(false)
             finishSession(after: 0)
             return
         }
 
-        overlayState.transcribedText = text
         if transcriptionEngine == .remote {
             remoteASRTranscriber.transcribedText = text
         } else if transcriptionEngine == .mlxAudio {
@@ -303,6 +309,7 @@ extension AppDelegate {
         } else {
             speechTranscriber.transcribedText = text
         }
+        refreshVoxtNoteTranscriptDisplay()
 
         VoxtLog.info("Transcription result received. characters=\(text.count), output=\(sessionOutputMode == .translation ? "translation" : "transcription")")
         VoxtLog.info("Transcription result output mode resolved as \(sessionOutputLabel(for: sessionOutputMode)).", verbose: true)
@@ -319,6 +326,13 @@ extension AppDelegate {
 
         if sessionOutputMode == .rewrite {
             processRewriteTranscription(text, sessionID: sessionID)
+            return
+        }
+
+        if isCurrentTranscriptionNoteSessionActive {
+            _ = captureTrailingVoxtNoteIfNeeded(finalRawText: text)
+            setEnhancingState(false)
+            finishSession(after: 0)
             return
         }
 
@@ -699,6 +713,7 @@ extension AppDelegate {
         rewriteSessionHadWritableFocusedInput = false
         resetVoiceEndCommandState()
         resetSessionTranslationState()
+        resetVoxtNoteSessionRuntimeState()
         overlayState.reset()
         overlayWindow.hide()
     }
@@ -862,11 +877,22 @@ extension AppDelegate {
 
         guard isSessionActive else { return }
 
+        let sessionKind = sessionOutputLabel(for: sessionOutputMode)
+        let remoteDebugState = remoteASRTranscriber.activeRealtimeDebugSummary() ?? "none"
+        VoxtLog.warning(
+            """
+            Preferred input device changed during recording. reason=\(reason), previousUID=\(previousUID ?? "none"), newUID=\(newUID ?? "none"), engine=\(transcriptionEngine.rawValue), output=\(sessionKind), remoteState=\(remoteDebugState)
+            """
+        )
+
         do {
             try restartCurrentRecordingCaptureForPreferredInputDevice()
             showOverlayStatus(
                 AppLocalization.format("Switched microphone to %@.", currentDevice.name),
                 clearAfter: 1.8
+            )
+            VoxtLog.warning(
+                "Preferred input device change applied during recording. reason=\(reason), newUID=\(newUID ?? "none"), engine=\(transcriptionEngine.rawValue), output=\(sessionKind)"
             )
         } catch {
             VoxtLog.error("Recording microphone switch failed: \(error.localizedDescription). reason=\(reason)")

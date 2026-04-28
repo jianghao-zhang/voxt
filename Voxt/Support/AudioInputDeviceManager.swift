@@ -45,17 +45,47 @@ enum AudioInputDeviceManager {
         )
         guard listStatus == noErr else { return [] }
 
-        let devices: [AudioInputDevice] = deviceIDs.compactMap { (id: AudioDeviceID) -> AudioInputDevice? in
+        let discoveredDevices: [AudioInputDevice] = deviceIDs.compactMap { (id: AudioDeviceID) -> AudioInputDevice? in
             guard hasInputStream(deviceID: id) else { return nil }
             guard let uid = deviceUID(deviceID: id), !uid.isEmpty else { return nil }
             guard let name = deviceName(deviceID: id), !name.isEmpty else { return nil }
-            guard shouldIncludeInSnapshot(uid: uid, name: name) else { return nil }
             return AudioInputDevice(id: id, uid: uid, name: name)
         }
-        .sorted { (lhs: AudioInputDevice, rhs: AudioInputDevice) in
-            lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+
+        let excludedDevices = discoveredDevices.filter { !shouldIncludeInSnapshot(uid: $0.uid, name: $0.name) }
+        if !excludedDevices.isEmpty {
+            VoxtLog.info(
+                "Filtered non-microphone input devices from snapshot: \(excludedDevices.map { "\($0.name){uid=\($0.uid),id=\($0.id)}" }.joined(separator: ", "))",
+                verbose: true
+            )
         }
+
+        let devices = discoveredDevices
+            .filter { shouldIncludeInSnapshot(uid: $0.uid, name: $0.name) }
+            .sorted { (lhs: AudioInputDevice, rhs: AudioInputDevice) in
+                lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
         return devices
+    }
+
+    nonisolated static func shouldIncludeInSnapshot(uid: String, name: String) -> Bool {
+        let trimmedUID = uid.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedUID.isEmpty, !trimmedName.isEmpty else { return false }
+
+        if trimmedUID.hasPrefix("voxt-process-tap-") || trimmedName == "VoxtProcessTap" {
+            return false
+        }
+
+        // CoreAudio can expose internal aggregate routing devices as input streams.
+        // They are not real microphones and should not participate in auto-switch.
+        if trimmedUID.hasPrefix("CADefaultDeviceAggregate-"),
+           trimmedName.hasPrefix("CADefaultDeviceAggregate-") {
+            return false
+        }
+
+        return true
     }
 
     static func defaultInputDeviceID() -> AudioDeviceID? {
@@ -136,23 +166,6 @@ enum AudioInputDeviceManager {
         default:
             return String(selector)
         }
-    }
-
-    nonisolated static func shouldIncludeInSnapshot(uid: String, name: String) -> Bool {
-        let normalizedUID = uid.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !normalizedUID.isEmpty, !normalizedName.isEmpty else { return false }
-
-        let blockedPrefixes = [
-            "CADefaultDeviceAggregate-"
-        ]
-
-        if blockedPrefixes.contains(where: { normalizedUID.hasPrefix($0) || normalizedName.hasPrefix($0) }) {
-            return false
-        }
-
-        return true
     }
 
     nonisolated private static func hasInputStream(deviceID: AudioDeviceID) -> Bool {

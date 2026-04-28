@@ -1,5 +1,4 @@
 import XCTest
-import CoreAudio
 @testable import Voxt
 
 final class AudioInputDeviceManagerTests: XCTestCase {
@@ -64,5 +63,32 @@ final class AudioInputDeviceManagerTests: XCTestCase {
         )
 
         XCTAssertEqual(resolved, 10)
+    }
+
+    func testSnapshotFilterExcludesVoxtProcessTapDevice() {
+        XCTAssertFalse(
+            AudioInputDeviceManager.shouldIncludeInSnapshot(
+                uid: "voxt-process-tap-2B3C106D-E5A2-4C0C-B910-23275522F843",
+                name: "VoxtProcessTap"
+            )
+        )
+    }
+
+    func testSnapshotFilterExcludesAnonymousCoreAudioAggregateDevice() {
+        XCTAssertFalse(
+            AudioInputDeviceManager.shouldIncludeInSnapshot(
+                uid: "CADefaultDeviceAggregate-8135-0",
+                name: "CADefaultDeviceAggregate-8135-0"
+            )
+        )
+    }
+
+    func testSnapshotFilterKeepsRealMicrophoneDevices() {
+        XCTAssertTrue(
+            AudioInputDeviceManager.shouldIncludeInSnapshot(
+                uid: "BuiltInMicrophoneDevice",
+                name: "MacBook Air麦克风"
+            )
+        )
     }
 }

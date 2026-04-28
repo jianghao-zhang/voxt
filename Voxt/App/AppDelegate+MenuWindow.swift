@@ -81,6 +81,16 @@ extension AppDelegate {
         featureItem.target = self
         menu.addItem(featureItem)
 
+        if noteFeatureSettings.enabled {
+            let notesItem = NSMenuItem(
+                title: AppLocalization.localizedString("Notes"),
+                action: #selector(openNotesFromMenu),
+                keyEquivalent: ""
+            )
+            notesItem.target = self
+            menu.addItem(notesItem)
+        }
+
         let dictionaryItem = NSMenuItem(
             title: AppLocalization.localizedString("Dictionary"),
             action: #selector(openDictionarySettings),
@@ -215,6 +225,14 @@ extension AppDelegate {
             )
         }
 
+        if (devicesChanged || selectionChanged), (isSessionActive || meetingSessionCoordinator.isActive) {
+            VoxtLog.warning(
+                """
+                Audio input change observed during active session. reason=\(reason), recordingActive=\(isSessionActive), meetingActive=\(meetingSessionCoordinator.isActive), previousSelected=\(previousSelectedUID ?? "none"), newSelected=\(resolvedState.activeUID ?? "none"), devicesChanged=\(devicesChanged), selectionChanged=\(selectionChanged), added=\(describeDevices(addedDevices)), removed=\(describeDevices(removedDevices))
+                """
+            )
+        }
+
         guard devicesChanged || selectionChanged else { return }
 
         if devicesChanged {
@@ -299,8 +317,15 @@ extension AppDelegate {
         }
     }
 
+    @objc private func openNotesFromMenu() {
+        performAfterStatusMenuDismissal {
+            self.openMainWindow(target: SettingsNavigationTarget(tab: .feature, featureTab: .note))
+        }
+    }
+
     @objc private func selectMicrophoneFromMenu(_ sender: NSMenuItem) {
         guard let uid = sender.representedObject as? String else { return }
+        let previousState = microphoneResolvedState
         if let device = inputDevicesSnapshot.first(where: { $0.uid == uid }) {
             VoxtLog.info("Microphone focus changed from tray menu. uid=\(uid), name=\(device.name)")
         } else {
@@ -311,33 +336,51 @@ extension AppDelegate {
             defaults: .standard,
             availableDevices: inputDevicesSnapshot
         )
+        handleResolvedMicrophoneStateChange(
+            from: previousState,
+            to: microphoneResolvedState,
+            reason: "tray microphone selection"
+        )
         NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
         buildMenu()
     }
 
     @objc private func toggleMicrophoneAutoSwitch(_ sender: NSMenuItem) {
         let newValue = sender.state != .on
+        let previousState = microphoneResolvedState
         VoxtLog.info("Microphone auto switch updated from tray menu. enabled=\(newValue)")
         microphoneResolvedState = MicrophonePreferenceManager.setAutoSwitchEnabled(
             newValue,
             defaults: .standard,
             availableDevices: inputDevicesSnapshot
         )
+        handleResolvedMicrophoneStateChange(
+            from: previousState,
+            to: microphoneResolvedState,
+            reason: "tray microphone auto-switch"
+        )
         NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
         buildMenu()
     }
 
     func applyMicrophonePriorityOrder(_ orderedUIDs: [String]) {
+        let previousState = microphoneResolvedState
         microphoneResolvedState = MicrophonePreferenceManager.reorderPriority(
             orderedUIDs: orderedUIDs,
             defaults: .standard,
             availableDevices: inputDevicesSnapshot
+        )
+        handleResolvedMicrophoneStateChange(
+            from: previousState,
+            to: microphoneResolvedState,
+            reason: "microphone priority reorder"
         )
         NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
         buildMenu()
     }
 
     func selectMicrophoneManually(uid: String) {
+        let previousState = microphoneResolvedState
         if let device = inputDevicesSnapshot.first(where: { $0.uid == uid }) {
             VoxtLog.info("Microphone focus changed. uid=\(uid), name=\(device.name)")
         } else {
@@ -347,6 +390,11 @@ extension AppDelegate {
             uid: uid,
             defaults: .standard,
             availableDevices: inputDevicesSnapshot
+        )
+        handleResolvedMicrophoneStateChange(
+            from: previousState,
+            to: microphoneResolvedState,
+            reason: "manual microphone selection"
         )
         NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
         buildMenu()
@@ -420,6 +468,7 @@ extension AppDelegate {
             whisperModelManager: whisperModelManager,
             customLLMManager: customLLMManager,
             historyStore: historyStore,
+            noteStore: noteStore,
             dictionaryStore: dictionaryStore,
             dictionarySuggestionStore: dictionarySuggestionStore,
             appUpdateManager: appUpdateManager,
