@@ -155,11 +155,14 @@ final class VoxtObsidianSyncCoordinatorTests: XCTestCase {
         _ = noteStore.updateCompletion(true, for: item.id)
         try await Task.sleep(for: .milliseconds(700))
 
-        let updatedContent = try String(contentsOf: fileURL, encoding: .utf8)
+        let updatedRecord = try XCTUnwrap(exportStore.recordsByNoteID[item.id])
+        let updatedFileURL = vaultURL.appendingPathComponent(updatedRecord.relativeFilePath)
+        let updatedContent = try String(contentsOf: updatedFileURL, encoding: .utf8)
         XCTAssertTrue(updatedContent.contains("# Updated title"))
         XCTAssertTrue(updatedContent.contains("status: \"completed\""))
         XCTAssertTrue(updatedContent.contains(editedBody))
         XCTAssertFalse(updatedContent.contains("Original body from Voxt."))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
     func testCompletedSingleFileUsesTimeAndStatusSuffixInFileName() async throws {
