@@ -517,7 +517,7 @@ struct FeaturePromptSection: View {
             text: $text,
             defaultText: defaultText,
             variables: variables,
-            promptHeight: 168
+            promptHeight: 196
         )
     }
 }

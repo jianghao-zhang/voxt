@@ -163,11 +163,11 @@ extension AppDelegate {
     }
 
     var translationSystemPrompt: String {
-        let value = defaults.string(forKey: AppPreferenceKey.translationSystemPrompt)
-        if let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return value
-        }
-        return AppPreferenceKey.defaultTranslationPrompt
+        AppPromptDefaults.resolvedStoredText(
+            defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
+            kind: .translation,
+            defaults: defaults
+        )
     }
 
     var translationCustomLLMRepo: String {
@@ -201,11 +201,11 @@ extension AppDelegate {
     }
 
     var rewriteSystemPrompt: String {
-        let value = defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt)
-        if let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return value
-        }
-        return AppPreferenceKey.defaultRewritePrompt
+        AppPromptDefaults.resolvedStoredText(
+            defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
+            kind: .rewrite,
+            defaults: defaults
+        )
     }
 
     var rewriteCustomLLMRepo: String {

@@ -48,11 +48,11 @@ enum ASRHintTarget: String, CaseIterable, Codable, Identifiable {
         case .dictation:
             return ""
         case .whisperKit:
-            return AppPreferenceKey.defaultWhisperASRHintPrompt
+            return AppPromptDefaults.text(for: .whisperASRHint)
         case .openAIWhisper:
-            return AppPreferenceKey.defaultOpenAIASRHintPrompt
+            return AppPromptDefaults.text(for: .openAIASRHint)
         case .glmASR:
-            return AppPreferenceKey.defaultGLMASRHintPrompt
+            return AppPromptDefaults.text(for: .glmASRHint)
         case .mlxAudio, .doubaoASR, .aliyunBailianASR:
             return ""
         }
@@ -175,7 +175,7 @@ enum ASRHintSettingsStore {
         var result: [ASRHintTarget: ASRHintSettings] = [:]
         for (key, value) in decoded {
             guard let target = ASRHintTarget(rawValue: key) else { continue }
-            result[target] = sanitized(value, for: target)
+            result[target] = resolved(sanitized(value, for: target), for: target)
         }
         return result
     }
@@ -198,13 +198,30 @@ enum ASRHintSettingsStore {
     }
 
     static func defaultStoredValue() -> String {
-        storageValue(for: Dictionary(uniqueKeysWithValues: ASRHintTarget.allCases.map { ($0, defaultSettings(for: $0)) }))
+        storageValue(for: Dictionary(uniqueKeysWithValues: ASRHintTarget.allCases.map { ($0, ASRHintSettings()) }))
     }
 
     static func defaultSettings(for target: ASRHintTarget) -> ASRHintSettings {
+        resolved(
+            ASRHintSettings(
+                followsUserMainLanguage: true,
+                promptTemplate: ""
+            ),
+            for: target
+        )
+    }
+
+    static func resolved(_ settings: ASRHintSettings, for target: ASRHintTarget) -> ASRHintSettings {
         ASRHintSettings(
-            followsUserMainLanguage: true,
-            promptTemplate: target.defaultPromptTemplate
+            followsUserMainLanguage: settings.followsUserMainLanguage,
+            promptTemplate: AppPromptDefaults.resolvedStoredText(
+                settings.promptTemplate,
+                kind: promptKind(for: target)
+            ),
+            contextualPhrasesText: settings.contextualPhrasesText,
+            prefersOnDeviceRecognition: settings.prefersOnDeviceRecognition,
+            addsPunctuation: settings.addsPunctuation,
+            reportsPartialResults: settings.reportsPartialResults
         )
     }
 
@@ -212,12 +229,7 @@ enum ASRHintSettingsStore {
         let trimmedPrompt: String
         if target.supportsPromptEditor {
             let candidate = settings.promptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
-            if target == .whisperKit,
-               candidate == AppPreferenceKey.legacyDefaultWhisperASRHintPrompt.trimmingCharacters(in: .whitespacesAndNewlines) {
-                trimmedPrompt = ""
-            } else {
-                trimmedPrompt = candidate
-            }
+            trimmedPrompt = AppPromptDefaults.canonicalStoredText(candidate, kind: promptKind(for: target))
         } else {
             trimmedPrompt = ""
         }
@@ -232,6 +244,17 @@ enum ASRHintSettingsStore {
             addsPunctuation: settings.addsPunctuation,
             reportsPartialResults: settings.reportsPartialResults
         )
+    }
+
+    private static func promptKind(for target: ASRHintTarget) -> AppPromptKind {
+        switch target {
+        case .openAIWhisper:
+            return .openAIASRHint
+        case .glmASR:
+            return .glmASRHint
+        case .whisperKit, .dictation, .mlxAudio, .doubaoASR, .aliyunBailianASR:
+            return .whisperASRHint
+        }
     }
 
     static func contextualPhrases(from settings: ASRHintSettings) -> [String] {

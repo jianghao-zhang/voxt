@@ -18,7 +18,7 @@ final class ASRHintSettingsTests: XCTestCase {
         let settings = ASRHintSettingsStore.resolvedSettings(for: .glmASR, rawValue: nil)
 
         XCTAssertTrue(settings.followsUserMainLanguage)
-        XCTAssertEqual(settings.promptTemplate, AppPreferenceKey.defaultGLMASRHintPrompt)
+        XCTAssertEqual(settings.promptTemplate, AppPromptDefaults.text(for: .glmASRHint))
     }
 
     func testResolveOpenAIUsesBaseLanguageAndResolvedPrompt() {

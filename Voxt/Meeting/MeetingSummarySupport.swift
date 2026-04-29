@@ -146,11 +146,7 @@ enum MeetingSummarySupport {
     }
 
     static func resolvedPromptTemplate(_ promptTemplate: String?) -> String {
-        let trimmedPromptTemplate = promptTemplate?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (trimmedPromptTemplate?.isEmpty == false
-            ? trimmedPromptTemplate!
-            : defaultPromptTemplate())
+        AppPromptDefaults.resolvedStoredText(promptTemplate, kind: .meetingSummary)
     }
 
     private static func resolvePromptTemplate(

@@ -2,6 +2,17 @@ import AppKit
 import SwiftUI
 
 extension ModelSettingsView {
+    func promptBinding(for storage: Binding<String>, kind: AppPromptKind) -> Binding<String> {
+        Binding(
+            get: {
+                AppPromptDefaults.resolvedStoredText(storage.wrappedValue, kind: kind)
+            },
+            set: { newValue in
+                storage.wrappedValue = AppPromptDefaults.canonicalStoredText(newValue, kind: kind)
+            }
+        )
+    }
+
     var whisperRows: [ModelTableRow] {
         WhisperKitModelManager.availableModels.map { model in
             let isDownloaded = whisperModelManager.isModelDownloaded(id: model.id)

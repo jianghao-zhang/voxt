@@ -23,11 +23,12 @@ enum FeatureSettingsStore {
 
     static func save(_ settings: FeatureSettings, defaults: UserDefaults = .standard) {
         let sanitized = sanitize(settings, defaults: defaults)
-        if let data = try? JSONEncoder().encode(sanitized),
+        let storageReady = storageRepresentation(for: sanitized)
+        if let data = try? JSONEncoder().encode(storageReady),
            let raw = String(data: data, encoding: .utf8) {
             defaults.set(raw, forKey: AppPreferenceKey.featureSettings)
         }
-        syncLegacyMirror(from: sanitized, defaults: defaults)
+        syncLegacyMirror(from: storageReady, defaults: defaults)
         NotificationCenter.default.post(name: .voxtFeatureSettingsDidChange, object: nil)
     }
 
@@ -49,7 +50,11 @@ enum FeatureSettingsStore {
                 asrSelectionID: transcriptionASR,
                 llmEnabled: (EnhancementMode(rawValue: defaults.string(forKey: AppPreferenceKey.enhancementMode) ?? "") ?? .off) != .off,
                 llmSelectionID: transcriptionText,
-                prompt: defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt) ?? AppPreferenceKey.defaultEnhancementPrompt,
+                prompt: AppPromptDefaults.resolvedStoredText(
+                    defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt),
+                    kind: .enhancement,
+                    defaults: defaults
+                ),
                 notes: TranscriptionNoteFeatureSettings(
                     enabled: false,
                     triggerShortcut: .defaultShortcut,
@@ -62,14 +67,22 @@ enum FeatureSettingsStore {
                 asrSelectionID: transcriptionASR,
                 modelSelectionID: translationText,
                 targetLanguageRawValue: (TranslationTargetLanguage(rawValue: defaults.string(forKey: AppPreferenceKey.translationTargetLanguage) ?? "") ?? .english).rawValue,
-                prompt: defaults.string(forKey: AppPreferenceKey.translationSystemPrompt) ?? AppPreferenceKey.defaultTranslationPrompt,
+                prompt: AppPromptDefaults.resolvedStoredText(
+                    defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
+                    kind: .translation,
+                    defaults: defaults
+                ),
                 replaceSelectedText: defaults.object(forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey) as? Bool ?? true,
                 showResultWindow: defaults.object(forKey: AppPreferenceKey.showSelectedTextTranslationResultWindow) as? Bool ?? true
             ),
             rewrite: RewriteFeatureSettings(
                 asrSelectionID: transcriptionASR,
                 llmSelectionID: rewriteText,
-                prompt: defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt) ?? AppPreferenceKey.defaultRewritePrompt,
+                prompt: AppPromptDefaults.resolvedStoredText(
+                    defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
+                    kind: .rewrite,
+                    defaults: defaults
+                ),
                 appEnhancementEnabled: defaults.object(forKey: AppPreferenceKey.appEnhancementEnabled) as? Bool ?? false,
                 continueShortcut: .defaultShortcut
             ),
@@ -77,7 +90,11 @@ enum FeatureSettingsStore {
                 enabled: defaults.object(forKey: AppPreferenceKey.meetingNotesBetaEnabled) as? Bool ?? false,
                 asrSelectionID: transcriptionASR,
                 summaryModelSelectionID: meetingSummary,
-                summaryPrompt: defaults.string(forKey: AppPreferenceKey.meetingSummaryPromptTemplate) ?? AppPreferenceKey.defaultMeetingSummaryPrompt,
+                summaryPrompt: AppPromptDefaults.resolvedStoredText(
+                    defaults.string(forKey: AppPreferenceKey.meetingSummaryPromptTemplate),
+                    kind: .meetingSummary,
+                    defaults: defaults
+                ),
                 summaryAutoGenerate: defaults.object(forKey: AppPreferenceKey.meetingSummaryAutoGenerate) as? Bool ?? true,
                 realtimeTranslateEnabled: defaults.object(forKey: AppPreferenceKey.meetingRealtimeTranslateEnabled) as? Bool ?? false,
                 realtimeTargetLanguageRawValue: defaults.string(forKey: AppPreferenceKey.meetingRealtimeTranslationTargetLanguage) ?? "",
@@ -147,7 +164,10 @@ enum FeatureSettingsStore {
     }
 
     private static func syncLegacyTranscription(_ settings: TranscriptionFeatureSettings, defaults: UserDefaults) {
-        defaults.set(settings.prompt, forKey: AppPreferenceKey.enhancementSystemPrompt)
+        defaults.set(
+            AppPromptDefaults.canonicalStoredText(settings.prompt, kind: .enhancement),
+            forKey: AppPreferenceKey.enhancementSystemPrompt
+        )
         guard settings.llmEnabled else {
             defaults.set(EnhancementMode.off.rawValue, forKey: AppPreferenceKey.enhancementMode)
             return
@@ -168,7 +188,10 @@ enum FeatureSettingsStore {
     }
 
     private static func syncLegacyTranslation(_ settings: TranslationFeatureSettings, defaults: UserDefaults) {
-        defaults.set(settings.prompt, forKey: AppPreferenceKey.translationSystemPrompt)
+        defaults.set(
+            AppPromptDefaults.canonicalStoredText(settings.prompt, kind: .translation),
+            forKey: AppPreferenceKey.translationSystemPrompt
+        )
         defaults.set(settings.targetLanguage.rawValue, forKey: AppPreferenceKey.translationTargetLanguage)
         defaults.set(settings.replaceSelectedText, forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
         defaults.set(settings.showResultWindow, forKey: AppPreferenceKey.showSelectedTextTranslationResultWindow)
@@ -191,7 +214,10 @@ enum FeatureSettingsStore {
     }
 
     private static func syncLegacyRewrite(_ settings: RewriteFeatureSettings, defaults: UserDefaults) {
-        defaults.set(settings.prompt, forKey: AppPreferenceKey.rewriteSystemPrompt)
+        defaults.set(
+            AppPromptDefaults.canonicalStoredText(settings.prompt, kind: .rewrite),
+            forKey: AppPreferenceKey.rewriteSystemPrompt
+        )
         defaults.set(settings.appEnhancementEnabled, forKey: AppPreferenceKey.appEnhancementEnabled)
 
         switch settings.llmSelectionID.textSelection {
@@ -210,7 +236,10 @@ enum FeatureSettingsStore {
 
     private static func syncLegacyMeeting(_ settings: MeetingFeatureSettings, defaults: UserDefaults) {
         defaults.set(settings.enabled, forKey: AppPreferenceKey.meetingNotesBetaEnabled)
-        defaults.set(settings.summaryPrompt, forKey: AppPreferenceKey.meetingSummaryPromptTemplate)
+        defaults.set(
+            AppPromptDefaults.canonicalStoredText(settings.summaryPrompt, kind: .meetingSummary),
+            forKey: AppPreferenceKey.meetingSummaryPromptTemplate
+        )
         defaults.set(settings.summaryAutoGenerate, forKey: AppPreferenceKey.meetingSummaryAutoGenerate)
         defaults.set(settings.realtimeTranslateEnabled, forKey: AppPreferenceKey.meetingRealtimeTranslateEnabled)
         defaults.set(settings.realtimeTargetLanguageRawValue, forKey: AppPreferenceKey.meetingRealtimeTranslationTargetLanguage)
@@ -225,7 +254,11 @@ enum FeatureSettingsStore {
                 asrSelectionID: settings.transcription.asrSelectionID.asrSelection == nil ? fallback.transcription.asrSelectionID : settings.transcription.asrSelectionID,
                 llmEnabled: settings.transcription.llmEnabled,
                 llmSelectionID: settings.transcription.llmSelectionID.textSelection == nil ? fallback.transcription.llmSelectionID : settings.transcription.llmSelectionID,
-                prompt: sanitizedPrompt(settings.transcription.prompt, fallback: AppPreferenceKey.defaultEnhancementPrompt),
+                prompt: AppPromptDefaults.resolvedStoredText(
+                    sanitizedPrompt(settings.transcription.prompt),
+                    kind: .enhancement,
+                    defaults: defaults
+                ),
                 notes: sanitizedNotesSettings(
                     settings.transcription.notes,
                     fallbackSelectionID: fallback.transcription.notes.titleModelSelectionID
@@ -235,14 +268,22 @@ enum FeatureSettingsStore {
                 asrSelectionID: settings.translation.asrSelectionID.asrSelection == nil ? fallback.translation.asrSelectionID : settings.translation.asrSelectionID,
                 modelSelectionID: settings.translation.modelSelectionID.translationSelection == nil ? fallback.translation.modelSelectionID : settings.translation.modelSelectionID,
                 targetLanguageRawValue: settings.translation.targetLanguage.rawValue,
-                prompt: sanitizedPrompt(settings.translation.prompt, fallback: AppPreferenceKey.defaultTranslationPrompt),
+                prompt: AppPromptDefaults.resolvedStoredText(
+                    sanitizedPrompt(settings.translation.prompt),
+                    kind: .translation,
+                    defaults: defaults
+                ),
                 replaceSelectedText: settings.translation.replaceSelectedText,
                 showResultWindow: settings.translation.showResultWindow
             ),
             rewrite: RewriteFeatureSettings(
                 asrSelectionID: settings.rewrite.asrSelectionID.asrSelection == nil ? fallback.rewrite.asrSelectionID : settings.rewrite.asrSelectionID,
                 llmSelectionID: settings.rewrite.llmSelectionID.textSelection == nil ? fallback.rewrite.llmSelectionID : settings.rewrite.llmSelectionID,
-                prompt: sanitizedPrompt(settings.rewrite.prompt, fallback: AppPreferenceKey.defaultRewritePrompt),
+                prompt: AppPromptDefaults.resolvedStoredText(
+                    sanitizedPrompt(settings.rewrite.prompt),
+                    kind: .rewrite,
+                    defaults: defaults
+                ),
                 appEnhancementEnabled: settings.rewrite.appEnhancementEnabled,
                 continueShortcut: sanitizedContinueShortcutSettings(settings.rewrite.continueShortcut)
             ),
@@ -250,7 +291,11 @@ enum FeatureSettingsStore {
                 enabled: settings.meeting.enabled,
                 asrSelectionID: settings.meeting.asrSelectionID.asrSelection == nil ? fallback.meeting.asrSelectionID : settings.meeting.asrSelectionID,
                 summaryModelSelectionID: settings.meeting.summaryModelSelectionID.textSelection == nil ? fallback.meeting.summaryModelSelectionID : settings.meeting.summaryModelSelectionID,
-                summaryPrompt: sanitizedPrompt(settings.meeting.summaryPrompt, fallback: AppPreferenceKey.defaultMeetingSummaryPrompt),
+                summaryPrompt: AppPromptDefaults.resolvedStoredText(
+                    sanitizedPrompt(settings.meeting.summaryPrompt),
+                    kind: .meetingSummary,
+                    defaults: defaults
+                ),
                 summaryAutoGenerate: settings.meeting.summaryAutoGenerate,
                 realtimeTranslateEnabled: settings.meeting.realtimeTranslateEnabled,
                 realtimeTargetLanguageRawValue: settings.meeting.realtimeTargetLanguage?.rawValue ?? "",
@@ -259,9 +304,46 @@ enum FeatureSettingsStore {
         )
     }
 
-    private static func sanitizedPrompt(_ prompt: String, fallback: String) -> String {
+    private static func storageRepresentation(for settings: FeatureSettings) -> FeatureSettings {
+        FeatureSettings(
+            transcription: TranscriptionFeatureSettings(
+                asrSelectionID: settings.transcription.asrSelectionID,
+                llmEnabled: settings.transcription.llmEnabled,
+                llmSelectionID: settings.transcription.llmSelectionID,
+                prompt: AppPromptDefaults.canonicalStoredText(settings.transcription.prompt, kind: .enhancement),
+                notes: settings.transcription.notes
+            ),
+            translation: TranslationFeatureSettings(
+                asrSelectionID: settings.translation.asrSelectionID,
+                modelSelectionID: settings.translation.modelSelectionID,
+                targetLanguageRawValue: settings.translation.targetLanguageRawValue,
+                prompt: AppPromptDefaults.canonicalStoredText(settings.translation.prompt, kind: .translation),
+                replaceSelectedText: settings.translation.replaceSelectedText,
+                showResultWindow: settings.translation.showResultWindow
+            ),
+            rewrite: RewriteFeatureSettings(
+                asrSelectionID: settings.rewrite.asrSelectionID,
+                llmSelectionID: settings.rewrite.llmSelectionID,
+                prompt: AppPromptDefaults.canonicalStoredText(settings.rewrite.prompt, kind: .rewrite),
+                appEnhancementEnabled: settings.rewrite.appEnhancementEnabled,
+                continueShortcut: settings.rewrite.continueShortcut
+            ),
+            meeting: MeetingFeatureSettings(
+                enabled: settings.meeting.enabled,
+                asrSelectionID: settings.meeting.asrSelectionID,
+                summaryModelSelectionID: settings.meeting.summaryModelSelectionID,
+                summaryPrompt: AppPromptDefaults.canonicalStoredText(settings.meeting.summaryPrompt, kind: .meetingSummary),
+                summaryAutoGenerate: settings.meeting.summaryAutoGenerate,
+                realtimeTranslateEnabled: settings.meeting.realtimeTranslateEnabled,
+                realtimeTargetLanguageRawValue: settings.meeting.realtimeTargetLanguageRawValue,
+                showOverlayInScreenShare: settings.meeting.showOverlayInScreenShare
+            )
+        )
+    }
+
+    private static func sanitizedPrompt(_ prompt: String) -> String {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? fallback : prompt
+        return trimmed.isEmpty ? "" : prompt
     }
 
     private static func sanitizedNotesSettings(

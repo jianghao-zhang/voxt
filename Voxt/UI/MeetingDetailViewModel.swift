@@ -357,11 +357,14 @@ final class MeetingDetailViewModel: ObservableObject {
 
     func setSummaryPromptTemplate(_ promptTemplate: String) {
         summaryPromptTemplate = promptTemplate
-        UserDefaults.standard.set(promptTemplate, forKey: AppPreferenceKey.meetingSummaryPromptTemplate)
+        UserDefaults.standard.set(
+            AppPromptDefaults.canonicalStoredText(promptTemplate, kind: .meetingSummary),
+            forKey: AppPreferenceKey.meetingSummaryPromptTemplate
+        )
     }
 
     func resetSummaryPromptTemplate() {
-        setSummaryPromptTemplate(AppPreferenceKey.defaultMeetingSummaryPrompt)
+        setSummaryPromptTemplate(AppPromptDefaults.text(for: .meetingSummary))
     }
 
     func setSummaryModelSelectionID(_ selectionID: String) {

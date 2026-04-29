@@ -879,9 +879,21 @@ enum ConfigurationTransferManager {
             model: .init(
                 transcriptionEngine: defaults.string(forKey: AppPreferenceKey.transcriptionEngine) ?? TranscriptionEngine.mlxAudio.rawValue,
                 enhancementMode: defaults.string(forKey: AppPreferenceKey.enhancementMode) ?? EnhancementMode.off.rawValue,
-                enhancementSystemPrompt: defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt) ?? AppPreferenceKey.defaultEnhancementPrompt,
-                translationSystemPrompt: defaults.string(forKey: AppPreferenceKey.translationSystemPrompt) ?? AppPreferenceKey.defaultTranslationPrompt,
-                rewriteSystemPrompt: defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt) ?? AppPreferenceKey.defaultRewritePrompt,
+                enhancementSystemPrompt: AppPromptDefaults.resolvedStoredText(
+                    defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt),
+                    kind: .enhancement,
+                    defaults: defaults
+                ),
+                translationSystemPrompt: AppPromptDefaults.resolvedStoredText(
+                    defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
+                    kind: .translation,
+                    defaults: defaults
+                ),
+                rewriteSystemPrompt: AppPromptDefaults.resolvedStoredText(
+                    defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
+                    kind: .rewrite,
+                    defaults: defaults
+                ),
                 asrHintSettings: defaults.string(forKey: AppPreferenceKey.asrHintSettings) ?? ASRHintSettingsStore.defaultStoredValue(),
                 whisperLocalASRTuningSettings: defaults.string(forKey: AppPreferenceKey.whisperLocalASRTuningSettings)
                     ?? WhisperLocalTuningSettingsStore.defaultStoredValue(),

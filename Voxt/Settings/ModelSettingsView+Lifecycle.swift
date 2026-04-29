@@ -31,12 +31,6 @@ extension ModelSettingsView {
         if !CustomLLMModelManager.isSupportedModelRepo(translationCustomLLMRepo) {
             translationCustomLLMRepo = customLLMRepo
         }
-        if translationPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            translationPrompt = AppPreferenceKey.defaultTranslationPrompt
-        }
-        if rewritePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            rewritePrompt = AppPreferenceKey.defaultRewritePrompt
-        }
         if !TranslationModelProvider.allCases.contains(where: { $0.rawValue == translationModelProviderRaw }) {
             translationModelProviderRaw = TranslationModelProvider.customLLM.rawValue
         }

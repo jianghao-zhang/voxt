@@ -16,8 +16,8 @@ extension ModelSettingsView {
             statusMessage: translationProviderStatusMessage,
             statusIsWarning: translationProviderStatusIsWarning,
             promptTitle: "Translation Prompt",
-            promptText: $translationPrompt,
-            defaultPromptText: AppPreferenceKey.defaultTranslationPrompt,
+            promptText: promptBinding(for: $translationPrompt, kind: .translation),
+            defaultPromptText: AppPromptDefaults.text(for: .translation),
             variables: ModelSettingsPromptVariables.translation
         )
     }
@@ -37,8 +37,8 @@ extension ModelSettingsView {
             statusMessage: nil,
             statusIsWarning: false,
             promptTitle: "Content Rewrite Prompt",
-            promptText: $rewritePrompt,
-            defaultPromptText: AppPreferenceKey.defaultRewritePrompt,
+            promptText: promptBinding(for: $rewritePrompt, kind: .rewrite),
+            defaultPromptText: AppPromptDefaults.text(for: .rewrite),
             variables: ModelSettingsPromptVariables.rewrite
         )
     }
@@ -202,8 +202,8 @@ extension ModelSettingsView {
         if appleIntelligenceAvailable {
             ResettablePromptSection(
                 title: "System Prompt",
-                text: $systemPrompt,
-                defaultText: AppPreferenceKey.defaultEnhancementPrompt,
+                text: promptBinding(for: $systemPrompt, kind: .enhancement),
+                defaultText: AppPromptDefaults.text(for: .enhancement),
                 variables: ModelSettingsPromptVariables.enhancement
             )
 
@@ -225,8 +225,8 @@ extension ModelSettingsView {
 
         ResettablePromptSection(
             title: "System Prompt",
-            text: $systemPrompt,
-            defaultText: AppPreferenceKey.defaultEnhancementPrompt,
+            text: promptBinding(for: $systemPrompt, kind: .enhancement),
+            defaultText: AppPromptDefaults.text(for: .enhancement),
             variables: ModelSettingsPromptVariables.enhancement
         )
 
@@ -253,8 +253,8 @@ extension ModelSettingsView {
 
         ResettablePromptSection(
             title: "System Prompt",
-            text: $systemPrompt,
-            defaultText: AppPreferenceKey.defaultEnhancementPrompt,
+            text: promptBinding(for: $systemPrompt, kind: .enhancement),
+            defaultText: AppPromptDefaults.text(for: .enhancement),
             variables: ModelSettingsPromptVariables.enhancement
         )
 

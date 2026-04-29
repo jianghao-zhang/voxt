@@ -24,9 +24,10 @@ extension AppDelegate {
     }
 
     var meetingSummaryPromptTemplatePreference: String {
-        let value = UserDefaults.standard.string(forKey: AppPreferenceKey.meetingSummaryPromptTemplate)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return value.isEmpty ? AppPreferenceKey.defaultMeetingSummaryPrompt : value
+        AppPromptDefaults.resolvedStoredText(
+            UserDefaults.standard.string(forKey: AppPreferenceKey.meetingSummaryPromptTemplate),
+            kind: .meetingSummary
+        )
     }
 
     var meetingSummaryModelSelectionPreference: String? {

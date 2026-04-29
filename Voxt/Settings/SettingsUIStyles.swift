@@ -152,7 +152,8 @@ struct SettingsPromptEditorModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .font(.system(size: 13, weight: .medium, design: .monospaced))
+            .lineSpacing(4)
             .frame(height: height)
             .scrollContentBackground(.hidden)
             .padding(contentPadding)

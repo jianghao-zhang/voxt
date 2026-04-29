@@ -30,9 +30,9 @@ struct ModelSettingsView: View {
 
     @AppStorage(AppPreferenceKey.transcriptionEngine) var engineRaw = TranscriptionEngine.mlxAudio.rawValue
     @AppStorage(AppPreferenceKey.enhancementMode) var enhancementModeRaw = EnhancementMode.off.rawValue
-    @AppStorage(AppPreferenceKey.enhancementSystemPrompt) var systemPrompt = AppPreferenceKey.defaultEnhancementPrompt
-    @AppStorage(AppPreferenceKey.translationSystemPrompt) var translationPrompt = AppPreferenceKey.defaultTranslationPrompt
-    @AppStorage(AppPreferenceKey.rewriteSystemPrompt) var rewritePrompt = AppPreferenceKey.defaultRewritePrompt
+    @AppStorage(AppPreferenceKey.enhancementSystemPrompt) var systemPrompt = ""
+    @AppStorage(AppPreferenceKey.translationSystemPrompt) var translationPrompt = ""
+    @AppStorage(AppPreferenceKey.rewriteSystemPrompt) var rewritePrompt = ""
     @AppStorage(AppPreferenceKey.mlxModelRepo) var modelRepo = MLXModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.whisperModelID) var whisperModelID = WhisperKitModelManager.defaultModelID
     @AppStorage(AppPreferenceKey.whisperTemperature) var whisperTemperature = 0.0

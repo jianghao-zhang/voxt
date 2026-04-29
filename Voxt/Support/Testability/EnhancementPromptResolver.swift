@@ -182,7 +182,7 @@ struct EnhancementPromptResolver {
 
     private static func resolvedGlobalPrompt(_ prompt: String) -> String {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? AppPreferenceKey.defaultEnhancementPrompt : trimmed
+        return trimmed.isEmpty ? AppPromptDefaults.text(for: .enhancement) : trimmed
     }
 
     private static func resolvedPrompt(

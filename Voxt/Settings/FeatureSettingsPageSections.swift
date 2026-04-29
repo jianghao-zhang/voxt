@@ -5,6 +5,21 @@ private func featureSettingsLocalized(_ key: String) -> String {
 }
 
 extension FeatureSettingsView {
+    func promptBinding(
+        get: @escaping () -> String,
+        set: @escaping (String) -> Void,
+        kind: AppPromptKind
+    ) -> Binding<String> {
+        Binding(
+            get: {
+                AppPromptDefaults.resolvedStoredText(get(), kind: kind)
+            },
+            set: { newValue in
+                set(AppPromptDefaults.canonicalStoredText(newValue, kind: kind))
+            }
+        )
+    }
+
     var transcriptionContent: some View {
         featurePage(
             title: featureSettingsLocalized("Transcription"),
@@ -54,11 +69,12 @@ extension FeatureSettingsView {
                         )
                         FeaturePromptSection(
                             title: featureSettingsLocalized("Enhancement Prompt"),
-                            text: binding(
+                            text: promptBinding(
                                 get: { featureSettings.transcription.prompt },
-                                set: { featureSettings.transcription.prompt = $0 }
+                                set: { featureSettings.transcription.prompt = $0 },
+                                kind: .enhancement
                             ),
-                            defaultText: AppPreferenceKey.defaultEnhancementPrompt,
+                            defaultText: AppPromptDefaults.text(for: .enhancement),
                             variables: ModelSettingsPromptVariables.enhancement
                         )
                     }
@@ -201,11 +217,12 @@ extension FeatureSettingsView {
                     FeatureSettingSection(title: featureSettingsLocalized("Prompt"), detail: featureSettingsLocalized("Prompt controls are shown only when the selected translation model supports prompt-based generation.")) {
                         FeaturePromptSection(
                             title: featureSettingsLocalized("Translation Prompt"),
-                            text: binding(
+                            text: promptBinding(
                                 get: { featureSettings.translation.prompt },
-                                set: { featureSettings.translation.prompt = $0 }
+                                set: { featureSettings.translation.prompt = $0 },
+                                kind: .translation
                             ),
-                            defaultText: AppPreferenceKey.defaultTranslationPrompt,
+                            defaultText: AppPromptDefaults.text(for: .translation),
                             variables: ModelSettingsPromptVariables.translation
                         )
                     }
@@ -246,11 +263,12 @@ extension FeatureSettingsView {
                 FeatureSettingSection(title: featureSettingsLocalized("Prompt"), detail: featureSettingsLocalized("Prompt templates stay local to rewrite mode and no longer live in the shared model page.")) {
                     FeaturePromptSection(
                         title: featureSettingsLocalized("Rewrite Prompt"),
-                        text: binding(
+                        text: promptBinding(
                             get: { featureSettings.rewrite.prompt },
-                            set: { featureSettings.rewrite.prompt = $0 }
+                            set: { featureSettings.rewrite.prompt = $0 },
+                            kind: .rewrite
                         ),
-                        defaultText: AppPreferenceKey.defaultRewritePrompt,
+                        defaultText: AppPromptDefaults.text(for: .rewrite),
                         variables: ModelSettingsPromptVariables.rewrite
                     )
                 }
@@ -344,11 +362,12 @@ extension FeatureSettingsView {
                 FeatureSettingSection(title: featureSettingsLocalized("Summary Prompt"), detail: featureSettingsLocalized("Use prompt variables to shape the meeting summary format and focus.")) {
                     FeaturePromptSection(
                         title: featureSettingsLocalized("Summary Prompt"),
-                        text: binding(
+                        text: promptBinding(
                             get: { featureSettings.meeting.summaryPrompt },
-                            set: { featureSettings.meeting.summaryPrompt = $0 }
+                            set: { featureSettings.meeting.summaryPrompt = $0 },
+                            kind: .meetingSummary
                         ),
-                        defaultText: AppPreferenceKey.defaultMeetingSummaryPrompt,
+                        defaultText: AppPromptDefaults.text(for: .meetingSummary),
                         variables: MeetingSummarySupport.promptTemplateVariables.map {
                             PromptTemplateVariableDescriptor(token: $0, tipKey: "Template tip \($0)")
                         }

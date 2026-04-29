@@ -49,7 +49,7 @@ struct ResettablePromptSection: View {
     @Binding var text: String
     let defaultText: String
     let variables: [PromptTemplateVariableDescriptor]
-    var promptHeight: CGFloat = 100
+    var promptHeight: CGFloat = 124
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {

@@ -19,16 +19,16 @@ extension AppDelegate {
 
     func resolveGlobalEnhancementPromptTemplate(_ prompt: String, rawTranscription: String) -> String {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedPrompt.isEmpty else { return AppPreferenceKey.defaultEnhancementPrompt }
+        guard !trimmedPrompt.isEmpty else { return AppPromptDefaults.text(for: .enhancement) }
         let resolved = resolveEnhancementPromptVariables(in: trimmedPrompt, rawTranscription: rawTranscription)
         return appendDictionaryEnhancementGlossary(to: resolved, sourceText: rawTranscription)
     }
 
     func resolvedGlobalEnhancementPrompt() -> String {
-        let globalPrompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let fallbackPrompt = (globalPrompt?.isEmpty == false) ? globalPrompt! : AppPreferenceKey.defaultEnhancementPrompt
-        return fallbackPrompt
+        AppPromptDefaults.resolvedStoredText(
+            UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt),
+            kind: .enhancement
+        )
     }
 
     func resolvedEnhancementPrompt(rawTranscription: String) -> EnhancementPromptResolution {

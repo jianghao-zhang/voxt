@@ -298,7 +298,7 @@ final class MeetingDetailViewModelTests: XCTestCase {
 
         viewModel.resetSummaryPromptTemplate()
 
-        XCTAssertEqual(viewModel.summaryPromptTemplate, AppPreferenceKey.defaultMeetingSummaryPrompt)
+        XCTAssertEqual(viewModel.summaryPromptTemplate, AppPromptDefaults.text(for: .meetingSummary))
     }
 
     func testRefreshSummaryConfigurationFallsBackToFirstAvailableModel() {
