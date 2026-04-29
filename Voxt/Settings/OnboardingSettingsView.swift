@@ -1125,6 +1125,11 @@ struct OnboardingSettingsView: View {
             modifiers: values.meeting.modifiers,
             sidedModifiers: values.meeting.sidedModifiers
         )
+        HotkeyPreference.saveCustomPaste(
+            keyCode: values.customPaste.keyCode,
+            modifiers: values.customPaste.modifiers,
+            sidedModifiers: values.customPaste.sidedModifiers
+        )
     }
 
     func setMicrophoneAutoSwitchEnabled(_ isEnabled: Bool) {

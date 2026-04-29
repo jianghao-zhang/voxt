@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 import Carbon
 import ApplicationServices
 import IOKit.hidsystem
@@ -20,6 +21,10 @@ final class HotkeyManagerTests: XCTestCase {
         AppPreferenceKey.meetingHotkeyKeyCode,
         AppPreferenceKey.meetingHotkeyModifiers,
         AppPreferenceKey.meetingHotkeySidedModifiers,
+        AppPreferenceKey.customPasteHotkeyEnabled,
+        AppPreferenceKey.customPasteHotkeyKeyCode,
+        AppPreferenceKey.customPasteHotkeyModifiers,
+        AppPreferenceKey.customPasteHotkeySidedModifiers,
         AppPreferenceKey.meetingNotesBetaEnabled,
         AppPreferenceKey.hotkeyTriggerMode,
         AppPreferenceKey.hotkeyDistinguishModifierSides,
@@ -412,6 +417,232 @@ final class HotkeyManagerTests: XCTestCase {
         await fulfillment(of: [callbackExpectation], timeout: 1.0)
 
         XCTAssertEqual(transcriptionDownCount, 1)
+    }
+
+    func testPlainFnTapStillWorksWhenDistinguishingModifierSidesIsEnabledAndPresetIsCustom() async {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        let callbackExpectation = expectation(description: "transcription callback with side distinction enabled")
+        manager.onKeyDown = {
+            transcriptionDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskSecondaryFn
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: []
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(transcriptionDownCount, 1)
+    }
+
+    func testLegacyStoredFunctionKeyHotkeyStillTriggersFnTap() async {
+        let defaults = UserDefaults.standard
+        defaults.set(Int(UInt16(kVK_Function)), forKey: AppPreferenceKey.hotkeyKeyCode)
+        defaults.set(Int(NSEvent.ModifierFlags.function.rawValue), forKey: AppPreferenceKey.hotkeyModifiers)
+        defaults.set(0, forKey: AppPreferenceKey.hotkeySidedModifiers)
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        let callbackExpectation = expectation(description: "legacy fn transcription callback")
+        manager.onKeyDown = {
+            transcriptionDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskSecondaryFn
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: []
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(transcriptionDownCount, 1)
+    }
+
+    func testModifierOnlyCustomPasteDoesNotBlockFnTapTranscription() async {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.customPasteHotkeyEnabled)
+        defaults.set(Int(HotkeyPreference.modifierOnlyKeyCode), forKey: AppPreferenceKey.customPasteHotkeyKeyCode)
+        defaults.set(Int(NSEvent.ModifierFlags.command.rawValue), forKey: AppPreferenceKey.customPasteHotkeyModifiers)
+        defaults.set(SidedModifierFlags.rightCommand.rawValue, forKey: AppPreferenceKey.customPasteHotkeySidedModifiers)
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        let callbackExpectation = expectation(description: "fn transcription callback with modifier-only custom paste enabled")
+        manager.onKeyDown = {
+            transcriptionDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskSecondaryFn
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: []
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(transcriptionDownCount, 1)
+    }
+
+    func testModifierOnlyCustomPasteStillTriggersWithRightCommand() async {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.customPasteHotkeyEnabled)
+        defaults.set(Int(HotkeyPreference.modifierOnlyKeyCode), forKey: AppPreferenceKey.customPasteHotkeyKeyCode)
+        defaults.set(Int(NSEvent.ModifierFlags.command.rawValue), forKey: AppPreferenceKey.customPasteHotkeyModifiers)
+        defaults.set(SidedModifierFlags.rightCommand.rawValue, forKey: AppPreferenceKey.customPasteHotkeySidedModifiers)
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+
+        let manager = makeManager()
+        var customPasteDownCount = 0
+        let callbackExpectation = expectation(description: "right-command custom paste callback")
+        manager.onCustomPasteKeyDown = {
+            customPasteDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: commandFlags(for: .rightCommand)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: []
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(customPasteDownCount, 1)
+    }
+
+    func testControlCommandVCustomPasteStillTriggersUnderCommandPresetWithRightCommand() async {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.customPasteHotkeyEnabled)
+        defaults.set(Int(UInt16(kVK_ANSI_V)), forKey: AppPreferenceKey.customPasteHotkeyKeyCode)
+        defaults.set(Int(NSEvent.ModifierFlags([.control, .command]).rawValue), forKey: AppPreferenceKey.customPasteHotkeyModifiers)
+        defaults.set(0, forKey: AppPreferenceKey.customPasteHotkeySidedModifiers)
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.commandCombo.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+        HotkeyPreference.save(
+            keyCode: HotkeyPreference.modifierOnlyKeyCode,
+            modifiers: [.command],
+            sidedModifiers: [.rightCommand]
+        )
+
+        let manager = makeManager()
+        var customPasteDownCount = 0
+        let callbackExpectation = expectation(description: "control-command-v custom paste callback under command preset")
+        manager.onCustomPasteKeyDown = {
+            customPasteDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Control),
+            flags: .maskControl
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: commandFlags(for: .rightCommand).union(.maskControl)
+        )
+        manager.testingHandleEvent(
+            type: .keyDown,
+            keyCode: UInt16(kVK_ANSI_V),
+            flags: commandFlags(for: .rightCommand).union(.maskControl)
+        )
+        manager.testingHandleEvent(
+            type: .keyUp,
+            keyCode: UInt16(kVK_ANSI_V),
+            flags: commandFlags(for: .rightCommand).union(.maskControl)
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(customPasteDownCount, 1)
+    }
+
+    func testCustomPasteChordWinsOverMeetingWhenHotkeysConflict() async {
+        let defaults = UserDefaults.standard
+        defaults.set(true, forKey: AppPreferenceKey.customPasteHotkeyEnabled)
+        defaults.set(true, forKey: AppPreferenceKey.meetingNotesBetaEnabled)
+        defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+
+        HotkeyPreference.save(
+            keyCode: HotkeyPreference.modifierOnlyKeyCode,
+            modifiers: [.command],
+            sidedModifiers: [.rightCommand]
+        )
+        HotkeyPreference.saveMeeting(
+            keyCode: UInt16(kVK_ANSI_L),
+            modifiers: [.command],
+            sidedModifiers: [.rightCommand]
+        )
+        HotkeyPreference.saveCustomPaste(
+            keyCode: UInt16(kVK_ANSI_L),
+            modifiers: [.command],
+            sidedModifiers: []
+        )
+
+        let manager = makeManager()
+        var customPasteDownCount = 0
+        var meetingDownCount = 0
+        let callbackExpectation = expectation(description: "custom paste wins conflict with meeting")
+        manager.onCustomPasteKeyDown = {
+            customPasteDownCount += 1
+            callbackExpectation.fulfill()
+        }
+        manager.onMeetingKeyDown = {
+            meetingDownCount += 1
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_RightCommand),
+            flags: commandFlags(for: .rightCommand)
+        )
+        manager.testingHandleEvent(
+            type: .keyDown,
+            keyCode: UInt16(kVK_ANSI_L),
+            flags: commandFlags(for: .rightCommand)
+        )
+        manager.testingHandleEvent(
+            type: .keyUp,
+            keyCode: UInt16(kVK_ANSI_L),
+            flags: commandFlags(for: .rightCommand)
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(customPasteDownCount, 1)
+        XCTAssertEqual(meetingDownCount, 0)
     }
 
     func testRightCommandTapRemainsStableAcrossDuplicateFlagsChangedEvents() async {

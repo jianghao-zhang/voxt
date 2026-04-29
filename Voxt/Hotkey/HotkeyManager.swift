@@ -464,6 +464,48 @@ class HotkeyManager {
             }
         }
 
+        if let customPasteHotkey = activeCustomPasteHotkey,
+           HotkeyModifierInterpreter.isModifierOnly(customPasteHotkey) {
+            if handleModifierOnlyCustomPasteEvent(
+                type: type,
+                keyCode: keyCode,
+                flags: flags,
+                currentSidedModifiers: currentSidedModifiers,
+                customPasteHotkey: customPasteHotkey,
+                distinguishModifierSides: distinguishModifierSides,
+                customPasteFlags: customPasteFlags,
+                wasCustomPasteKeyDown: wasCustomPasteKeyDown
+            ) {
+                return
+            }
+        } else if let customPasteHotkey = activeCustomPasteHotkey {
+            let customPasteFlagsMatch = HotkeyPreference.hotkeyMatches(
+                customPasteHotkey,
+                eventFlags: flags,
+                sidedModifiers: currentSidedModifiers,
+                distinguishModifierSides: distinguishModifierSides
+            )
+            switch type {
+            case .keyDown:
+                if keyCode == customPasteHotkey.keyCode, customPasteFlagsMatch, !isAutoRepeat {
+                    if !isCustomPasteKeyDown {
+                        isCustomPasteKeyDown = true
+                        activeCustomPasteKeyCode = keyCode
+                    }
+                    return
+                }
+            case .keyUp:
+                if isCustomPasteKeyDown, activeCustomPasteKeyCode == keyCode {
+                    isCustomPasteKeyDown = false
+                    activeCustomPasteKeyCode = nil
+                    emitCustomPasteKeyDown()
+                    return
+                }
+            default:
+                break
+            }
+        }
+
         if let meetingHotkey = activeMeetingHotkey,
            HotkeyModifierInterpreter.isModifierOnly(meetingHotkey) {
             if handleModifierOnlyMeetingEvent(
@@ -508,49 +550,6 @@ class HotkeyManager {
                 if isMeetingKeyDown, activeMeetingKeyCode == keyCode {
                     isMeetingKeyDown = false
                     activeMeetingKeyCode = nil
-                    return
-                }
-            default:
-                break
-            }
-        }
-
-        if let customPasteHotkey = activeCustomPasteHotkey,
-           HotkeyModifierInterpreter.isModifierOnly(customPasteHotkey) {
-            if handleModifierOnlyCustomPasteEvent(
-                type: type,
-                keyCode: keyCode,
-                flags: flags,
-                currentSidedModifiers: currentSidedModifiers,
-                customPasteHotkey: customPasteHotkey,
-                distinguishModifierSides: distinguishModifierSides,
-                customPasteFlags: customPasteFlags,
-                wasCustomPasteKeyDown: wasCustomPasteKeyDown
-            ) {
-                return
-            }
-            return
-        } else if let customPasteHotkey = activeCustomPasteHotkey {
-            let customPasteFlagsMatch = HotkeyPreference.hotkeyMatches(
-                customPasteHotkey,
-                eventFlags: flags,
-                sidedModifiers: currentSidedModifiers,
-                distinguishModifierSides: distinguishModifierSides
-            )
-            switch type {
-            case .keyDown:
-                if keyCode == customPasteHotkey.keyCode, customPasteFlagsMatch, !isAutoRepeat {
-                    if !isCustomPasteKeyDown {
-                        isCustomPasteKeyDown = true
-                        activeCustomPasteKeyCode = keyCode
-                    }
-                    return
-                }
-            case .keyUp:
-                if isCustomPasteKeyDown, activeCustomPasteKeyCode == keyCode {
-                    isCustomPasteKeyDown = false
-                    activeCustomPasteKeyCode = nil
-                    emitCustomPasteKeyDown()
                     return
                 }
             default:
@@ -794,14 +793,14 @@ class HotkeyManager {
             // - Stop action is centralized to transcription hotkey tap (fn) in AppDelegate.
             // - We still track combo-up to enter a short suppression window for fn stray events.
             if translationTriggerDown && !isTranslationKeyDown {
-                VoxtLog.info("Hotkey detect translation modifier combo down (tap).", verbose: true)
+                VoxtLog.hotkey("Hotkey detect translation modifier combo down (tap).")
                 cancelPendingTranscriptionTap(resetKeyState: true)
                 isTranslationKeyDown = true
                 hasTranslationModifierTapCandidate = true
                 suppressTranscriptionTapUntil = Date().addingTimeInterval(0.35)
             }
             if !comboIsDown && isTranslationKeyDown {
-                VoxtLog.info("Hotkey detect translation modifier combo up (tap).", verbose: true)
+                VoxtLog.hotkey("Hotkey detect translation modifier combo up (tap).")
                 if hasTranslationModifierTapCandidate {
                     VoxtLog.hotkey("Hotkey translation modifier tap confirmed on release.")
                     emitTranslationKeyDown()
@@ -820,11 +819,11 @@ class HotkeyManager {
             cancelPendingTranslationLongPressRelease()
         }
         if comboIsDown && !isTranslationKeyDown {
-            VoxtLog.info("Hotkey detect translation modifier combo down (longPress).", verbose: true)
+            VoxtLog.hotkey("Hotkey detect translation modifier combo down (longPress).")
             isTranslationKeyDown = true
             emitTranslationKeyDown()
         } else if !comboIsDown && isTranslationKeyDown {
-            VoxtLog.info("Hotkey detect translation modifier combo up (longPress-pending).", verbose: true)
+            VoxtLog.hotkey("Hotkey detect translation modifier combo up (longPress-pending).")
             scheduleTranslationLongPressRelease()
         } else if translationFlags == .maskSecondaryFn && HotkeyModifierInterpreter.isFunctionKeyEvent(keyCode) {
             if isTranslationKeyDown {
@@ -1064,7 +1063,7 @@ class HotkeyManager {
                 sidedModifiers: currentSidedModifiers,
                 distinguishModifierSides: distinguishModifierSides
             ) || isRewriteKeyDown)) {
-            VoxtLog.info("Hotkey suppress transcription modifier path because higher-priority combo is active.", verbose: true)
+            VoxtLog.hotkey("Hotkey suppress transcription modifier path because higher-priority combo is active.")
             cancelPendingTranscriptionTap(resetKeyState: true)
             return true
         }
@@ -1076,7 +1075,7 @@ class HotkeyManager {
                 sidedModifiers: currentSidedModifiers,
                 distinguishModifierSides: distinguishModifierSides
             ) || isMeetingKeyDown) {
-            VoxtLog.info("Hotkey suppress transcription modifier path because meeting combo is active.", verbose: true)
+            VoxtLog.hotkey("Hotkey suppress transcription modifier path because meeting combo is active.")
             cancelPendingTranscriptionTap(resetKeyState: true)
             return true
         }
@@ -1101,7 +1100,7 @@ class HotkeyManager {
             // enter candidate state on press and confirm only on release.
             // Translation cooldown check is critical for fn/fn+shift coexistence.
             if Date() < suppressTranscriptionTapUntil {
-                VoxtLog.info("Hotkey suppress transcription tap due to translation cooldown.", verbose: true)
+                VoxtLog.hotkey("Hotkey suppress transcription tap due to translation cooldown.")
                 cancelPendingTranscriptionTap(resetKeyState: true)
                 hasTranscriptionModifierTapCandidate = false
                 if !comboIsDown && isKeyDown {
@@ -1194,7 +1193,7 @@ class HotkeyManager {
             guard let self else { return }
             guard !Task.isCancelled else { return }
             guard self.pendingTranscriptionTapTask != nil, !self.isTranslationKeyDown, !self.isRewriteKeyDown else {
-                VoxtLog.info("Hotkey delayed transcription tap dropped. pending=\(self.pendingTranscriptionTapTask != nil), isTranslationKeyDown=\(self.isTranslationKeyDown), isRewriteKeyDown=\(self.isRewriteKeyDown)", verbose: true)
+                VoxtLog.hotkey("Hotkey delayed transcription tap dropped. pending=\(self.pendingTranscriptionTapTask != nil), isTranslationKeyDown=\(self.isTranslationKeyDown), isRewriteKeyDown=\(self.isRewriteKeyDown)")
                 return
             }
             self.pendingTranscriptionTapTask = nil

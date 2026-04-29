@@ -19,4 +19,20 @@ final class MeetingHotkeyPreferenceTests: XCTestCase {
         XCTAssertEqual(preset?.meeting.modifiers, [.command])
         XCTAssertEqual(preset?.meeting.sidedModifiers, [.rightCommand])
     }
+
+    func testFnPresetKeepsCustomPasteAtControlCommandV() {
+        let preset = HotkeyPreference.presetHotkeys(for: .fnCombo)
+
+        XCTAssertEqual(preset?.customPaste.keyCode, UInt16(kVK_ANSI_V))
+        XCTAssertEqual(preset?.customPaste.modifiers, [.control, .command])
+        XCTAssertEqual(preset?.customPaste.sidedModifiers, [])
+    }
+
+    func testCommandPresetKeepsCustomPasteAtControlCommandV() {
+        let preset = HotkeyPreference.presetHotkeys(for: .commandCombo)
+
+        XCTAssertEqual(preset?.customPaste.keyCode, UInt16(kVK_ANSI_V))
+        XCTAssertEqual(preset?.customPaste.modifiers, [.control, .command])
+        XCTAssertEqual(preset?.customPaste.sidedModifiers, [])
+    }
 }

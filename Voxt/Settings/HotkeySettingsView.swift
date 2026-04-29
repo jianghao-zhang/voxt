@@ -646,21 +646,31 @@ struct HotkeySettingsView: View {
 
         distinguishModifierSides = values.distinguishSides
 
-        hotkeyKeyCode = Int(values.transcription.keyCode)
-        hotkeyModifiers = Int(values.transcription.modifiers.rawValue)
-        hotkeySidedModifiers = values.transcription.sidedModifiers.rawValue
-
-        translationHotkeyKeyCode = Int(values.translation.keyCode)
-        translationHotkeyModifiers = Int(values.translation.modifiers.rawValue)
-        translationHotkeySidedModifiers = values.translation.sidedModifiers.rawValue
-
-        rewriteHotkeyKeyCode = Int(values.rewrite.keyCode)
-        rewriteHotkeyModifiers = Int(values.rewrite.modifiers.rawValue)
-        rewriteHotkeySidedModifiers = values.rewrite.sidedModifiers.rawValue
-
-        meetingHotkeyKeyCode = Int(values.meeting.keyCode)
-        meetingHotkeyModifiers = Int(values.meeting.modifiers.rawValue)
-        meetingHotkeySidedModifiers = values.meeting.sidedModifiers.rawValue
+        HotkeyPreference.save(
+            keyCode: values.transcription.keyCode,
+            modifiers: values.transcription.modifiers,
+            sidedModifiers: values.transcription.sidedModifiers
+        )
+        HotkeyPreference.saveTranslation(
+            keyCode: values.translation.keyCode,
+            modifiers: values.translation.modifiers,
+            sidedModifiers: values.translation.sidedModifiers
+        )
+        HotkeyPreference.saveRewrite(
+            keyCode: values.rewrite.keyCode,
+            modifiers: values.rewrite.modifiers,
+            sidedModifiers: values.rewrite.sidedModifiers
+        )
+        HotkeyPreference.saveMeeting(
+            keyCode: values.meeting.keyCode,
+            modifiers: values.meeting.modifiers,
+            sidedModifiers: values.meeting.sidedModifiers
+        )
+        HotkeyPreference.saveCustomPaste(
+            keyCode: values.customPaste.keyCode,
+            modifiers: values.customPaste.modifiers,
+            sidedModifiers: values.customPaste.sidedModifiers
+        )
     }
 
     private func beginRecording(_ field: RecordingField) {
@@ -710,7 +720,8 @@ struct HotkeySettingsView: View {
         case .customPaste:
             customPasteHotkeyBinding.wrappedValue = hotkey.keyCode
             customPasteModifierBinding.wrappedValue = hotkey.modifiers
-            customPasteSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
+            customPasteSidedModifierBinding.wrappedValue =
+                hotkey.keyCode == HotkeyPreference.modifierOnlyKeyCode ? hotkey.sidedModifiers : []
         }
 
         hotkeyPreset = HotkeyPreference.Preset.custom.rawValue

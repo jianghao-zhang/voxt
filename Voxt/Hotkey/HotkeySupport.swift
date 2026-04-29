@@ -239,6 +239,7 @@ struct HotkeyPreference {
         guard let keyCodeValue = defaults.object(forKey: AppPreferenceKey.hotkeyKeyCode) as? Int,
               let modifiersValue = defaults.object(forKey: AppPreferenceKey.hotkeyModifiers) as? Int
         else {
+            syncStoredPresetValuesIfNeeded()
             return
         }
 
@@ -248,10 +249,15 @@ struct HotkeyPreference {
         if keyCode == modifierOnlyKeyCode && modifiers == [.control, .option] {
             save(keyCode: defaultKeyCode, modifiers: defaultModifiers, sidedModifiers: [])
         }
+
+        syncStoredPresetValuesIfNeeded()
     }
 
     static func load() -> Hotkey {
-        load(
+        if let presetHotkey = resolvedPresetHotkeys()?.transcription {
+            return presetHotkey
+        }
+        return load(
             keyCodeKey: AppPreferenceKey.hotkeyKeyCode,
             modifiersKey: AppPreferenceKey.hotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.hotkeySidedModifiers,
@@ -267,7 +273,10 @@ struct HotkeyPreference {
     }
 
     static func loadTranslation() -> Hotkey {
-        load(
+        if let presetHotkey = resolvedPresetHotkeys()?.translation {
+            return presetHotkey
+        }
+        return load(
             keyCodeKey: AppPreferenceKey.translationHotkeyKeyCode,
             modifiersKey: AppPreferenceKey.translationHotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.translationHotkeySidedModifiers,
@@ -283,7 +292,10 @@ struct HotkeyPreference {
     }
 
     static func loadRewrite() -> Hotkey {
-        load(
+        if let presetHotkey = resolvedPresetHotkeys()?.rewrite {
+            return presetHotkey
+        }
+        return load(
             keyCodeKey: AppPreferenceKey.rewriteHotkeyKeyCode,
             modifiersKey: AppPreferenceKey.rewriteHotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.rewriteHotkeySidedModifiers,
@@ -299,7 +311,10 @@ struct HotkeyPreference {
     }
 
     static func loadMeeting() -> Hotkey {
-        load(
+        if let presetHotkey = resolvedPresetHotkeys()?.meeting {
+            return presetHotkey
+        }
+        return load(
             keyCodeKey: AppPreferenceKey.meetingHotkeyKeyCode,
             modifiersKey: AppPreferenceKey.meetingHotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.meetingHotkeySidedModifiers,
@@ -315,13 +330,16 @@ struct HotkeyPreference {
     }
 
     static func loadCustomPaste() -> Hotkey {
-        load(
+        if let presetHotkey = resolvedPresetHotkeys()?.customPaste {
+            return presetHotkey
+        }
+        return normalizeCustomPasteHotkey(load(
             keyCodeKey: AppPreferenceKey.customPasteHotkeyKeyCode,
             modifiersKey: AppPreferenceKey.customPasteHotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.customPasteHotkeySidedModifiers,
             defaultKeyCode: defaultCustomPasteKeyCode,
             defaultModifiers: defaultCustomPasteModifiers
-        )
+        ))
     }
 
     static func saveCustomPaste(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, sidedModifiers: SidedModifierFlags) {
@@ -340,12 +358,61 @@ struct HotkeyPreference {
     }
 
     static func loadDistinguishModifierSides() -> Bool {
-        UserDefaults.standard.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? defaultDistinguishModifierSides
+        if let presetValues = resolvedPresetHotkeys() {
+            return presetValues.distinguishSides
+        }
+        return UserDefaults.standard.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? defaultDistinguishModifierSides
     }
 
     static func loadPreset() -> Preset {
         let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.hotkeyPreset)
         return Preset(rawValue: raw ?? "") ?? defaultPreset
+    }
+
+    private static func resolvedPresetHotkeys() -> (distinguishSides: Bool, transcription: Hotkey, translation: Hotkey, rewrite: Hotkey, meeting: Hotkey, customPaste: Hotkey)? {
+        let preset = loadPreset()
+        guard preset != .custom else { return nil }
+        return presetHotkeys(for: preset)
+    }
+
+    private static func syncStoredPresetValuesIfNeeded() {
+        guard let presetValues = resolvedPresetHotkeys() else { return }
+
+        UserDefaults.standard.set(presetValues.distinguishSides, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        save(
+            keyCode: presetValues.transcription.keyCode,
+            modifiers: presetValues.transcription.modifiers,
+            sidedModifiers: presetValues.transcription.sidedModifiers
+        )
+        saveTranslation(
+            keyCode: presetValues.translation.keyCode,
+            modifiers: presetValues.translation.modifiers,
+            sidedModifiers: presetValues.translation.sidedModifiers
+        )
+        saveRewrite(
+            keyCode: presetValues.rewrite.keyCode,
+            modifiers: presetValues.rewrite.modifiers,
+            sidedModifiers: presetValues.rewrite.sidedModifiers
+        )
+        saveMeeting(
+            keyCode: presetValues.meeting.keyCode,
+            modifiers: presetValues.meeting.modifiers,
+            sidedModifiers: presetValues.meeting.sidedModifiers
+        )
+        saveCustomPaste(
+            keyCode: presetValues.customPaste.keyCode,
+            modifiers: presetValues.customPaste.modifiers,
+            sidedModifiers: presetValues.customPaste.sidedModifiers
+        )
+    }
+
+    private static func normalizeCustomPasteHotkey(_ hotkey: Hotkey) -> Hotkey {
+        guard hotkey.keyCode != modifierOnlyKeyCode else { return hotkey }
+        return Hotkey(
+            keyCode: hotkey.keyCode,
+            modifiers: hotkey.modifiers,
+            sidedModifiers: []
+        )
     }
 
     static func displayString(for hotkey: Hotkey, distinguishModifierSides: Bool) -> String {
@@ -384,7 +451,7 @@ struct HotkeyPreference {
         return parts.joined(separator: usesSides ? " + " : "")
     }
 
-    static func presetHotkeys(for preset: Preset) -> (distinguishSides: Bool, transcription: Hotkey, translation: Hotkey, rewrite: Hotkey, meeting: Hotkey)? {
+    static func presetHotkeys(for preset: Preset) -> (distinguishSides: Bool, transcription: Hotkey, translation: Hotkey, rewrite: Hotkey, meeting: Hotkey, customPaste: Hotkey)? {
         switch preset {
         case .fnCombo:
             return (
@@ -392,7 +459,8 @@ struct HotkeyPreference {
                 Hotkey(keyCode: defaultKeyCode, modifiers: defaultModifiers, sidedModifiers: []),
                 Hotkey(keyCode: defaultTranslationKeyCode, modifiers: defaultTranslationModifiers, sidedModifiers: []),
                 Hotkey(keyCode: defaultRewriteKeyCode, modifiers: defaultRewriteModifiers, sidedModifiers: []),
-                Hotkey(keyCode: defaultMeetingKeyCode, modifiers: defaultMeetingModifiers, sidedModifiers: [])
+                Hotkey(keyCode: defaultMeetingKeyCode, modifiers: defaultMeetingModifiers, sidedModifiers: []),
+                Hotkey(keyCode: defaultCustomPasteKeyCode, modifiers: defaultCustomPasteModifiers, sidedModifiers: [])
             )
         case .commandCombo:
             return (
@@ -400,7 +468,8 @@ struct HotkeyPreference {
                 Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command], sidedModifiers: [.rightCommand]),
                 Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command, .shift], sidedModifiers: [.rightCommand, .rightShift]),
                 Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command, .option], sidedModifiers: [.rightCommand, .rightOption]),
-                Hotkey(keyCode: UInt16(kVK_ANSI_L), modifiers: [.command], sidedModifiers: [.rightCommand])
+                Hotkey(keyCode: UInt16(kVK_ANSI_L), modifiers: [.command], sidedModifiers: [.rightCommand]),
+                Hotkey(keyCode: defaultCustomPasteKeyCode, modifiers: defaultCustomPasteModifiers, sidedModifiers: [])
             )
         case .custom:
             return nil
@@ -467,7 +536,35 @@ struct HotkeyPreference {
         let modifiers = NSEvent.ModifierFlags(rawValue: UInt(modifiersRaw)).intersection(.hotkeyRelevant)
         let sidedModifiers = SidedModifierFlags(rawValue: sidedValue).filtered(by: modifiers)
 
-        return Hotkey(keyCode: keyCode, modifiers: modifiers, sidedModifiers: sidedModifiers)
+        return canonicalHotkey(
+            keyCode: keyCode,
+            modifiers: modifiers,
+            sidedModifiers: sidedModifiers
+        )
+    }
+
+    private static func canonicalHotkey(
+        keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags,
+        sidedModifiers: SidedModifierFlags
+    ) -> Hotkey {
+        guard let representedModifier = SidedModifierFlags.fromModifierKeyCode(keyCode),
+              modifiers.contains(representedModifier.modifiers)
+        else {
+            return Hotkey(
+                keyCode: keyCode,
+                modifiers: modifiers,
+                sidedModifiers: sidedModifiers.filtered(by: modifiers)
+            )
+        }
+
+        return Hotkey(
+            keyCode: modifierOnlyKeyCode,
+            modifiers: modifiers,
+            sidedModifiers: sidedModifiers
+                .union(representedModifier.sided)
+                .filtered(by: modifiers)
+        )
     }
 
     private static func sidedModifierLabel(
