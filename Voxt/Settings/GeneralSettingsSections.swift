@@ -350,6 +350,17 @@ struct GeneralModelStorageCard: View {
 struct GeneralOutputCard: View {
     @Binding var autoCopyWhenNoFocusedInput: Bool
     @Binding var customPasteHotkeyEnabled: Bool
+    let customPasteHotkeyDisplayString: String
+
+    private var customPasteDescription: String {
+        String(
+            format: NSLocalizedString(
+                "Lets you paste your latest Voxt result into the current input field. Shortcut: %@.",
+                comment: ""
+            ),
+            customPasteHotkeyDisplayString
+        )
+    }
 
     var body: some View {
         GeneralSettingsCard(title: "Output") {
@@ -361,7 +372,7 @@ struct GeneralOutputCard: View {
 
             GeneralToggleRow(
                 title: "Enable custom paste shortcut",
-                description: "Adds a shortcut to insert your latest Voxt result into the current input field. Default shortcut: Control + Command + V.",
+                descriptionText: customPasteDescription,
                 isOn: $customPasteHotkeyEnabled
             )
         }
@@ -569,14 +580,26 @@ struct GeneralLanguageSettingBlock<Control: View>: View {
 
 struct GeneralToggleRow: View {
     let title: LocalizedStringKey
-    let description: LocalizedStringKey
+    let description: Text
     @Binding var isOn: Bool
+
+    init(title: LocalizedStringKey, description: LocalizedStringKey, isOn: Binding<Bool>) {
+        self.title = title
+        self.description = Text(description)
+        self._isOn = isOn
+    }
+
+    init(title: LocalizedStringKey, descriptionText: String, isOn: Binding<Bool>) {
+        self.title = title
+        self.description = Text(descriptionText)
+        self._isOn = isOn
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                Text(description)
+                description
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

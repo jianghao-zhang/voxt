@@ -68,7 +68,7 @@
 "Inject into Current Input" = "Inject into current input";
 "Also copy result to clipboard" = "Also copy result to clipboard";
 "Enable custom paste shortcut" = "Enable custom paste shortcut";
-"Adds a shortcut to insert your latest Voxt result into the current input field. Default shortcut: Control + Command + V." = "Adds a shortcut to insert your latest Voxt result into the current input field. Default shortcut: Control + Command + V.";
+"Lets you paste your latest Voxt result into the current input field. Shortcut: %@." = "Lets you paste your latest Voxt result into the current input field. Shortcut: %@.";
 "App Behavior" = "App Behavior";
 "Launch at Login" = "Launch at Login";
 "Show in Dock" = "Show in Dock";

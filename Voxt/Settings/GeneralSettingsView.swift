@@ -20,6 +20,10 @@ struct GeneralSettingsView: View {
     @AppStorage(AppPreferenceKey.hideMeetingOverlayFromScreenSharing) private var hideMeetingOverlayFromScreenSharing = false
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) private var autoCopyWhenNoFocusedInput = false
     @AppStorage(AppPreferenceKey.customPasteHotkeyEnabled) private var customPasteHotkeyEnabled = false
+    @AppStorage(AppPreferenceKey.customPasteHotkeyKeyCode) private var customPasteHotkeyKeyCode = Int(HotkeyPreference.defaultCustomPasteKeyCode)
+    @AppStorage(AppPreferenceKey.customPasteHotkeyModifiers) private var customPasteHotkeyModifiers = Int(HotkeyPreference.defaultCustomPasteModifiers.rawValue)
+    @AppStorage(AppPreferenceKey.customPasteHotkeySidedModifiers) private var customPasteHotkeySidedModifiers = 0
+    @AppStorage(AppPreferenceKey.hotkeyDistinguishModifierSides) private var hotkeyDistinguishModifierSides = HotkeyPreference.defaultDistinguishModifierSides
     @AppStorage(AppPreferenceKey.launchAtLogin) private var launchAtLogin = false
     @AppStorage(AppPreferenceKey.showInDock) private var showInDock = false
     @AppStorage(AppPreferenceKey.autoCheckForUpdates) private var autoCheckForUpdates = true
@@ -96,6 +100,22 @@ struct GeneralSettingsView: View {
         return String(format: format, primaryOption.title(), codes.count - 1)
     }
 
+    private var currentCustomPasteHotkey: HotkeyPreference.Hotkey {
+        let modifiers = NSEvent.ModifierFlags(rawValue: UInt(customPasteHotkeyModifiers)).intersection(.hotkeyRelevant)
+        return HotkeyPreference.Hotkey(
+            keyCode: UInt16(customPasteHotkeyKeyCode),
+            modifiers: modifiers,
+            sidedModifiers: SidedModifierFlags(rawValue: customPasteHotkeySidedModifiers).filtered(by: modifiers)
+        )
+    }
+
+    private var currentCustomPasteHotkeyDisplayString: String {
+        HotkeyPreference.displayString(
+            for: currentCustomPasteHotkey,
+            distinguishModifierSides: hotkeyDistinguishModifierSides
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             GeneralConfigurationCard(
@@ -137,7 +157,8 @@ struct GeneralSettingsView: View {
 
             GeneralOutputCard(
                 autoCopyWhenNoFocusedInput: $autoCopyWhenNoFocusedInput,
-                customPasteHotkeyEnabled: $customPasteHotkeyEnabled
+                customPasteHotkeyEnabled: $customPasteHotkeyEnabled,
+                customPasteHotkeyDisplayString: currentCustomPasteHotkeyDisplayString
             )
             .settingsNavigationAnchor(.generalOutput)
 

@@ -68,7 +68,7 @@
 "Inject into Current Input" = "現在の入力欄に挿入";
 "Also copy result to clipboard" = "結果を同時にクリップボードへコピー";
 "Enable custom paste shortcut" = "カスタム貼り付けショートカットを有効にする";
-"Adds a shortcut to insert your latest Voxt result into the current input field. Default shortcut: Control + Command + V." = "最新の Voxt 結果を現在の入力欄に挿入するショートカットを追加します。初期ショートカット: Control + Command + V.";
+"Lets you paste your latest Voxt result into the current input field. Shortcut: %@." = "最新の Voxt 結果を現在の入力欄に貼り付けられます。現在のショートカット: %@。";
 "App Behavior" = "アプリ動作";
 "Launch at Login" = "ログイン時に起動";
 "Show in Dock" = "Dock に表示";

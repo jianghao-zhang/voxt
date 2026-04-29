@@ -68,7 +68,7 @@
 "Inject into Current Input" = "注入到当前输入框";
 "Also copy result to clipboard" = "同时复制结果到剪贴板";
 "Enable custom paste shortcut" = "开启自定义粘贴快捷键";
-"Adds a shortcut to insert your latest Voxt result into the current input field. Default shortcut: Control + Command + V." = "添加一个快捷键，将最近一次 Voxt 结果插入当前输入框。默认快捷键：Control + Command + V。";
+"Lets you paste your latest Voxt result into the current input field. Shortcut: %@." = "可将最近一次 Voxt 结果粘贴到当前输入框。当前快捷键：%@。";
 "App Behavior" = "应用行为";
 "Launch at Login" = "开机启动";
 "Show in Dock" = "在 Dock 中显示";
