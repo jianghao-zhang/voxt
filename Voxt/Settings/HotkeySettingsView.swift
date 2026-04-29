@@ -21,7 +21,8 @@ private let hotkeyConflictRules: [HotkeyConflictRule] = [
     HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_Q), modifiers: [.command], messageKey: "Conflicts with Quit (⌘Q)."),
     HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_H), modifiers: [.command], messageKey: "Conflicts with Hide (⌘H)."),
     HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_M), modifiers: [.command], messageKey: "Conflicts with Minimise (⌘M)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_W), modifiers: [.command], messageKey: "Conflicts with Close (⌘W).")
+    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_W), modifiers: [.command], messageKey: "Conflicts with Close (⌘W)."),
+    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_V), modifiers: [.command], messageKey: "Conflicts with Paste (⌘V).")
 ]
 
 enum HotkeyShortcutKind: String, CaseIterable {
@@ -58,6 +59,7 @@ struct HotkeySettingsView: View {
         case translation
         case rewrite
         case meeting
+        case customPaste
     }
 
     @AppStorage(AppPreferenceKey.hotkeyKeyCode) private var hotkeyKeyCode = Int(HotkeyPreference.defaultKeyCode)
@@ -72,6 +74,10 @@ struct HotkeySettingsView: View {
     @AppStorage(AppPreferenceKey.meetingHotkeyKeyCode) private var meetingHotkeyKeyCode = Int(HotkeyPreference.defaultMeetingKeyCode)
     @AppStorage(AppPreferenceKey.meetingHotkeyModifiers) private var meetingHotkeyModifiers = Int(HotkeyPreference.defaultMeetingModifiers.rawValue)
     @AppStorage(AppPreferenceKey.meetingHotkeySidedModifiers) private var meetingHotkeySidedModifiers = 0
+    @AppStorage(AppPreferenceKey.customPasteHotkeyEnabled) private var customPasteHotkeyEnabled = false
+    @AppStorage(AppPreferenceKey.customPasteHotkeyKeyCode) private var customPasteHotkeyKeyCode = Int(HotkeyPreference.defaultCustomPasteKeyCode)
+    @AppStorage(AppPreferenceKey.customPasteHotkeyModifiers) private var customPasteHotkeyModifiers = Int(HotkeyPreference.defaultCustomPasteModifiers.rawValue)
+    @AppStorage(AppPreferenceKey.customPasteHotkeySidedModifiers) private var customPasteHotkeySidedModifiers = 0
     @AppStorage(AppPreferenceKey.hotkeyTriggerMode) private var hotkeyTriggerMode = HotkeyPreference.defaultTriggerMode.rawValue
     @AppStorage(AppPreferenceKey.hotkeyDistinguishModifierSides) private var distinguishModifierSides = HotkeyPreference.defaultDistinguishModifierSides
     @AppStorage(AppPreferenceKey.hotkeyPreset) private var hotkeyPreset = HotkeyPreference.defaultPreset.rawValue
@@ -232,6 +238,35 @@ struct HotkeySettingsView: View {
         )
     }
 
+    private var customPasteHotkeyBinding: Binding<UInt16> {
+        Binding(
+            get: { UInt16(customPasteHotkeyKeyCode) },
+            set: { customPasteHotkeyKeyCode = Int($0) }
+        )
+    }
+
+    private var customPasteModifierBinding: Binding<NSEvent.ModifierFlags> {
+        Binding(
+            get: { NSEvent.ModifierFlags(rawValue: UInt(customPasteHotkeyModifiers)).intersection(.hotkeyRelevant) },
+            set: { customPasteHotkeyModifiers = Int($0.rawValue) }
+        )
+    }
+
+    private var currentCustomPasteHotkey: HotkeyPreference.Hotkey {
+        HotkeyPreference.Hotkey(
+            keyCode: customPasteHotkeyBinding.wrappedValue,
+            modifiers: customPasteModifierBinding.wrappedValue,
+            sidedModifiers: customPasteSidedModifierBinding.wrappedValue
+        )
+    }
+
+    private var customPasteSidedModifierBinding: Binding<SidedModifierFlags> {
+        Binding(
+            get: { SidedModifierFlags(rawValue: customPasteHotkeySidedModifiers).filtered(by: customPasteModifierBinding.wrappedValue) },
+            set: { customPasteHotkeySidedModifiers = $0.filtered(by: customPasteModifierBinding.wrappedValue).rawValue }
+        )
+    }
+
     private var isRecordingBinding: Binding<Bool> {
         Binding(
             get: { recordingField != nil },
@@ -372,6 +407,24 @@ struct HotkeySettingsView: View {
                         )
                     }
 
+                    if customPasteHotkeyEnabled {
+                        SettingsShortcutCaptureField(
+                            title: "Custom Paste",
+                            hotkey: displayedHotkey(for: .customPaste, current: currentCustomPasteHotkey),
+                            isRecording: recordingField == .customPaste,
+                            isPendingConfirmation: isPendingConfirmation(for: .customPaste),
+                            distinguishModifierSides: distinguishModifierSides,
+                            onFocus: { beginRecording(.customPaste) },
+                            onReset: {
+                                customPasteHotkeyBinding.wrappedValue = HotkeyPreference.defaultCustomPasteKeyCode
+                                customPasteModifierBinding.wrappedValue = HotkeyPreference.defaultCustomPasteModifiers
+                                customPasteSidedModifierBinding.wrappedValue = []
+                            },
+                            onCancelPending: discardPendingCapture,
+                            onConfirmPending: confirmPendingCapture
+                        )
+                    }
+
                     if recordingField != nil, pendingCapturedField != recordingField {
                         Text(localized("Type your shortcut now. Press Esc to cancel recording."))
                             .font(.caption)
@@ -412,6 +465,12 @@ struct HotkeySettingsView: View {
                             .foregroundStyle(.red)
                     }
 
+                    if customPasteHotkeyEnabled, let conflict = hotkeyConflictMessage(for: currentCustomPasteHotkey) {
+                        Text(localizedString("Custom paste shortcut: %@", conflict))
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
                     if currentHotkey == currentTranslationHotkey {
                         Text(localized("Transcription and translation shortcuts should be different."))
                             .font(.caption)
@@ -444,6 +503,30 @@ struct HotkeySettingsView: View {
 
                     if meetingEnabled, currentRewriteHotkey == currentMeetingHotkey {
                         Text(localized("Content rewrite and meeting notes shortcuts should be different."))
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    if customPasteHotkeyEnabled, currentHotkey == currentCustomPasteHotkey {
+                        Text(localized("Transcription and custom paste shortcuts should be different."))
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    if customPasteHotkeyEnabled, currentTranslationHotkey == currentCustomPasteHotkey {
+                        Text(localized("Translation and custom paste shortcuts should be different."))
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    if customPasteHotkeyEnabled, currentRewriteHotkey == currentCustomPasteHotkey {
+                        Text(localized("Content rewrite and custom paste shortcuts should be different."))
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    if customPasteHotkeyEnabled, meetingEnabled, currentMeetingHotkey == currentCustomPasteHotkey {
+                        Text(localized("Meeting notes and custom paste shortcuts should be different."))
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
@@ -538,6 +621,12 @@ struct HotkeySettingsView: View {
         }
         .id(interfaceLanguageRaw)
         .id(featureSettingsRaw)
+        .onChange(of: customPasteHotkeyEnabled) { _, enabled in
+            guard !enabled else { return }
+            if recordingField == .customPaste || pendingCapturedField == .customPaste {
+                discardPendingCapture()
+            }
+        }
     }
 
     private func hotkeyConflictMessage(for hotkey: HotkeyPreference.Hotkey) -> String? {
@@ -618,6 +707,10 @@ struct HotkeySettingsView: View {
             meetingHotkeyBinding.wrappedValue = hotkey.keyCode
             meetingModifierBinding.wrappedValue = hotkey.modifiers
             meetingSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
+        case .customPaste:
+            customPasteHotkeyBinding.wrappedValue = hotkey.keyCode
+            customPasteModifierBinding.wrappedValue = hotkey.modifiers
+            customPasteSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
         }
 
         hotkeyPreset = HotkeyPreference.Preset.custom.rawValue

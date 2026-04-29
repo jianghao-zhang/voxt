@@ -19,6 +19,7 @@ struct GeneralSettingsView: View {
     @AppStorage(AppPreferenceKey.meetingNotesBetaEnabled) private var meetingNotesBetaEnabled = false
     @AppStorage(AppPreferenceKey.hideMeetingOverlayFromScreenSharing) private var hideMeetingOverlayFromScreenSharing = false
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) private var autoCopyWhenNoFocusedInput = false
+    @AppStorage(AppPreferenceKey.customPasteHotkeyEnabled) private var customPasteHotkeyEnabled = false
     @AppStorage(AppPreferenceKey.launchAtLogin) private var launchAtLogin = false
     @AppStorage(AppPreferenceKey.showInDock) private var showInDock = false
     @AppStorage(AppPreferenceKey.autoCheckForUpdates) private var autoCheckForUpdates = true
@@ -135,7 +136,8 @@ struct GeneralSettingsView: View {
             .settingsNavigationAnchor(.generalLanguages)
 
             GeneralOutputCard(
-                autoCopyWhenNoFocusedInput: $autoCopyWhenNoFocusedInput
+                autoCopyWhenNoFocusedInput: $autoCopyWhenNoFocusedInput,
+                customPasteHotkeyEnabled: $customPasteHotkeyEnabled
             )
             .settingsNavigationAnchor(.generalOutput)
 

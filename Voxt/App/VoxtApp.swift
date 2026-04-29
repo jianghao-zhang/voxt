@@ -373,6 +373,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var currentEndingSessionID: UUID?
     var lastCompletedSessionEndSessionID: UUID?
     var isSessionCancellationRequested = false
+    var latestInjectableOutputText: String?
     var sessionTargetApplicationPID: pid_t?
     var sessionTargetApplicationBundleID: String?
     var pendingTranscriptionStartTask: Task<Void, Never>?
@@ -425,6 +426,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.escapeKeyCancelsOverlaySession: true,
             AppPreferenceKey.translateSelectedTextOnTranslationHotkey: true,
             AppPreferenceKey.showSelectedTextTranslationResultWindow: true,
+            AppPreferenceKey.customPasteHotkeyEnabled: false,
             AppPreferenceKey.meetingNotesBetaEnabled: false,
             AppPreferenceKey.hideMeetingOverlayFromScreenSharing: false,
             AppPreferenceKey.meetingOverlayCollapsed: false,
@@ -888,6 +890,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.handleMeetingHotkeyDown()
         }
+        hotkeyManager.onCustomPasteKeyDown = { [weak self] in
+            guard let self else { return }
+            self.handleCustomPasteHotkeyDown()
+        }
         hotkeyManager.start()
         VoxtLog.hotkey("Hotkey callbacks configured.")
     }
@@ -1195,6 +1201,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         guard isSessionActive, sessionOutputMode == .rewrite else { return }
         endRecording()
+    }
+
+    private func handleCustomPasteHotkeyDown() {
+        guard customPasteHotkeyEnabled else { return }
+        injectLatestResultByCustomPasteHotkey()
     }
 
     private func performHotkeyAction(_ action: HotkeyActionResolver.Action) {

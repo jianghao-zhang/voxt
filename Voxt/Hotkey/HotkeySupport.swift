@@ -205,6 +205,8 @@ struct HotkeyPreference {
     static let defaultRewriteModifiers: NSEvent.ModifierFlags = [.function, .control]
     static let defaultMeetingKeyCode: UInt16 = modifierOnlyKeyCode
     static let defaultMeetingModifiers: NSEvent.ModifierFlags = [.function, .option]
+    static let defaultCustomPasteKeyCode: UInt16 = UInt16(kVK_ANSI_V)
+    static let defaultCustomPasteModifiers: NSEvent.ModifierFlags = [.control, .command]
     static let defaultTriggerMode: TriggerMode = .tap
     static let defaultDistinguishModifierSides = false
     static let defaultPreset: Preset = .fnCombo
@@ -223,6 +225,9 @@ struct HotkeyPreference {
             AppPreferenceKey.meetingHotkeyKeyCode: Int(defaultMeetingKeyCode),
             AppPreferenceKey.meetingHotkeyModifiers: Int(defaultMeetingModifiers.rawValue),
             AppPreferenceKey.meetingHotkeySidedModifiers: 0,
+            AppPreferenceKey.customPasteHotkeyKeyCode: Int(defaultCustomPasteKeyCode),
+            AppPreferenceKey.customPasteHotkeyModifiers: Int(defaultCustomPasteModifiers.rawValue),
+            AppPreferenceKey.customPasteHotkeySidedModifiers: 0,
             AppPreferenceKey.hotkeyTriggerMode: defaultTriggerMode.rawValue,
             AppPreferenceKey.hotkeyDistinguishModifierSides: defaultDistinguishModifierSides,
             AppPreferenceKey.hotkeyPreset: defaultPreset.rawValue
@@ -307,6 +312,22 @@ struct HotkeyPreference {
         UserDefaults.standard.set(Int(keyCode), forKey: AppPreferenceKey.meetingHotkeyKeyCode)
         UserDefaults.standard.set(Int(modifiers.rawValue), forKey: AppPreferenceKey.meetingHotkeyModifiers)
         UserDefaults.standard.set(sidedModifiers.rawValue, forKey: AppPreferenceKey.meetingHotkeySidedModifiers)
+    }
+
+    static func loadCustomPaste() -> Hotkey {
+        load(
+            keyCodeKey: AppPreferenceKey.customPasteHotkeyKeyCode,
+            modifiersKey: AppPreferenceKey.customPasteHotkeyModifiers,
+            sidedModifiersKey: AppPreferenceKey.customPasteHotkeySidedModifiers,
+            defaultKeyCode: defaultCustomPasteKeyCode,
+            defaultModifiers: defaultCustomPasteModifiers
+        )
+    }
+
+    static func saveCustomPaste(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, sidedModifiers: SidedModifierFlags) {
+        UserDefaults.standard.set(Int(keyCode), forKey: AppPreferenceKey.customPasteHotkeyKeyCode)
+        UserDefaults.standard.set(Int(modifiers.rawValue), forKey: AppPreferenceKey.customPasteHotkeyModifiers)
+        UserDefaults.standard.set(sidedModifiers.rawValue, forKey: AppPreferenceKey.customPasteHotkeySidedModifiers)
     }
 
     static func loadTriggerMode() -> TriggerMode {

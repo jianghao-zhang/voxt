@@ -80,15 +80,17 @@ struct GeneralAudioCard: View {
                 }
             }
 
-            Toggle("Interaction Sounds", isOn: $interactionSoundsEnabled)
-            Text("Play a short start chime when recording begins and an end chime when transcription completes.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GeneralToggleRow(
+                title: "Interaction Sounds",
+                description: "Play a short start chime when recording begins and an end chime when transcription completes.",
+                isOn: $interactionSoundsEnabled
+            )
 
-            Toggle("Mute other media audio while recording", isOn: $muteSystemAudioWhileRecording)
-            Text("When enabled, Voxt requests system audio recording permission so it can mute other apps' media audio during recording and restore it after transcription completes.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GeneralToggleRow(
+                title: "Mute other media audio while recording",
+                description: "Temporarily lowers other apps' media audio while you record so your speech stays clear.",
+                isOn: $muteSystemAudioWhileRecording
+            )
 
             if let systemAudioPermissionMessage {
                 Text(systemAudioPermissionMessage)
@@ -165,15 +167,11 @@ struct GeneralTranscriptionUICard: View {
             )
 
             if meetingNotesBetaEnabled {
-                Toggle(isOn: $hideMeetingOverlayFromScreenSharing) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Meeting Transcript UI Shareable")
-                        Text("Leave this off to keep the meeting transcript overlay private. Turn it on if you want the UI to appear in screen sharing or screen recordings.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .toggleStyle(.checkbox)
+                GeneralToggleRow(
+                    title: "Meeting Transcript UI Shareable",
+                    description: "Makes the meeting transcript overlay visible in screen sharing and screen recordings.",
+                    isOn: $hideMeetingOverlayFromScreenSharing
+                )
             }
         }
     }
@@ -351,13 +349,21 @@ struct GeneralModelStorageCard: View {
 
 struct GeneralOutputCard: View {
     @Binding var autoCopyWhenNoFocusedInput: Bool
+    @Binding var customPasteHotkeyEnabled: Bool
 
     var body: some View {
         GeneralSettingsCard(title: "Output") {
-            Toggle("Also copy result to clipboard", isOn: $autoCopyWhenNoFocusedInput)
-            Text("When enabled, Voxt auto-pastes result text and also keeps it in clipboard.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GeneralToggleRow(
+                title: "Also copy result to clipboard",
+                description: "When enabled, Voxt auto-pastes result text and also keeps it in clipboard.",
+                isOn: $autoCopyWhenNoFocusedInput
+            )
+
+            GeneralToggleRow(
+                title: "Enable custom paste shortcut",
+                description: "Adds a shortcut to insert your latest Voxt result into the current input field. Default shortcut: Control + Command + V.",
+                isOn: $customPasteHotkeyEnabled
+            )
         }
     }
 }
@@ -368,15 +374,17 @@ struct GeneralLoggingCard: View {
 
     var body: some View {
         GeneralSettingsCard(title: "Logging") {
-            Toggle("Enable hotkey debug logs", isOn: $hotkeyDebugLoggingEnabled)
-            Text("When enabled, Voxt writes detailed hotkey detection and routing logs. Disabled by default.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GeneralToggleRow(
+                title: "Enable hotkey debug logs",
+                description: "Records hotkey detection, trigger routing, and shortcut handling details for debugging.",
+                isOn: $hotkeyDebugLoggingEnabled
+            )
 
-            Toggle("Enable LLM debug logs", isOn: $llmDebugLoggingEnabled)
-            Text("When enabled, Voxt writes detailed local and remote LLM request logs. Disabled by default.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GeneralToggleRow(
+                title: "Enable LLM debug logs",
+                description: "Records local and remote LLM request details to help inspect model calls and responses.",
+                isOn: $llmDebugLoggingEnabled
+            )
         }
     }
 }
@@ -395,20 +403,23 @@ struct GeneralAppBehaviorCard: View {
 
     var body: some View {
         GeneralSettingsCard(title: "App Behavior") {
-            Toggle("Launch at Login", isOn: $launchAtLogin)
-            Text("Automatically start Voxt when your Mac starts.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GeneralToggleRow(
+                title: "Launch at Login",
+                description: "Automatically start Voxt when your Mac starts.",
+                isOn: $launchAtLogin
+            )
 
-            Toggle("Show in Dock", isOn: $showInDock)
-            Text("Show Voxt in your Mac Dock for quick access.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GeneralToggleRow(
+                title: "Show in Dock",
+                description: "Show Voxt in your Mac Dock for quick access.",
+                isOn: $showInDock
+            )
 
-            Toggle("Automatically check for updates", isOn: $autoCheckForUpdates)
-            Text("Let Sparkle periodically check for updates in the background.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GeneralToggleRow(
+                title: "Automatically check for updates",
+                description: "Let Sparkle periodically check for updates in the background.",
+                isOn: $autoCheckForUpdates
+            )
 
             HStack(alignment: .center) {
                 Text("Proxy")
@@ -552,6 +563,30 @@ struct GeneralLanguageSettingBlock<Control: View>: View {
             Text(description)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct GeneralToggleRow: View {
+    let title: LocalizedStringKey
+    let description: LocalizedStringKey
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
         }
     }
 }

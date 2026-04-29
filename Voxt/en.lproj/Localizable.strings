@@ -67,6 +67,8 @@
 "Copy Answer" = "Copy Answer";
 "Inject into Current Input" = "Inject into current input";
 "Also copy result to clipboard" = "Also copy result to clipboard";
+"Enable custom paste shortcut" = "Enable custom paste shortcut";
+"Adds a shortcut to insert your latest Voxt result into the current input field. Default shortcut: Control + Command + V." = "Adds a shortcut to insert your latest Voxt result into the current input field. Default shortcut: Control + Command + V.";
 "App Behavior" = "App Behavior";
 "Launch at Login" = "Launch at Login";
 "Show in Dock" = "Show in Dock";
@@ -166,7 +168,9 @@
 "Conflicts with Hide (⌘H)." = "Conflicts with Hide (⌘H).";
 "Conflicts with Minimise (⌘M)." = "Conflicts with Minimise (⌘M).";
 "Conflicts with Close (⌘W)." = "Conflicts with Close (⌘W).";
+"Conflicts with Paste (⌘V)." = "Conflicts with Paste (⌘V).";
 "Transcription shortcut: %@" = "Transcription shortcut: %@";
+"Custom paste shortcut: %@" = "Custom paste shortcut: %@";
 "Translation shortcut: %@" = "Translation shortcut: %@";
 "Show Result Window For Selected Text Translation" = "Show translation result window";
 "When enabled, selected-text translation opens a result window after completion. When disabled, the translated result is injected back into the current input instead." = "On: show result window. Off: inject into current input.";
@@ -510,15 +514,22 @@
 "Content Rewrite Prompt" = "Content Rewrite Prompt";
 "Supported variables: {{DICTATED_PROMPT}}, {{SOURCE_TEXT}}" = "Supported variables: {{DICTATED_PROMPT}}, {{SOURCE_TEXT}}";
 "Content rewrite shortcut: %@" = "Content rewrite shortcut: %@";
+"Custom Paste" = "Custom Paste";
 "Transcription and content rewrite shortcuts should be different." = "Transcription and content rewrite shortcuts should be different.";
 "Translation and content rewrite shortcuts should be different." = "Translation and content rewrite shortcuts should be different.";
+"Transcription and custom paste shortcuts should be different." = "Transcription and custom paste shortcuts should be different.";
+"Translation and custom paste shortcuts should be different." = "Translation and custom paste shortcuts should be different.";
+"Content rewrite and custom paste shortcuts should be different." = "Content rewrite and custom paste shortcuts should be different.";
+"Meeting notes and custom paste shortcuts should be different." = "Meeting notes and custom paste shortcuts should be different.";
 "Long Press: Hold a hotkey to start its session and release it to stop. This works for transcription, translation, and content rewrite." = "Long Press: Hold a hotkey to start its session and release it to stop. This works for transcription, translation, and content rewrite.";
 "Tap: Tap transcription hotkey to start and tap transcription hotkey again to stop. Translation and content rewrite hotkeys start their own sessions." = "Tap: Tap transcription hotkey to start and tap transcription hotkey again to stop. Translation and content rewrite hotkeys start their own sessions.";
 "Logging" = "Logging";
 "Enable hotkey debug logs" = "Enable hotkey debug logs";
 "When enabled, Voxt writes detailed hotkey detection and routing logs. Disabled by default." = "When enabled, Voxt writes detailed hotkey detection and routing logs. Disabled by default.";
+"Records hotkey detection, trigger routing, and shortcut handling details for debugging." = "Records hotkey detection, trigger routing, and shortcut handling details for debugging.";
 "Enable LLM debug logs" = "Enable LLM debug logs";
 "When enabled, Voxt writes detailed local and remote LLM request logs. Disabled by default." = "When enabled, Voxt writes detailed local and remote LLM request logs. Disabled by default.";
+"Records local and remote LLM request details to help inspect model calls and responses." = "Records local and remote LLM request details to help inspect model calls and responses.";
 "Rewrite" = "Rewrite";
 
 "Version metadata missing" = "Version metadata missing";
@@ -727,7 +738,9 @@
 "Doubao uses App ID + Access Token for streaming API." = "Doubao uses App ID + Access Token for streaming API.";
 "Aliyun ASR in Voxt uses realtime WebSocket only: Qwen models use /api-ws/v1/realtime, Fun/Paraformer models use /api-ws/v1/inference." = "Aliyun ASR in Voxt uses realtime WebSocket only: Qwen models use /api-ws/v1/realtime, Fun/Paraformer models use /api-ws/v1/inference.";
 "Mute other media audio while recording" = "Mute other media audio while recording";
+"No recent result available to paste yet." = "No recent result available to paste yet.";
 "When enabled, Voxt requests system audio recording permission so it can mute other apps' media audio during recording and restore it after transcription completes." = "When enabled, Voxt requests system audio recording permission so it can mute other apps' media audio during recording and restore it after transcription completes.";
+"Temporarily lowers other apps' media audio while you record so your speech stays clear." = "Temporarily lowers other apps' media audio while you record so your speech stays clear.";
 "System audio recording permission granted." = "System audio recording permission granted.";
 "System audio recording permission is required for this feature. You can grant it in Settings > Permissions." = "System audio recording permission is required for this feature. You can grant it in Settings > Permissions.";
 "System Audio Recording Permission" = "System Audio Recording Permission";
@@ -1033,6 +1046,7 @@
 "Automatic scrolling pauses when you scroll away from the bottom." = "Automatic scrolling pauses when you scroll away from the bottom.";
 "Meeting Transcript UI Shareable" = "Meeting Transcript UI Shareable";
 "Leave this off to keep the meeting transcript overlay private. Turn it on if you want the UI to appear in screen sharing or screen recordings." = "Leave this off to keep the meeting transcript overlay private. Turn it on if you want the UI to appear in screen sharing or screen recordings.";
+"Makes the meeting transcript overlay visible in screen sharing and screen recordings." = "Makes the meeting transcript overlay visible in screen sharing and screen recordings.";
 "Timeline" = "Timeline";
 "Speaker Marks" = "Speaker Marks";
 "Search" = "Search";

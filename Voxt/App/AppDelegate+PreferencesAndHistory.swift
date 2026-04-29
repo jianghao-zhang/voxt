@@ -142,6 +142,10 @@ extension AppDelegate {
         defaults.object(forKey: AppPreferenceKey.showSelectedTextTranslationResultWindow) as? Bool ?? true
     }
 
+    var customPasteHotkeyEnabled: Bool {
+        defaults.bool(forKey: AppPreferenceKey.customPasteHotkeyEnabled)
+    }
+
     var voiceEndCommandEnabled: Bool {
         defaults.bool(forKey: AppPreferenceKey.voiceEndCommandEnabled)
     }

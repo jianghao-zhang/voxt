@@ -144,6 +144,7 @@ extension AppDelegate {
         VoxtLog.info(
             "Meeting history persistence succeeded. entryID=\(entryID.uuidString), segments=\(persistedSegments.count), forceSave=\(forceSave)"
         )
+        cacheLatestInjectableOutputText(persistedText)
         return historyStore.entry(id: entryID)
     }
 

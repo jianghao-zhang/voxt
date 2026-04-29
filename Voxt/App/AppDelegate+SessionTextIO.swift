@@ -159,6 +159,8 @@ extension AppDelegate {
             outputText = rewriteAnswerPayload.content
         }
 
+        cacheLatestInjectableOutputText(outputText)
+
         VoxtLog.info(
             "Commit transcription prepared payload. inputChars=\(text.count), outputChars=\(outputText.count), hasRewritePayload=\(rewriteAnswerPayload != nil)"
         )
@@ -1055,6 +1057,31 @@ extension AppDelegate {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+
+    func cacheLatestInjectableOutputText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        latestInjectableOutputText = trimmed
+    }
+
+    private func resolvedLatestInjectableOutputText() -> String? {
+        let cached = latestInjectableOutputText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !cached.isEmpty {
+            return cached
+        }
+
+        let historyText = historyStore.allHistoryEntries.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return historyText.isEmpty ? nil : historyText
+    }
+
+    func injectLatestResultByCustomPasteHotkey() {
+        guard let latestText = resolvedLatestInjectableOutputText() else {
+            showOverlayStatus(String(localized: "No recent result available to paste yet."), clearAfter: 2.0)
+            return
+        }
+
+        typeText(latestText)
     }
 
     private func pasteTextByShortcut(

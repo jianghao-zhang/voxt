@@ -26,6 +26,7 @@ class HotkeyManager {
     var onRewriteKeyDown: (() -> Void)?
     var onRewriteKeyUp: (() -> Void)?
     var onMeetingKeyDown: (() -> Void)?
+    var onCustomPasteKeyDown: (() -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -37,10 +38,13 @@ class HotkeyManager {
     private var activeRewriteKeyCode: UInt16?
     private var isMeetingKeyDown = false
     private var activeMeetingKeyCode: UInt16?
+    private var isCustomPasteKeyDown = false
+    private var activeCustomPasteKeyCode: UInt16?
     private var hasTranscriptionModifierTapCandidate = false
     private var hasTranslationModifierTapCandidate = false
     private var hasRewriteModifierTapCandidate = false
     private var hasMeetingModifierTapCandidate = false
+    private var hasCustomPasteModifierTapCandidate = false
     private var sawNonModifierKeyDuringFunctionChord = false
     private var currentSidedModifiers: SidedModifierFlags = []
     private var suppressTranscriptionTapUntil = Date.distantPast
@@ -51,6 +55,7 @@ class HotkeyManager {
     private var pendingTranslationLongPressReleaseTask: Task<Void, Never>?
     private var pendingRewriteLongPressReleaseTask: Task<Void, Never>?
     private var pendingMeetingLongPressReleaseTask: Task<Void, Never>?
+    private var pendingCustomPasteLongPressReleaseTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var didPromptAccessibility = false
     private var didPromptInputMonitoring = false
@@ -59,6 +64,10 @@ class HotkeyManager {
 
     private static func isMeetingHotkeyEnabled(defaults: UserDefaults = .standard) -> Bool {
         defaults.bool(forKey: AppPreferenceKey.meetingNotesBetaEnabled)
+    }
+
+    private static func isCustomPasteHotkeyEnabled(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: AppPreferenceKey.customPasteHotkeyEnabled)
     }
 
     deinit {
@@ -88,6 +97,8 @@ class HotkeyManager {
         pendingRewriteLongPressReleaseTask = nil
         pendingMeetingLongPressReleaseTask?.cancel()
         pendingMeetingLongPressReleaseTask = nil
+        pendingCustomPasteLongPressReleaseTask?.cancel()
+        pendingCustomPasteLongPressReleaseTask = nil
     }
 
     func start() {
@@ -99,13 +110,18 @@ class HotkeyManager {
         let rewriteHotkey = HotkeyPreference.loadRewrite()
         let meetingHotkeyEnabled = Self.isMeetingHotkeyEnabled()
         let meetingHotkey = HotkeyPreference.loadMeeting()
+        let customPasteHotkeyEnabled = Self.isCustomPasteHotkeyEnabled()
+        let customPasteHotkey = HotkeyPreference.loadCustomPaste()
         let distinguishModifierSides = HotkeyPreference.loadDistinguishModifierSides()
         let meetingHotkeyDescription = meetingHotkeyEnabled
             ? HotkeyPreference.displayString(for: meetingHotkey, distinguishModifierSides: distinguishModifierSides)
             : "disabled"
+        let customPasteHotkeyDescription = customPasteHotkeyEnabled
+            ? HotkeyPreference.displayString(for: customPasteHotkey, distinguishModifierSides: distinguishModifierSides)
+            : "disabled"
         VoxtLog.info("Starting hotkey manager.")
         VoxtLog.hotkey(
-            "Hotkey bindings. transcription=\(HotkeyPreference.displayString(for: transcriptionHotkey, distinguishModifierSides: distinguishModifierSides)), translation=\(HotkeyPreference.displayString(for: translationHotkey, distinguishModifierSides: distinguishModifierSides)), rewrite=\(HotkeyPreference.displayString(for: rewriteHotkey, distinguishModifierSides: distinguishModifierSides)), meeting=\(meetingHotkeyDescription), trigger=\(HotkeyPreference.loadTriggerMode().rawValue)"
+            "Hotkey bindings. transcription=\(HotkeyPreference.displayString(for: transcriptionHotkey, distinguishModifierSides: distinguishModifierSides)), translation=\(HotkeyPreference.displayString(for: translationHotkey, distinguishModifierSides: distinguishModifierSides)), rewrite=\(HotkeyPreference.displayString(for: rewriteHotkey, distinguishModifierSides: distinguishModifierSides)), meeting=\(meetingHotkeyDescription), customPaste=\(customPasteHotkeyDescription), trigger=\(HotkeyPreference.loadTriggerMode().rawValue)"
         )
         guard preflightAndPromptPermissionsIfNeeded() else {
             scheduleRetry()
@@ -268,6 +284,8 @@ class HotkeyManager {
         let rewriteHotkey = HotkeyPreference.loadRewrite()
         let meetingHotkeyEnabled = Self.isMeetingHotkeyEnabled()
         let meetingHotkey = HotkeyPreference.loadMeeting()
+        let customPasteHotkeyEnabled = Self.isCustomPasteHotkeyEnabled()
+        let customPasteHotkey = HotkeyPreference.loadCustomPaste()
         let distinguishModifierSides = HotkeyPreference.loadDistinguishModifierSides()
         let triggerMode = HotkeyPreference.loadTriggerMode()
         let incomingSidedModifiers =
@@ -281,12 +299,20 @@ class HotkeyManager {
             ? HotkeyPreference.cgFlags(from: meetingHotkey.modifiers)
             : []
         let activeMeetingHotkey = meetingHotkeyEnabled ? meetingHotkey : nil
+        let customPasteFlags = customPasteHotkeyEnabled
+            ? HotkeyPreference.cgFlags(from: customPasteHotkey.modifiers)
+            : []
+        let activeCustomPasteHotkey = customPasteHotkeyEnabled ? customPasteHotkey : nil
         let wasTranslationKeyDown = isTranslationKeyDown
         let wasRewriteKeyDown = isRewriteKeyDown
         let wasMeetingKeyDown = isMeetingKeyDown
+        let wasCustomPasteKeyDown = isCustomPasteKeyDown
 
         if !meetingHotkeyEnabled {
             clearMeetingTransientState()
+        }
+        if !customPasteHotkeyEnabled {
+            clearCustomPasteTransientState()
         }
 
         resetTransientStateIfIdleGapSuggestsStaleState(
@@ -489,6 +515,49 @@ class HotkeyManager {
             }
         }
 
+        if let customPasteHotkey = activeCustomPasteHotkey,
+           HotkeyModifierInterpreter.isModifierOnly(customPasteHotkey) {
+            if handleModifierOnlyCustomPasteEvent(
+                type: type,
+                keyCode: keyCode,
+                flags: flags,
+                currentSidedModifiers: currentSidedModifiers,
+                customPasteHotkey: customPasteHotkey,
+                distinguishModifierSides: distinguishModifierSides,
+                customPasteFlags: customPasteFlags,
+                wasCustomPasteKeyDown: wasCustomPasteKeyDown
+            ) {
+                return
+            }
+            return
+        } else if let customPasteHotkey = activeCustomPasteHotkey {
+            let customPasteFlagsMatch = HotkeyPreference.hotkeyMatches(
+                customPasteHotkey,
+                eventFlags: flags,
+                sidedModifiers: currentSidedModifiers,
+                distinguishModifierSides: distinguishModifierSides
+            )
+            switch type {
+            case .keyDown:
+                if keyCode == customPasteHotkey.keyCode, customPasteFlagsMatch, !isAutoRepeat {
+                    if !isCustomPasteKeyDown {
+                        isCustomPasteKeyDown = true
+                        activeCustomPasteKeyCode = keyCode
+                    }
+                    return
+                }
+            case .keyUp:
+                if isCustomPasteKeyDown, activeCustomPasteKeyCode == keyCode {
+                    isCustomPasteKeyDown = false
+                    activeCustomPasteKeyCode = nil
+                    emitCustomPasteKeyDown()
+                    return
+                }
+            default:
+                break
+            }
+        }
+
         // Transcription path runs after translation handling.
         // This keeps fn+shift and fn responsibilities separated.
         if HotkeyModifierInterpreter.isModifierOnly(transcriptionHotkey) {
@@ -524,10 +593,12 @@ class HotkeyManager {
             guard keyCode == transcriptionHotkey.keyCode, transcriptionFlagsMatch, !isAutoRepeat else { return }
             if triggerMode == .tap {
                 emitKeyDown()
+                return
             } else if !isKeyDown {
                 isKeyDown = true
                 activeKeyCode = keyCode
                 emitKeyDown()
+                return
             }
         case .keyUp:
             if triggerMode == .tap {
@@ -543,6 +614,7 @@ class HotkeyManager {
                 isKeyDown = false
                 activeKeyCode = nil
                 emitKeyUp()
+                return
             }
         default:
             break
@@ -901,6 +973,64 @@ class HotkeyManager {
         return false
     }
 
+    private func handleModifierOnlyCustomPasteEvent(
+        type: CGEventType,
+        keyCode: UInt16,
+        flags: CGEventFlags,
+        currentSidedModifiers: SidedModifierFlags,
+        customPasteHotkey: HotkeyPreference.Hotkey,
+        distinguishModifierSides: Bool,
+        customPasteFlags: CGEventFlags,
+        wasCustomPasteKeyDown: Bool
+    ) -> Bool {
+        guard type == .flagsChanged else { return false }
+
+        let comboIsDown = HotkeyPreference.hotkeyMatches(
+            customPasteHotkey,
+            eventFlags: flags,
+            sidedModifiers: currentSidedModifiers,
+            distinguishModifierSides: distinguishModifierSides
+        )
+        let customPasteTriggerDown = HotkeyModifierInterpreter.translationTriggerDown(
+            keyCode: keyCode,
+            comboIsDown: comboIsDown,
+            eventFlags: flags,
+            translationFlags: customPasteFlags
+        )
+
+        if customPasteTriggerDown && !isCustomPasteKeyDown {
+            VoxtLog.hotkey("Hotkey detect custom paste modifier combo down.")
+            cancelPendingTranscriptionTap(resetKeyState: true)
+            isCustomPasteKeyDown = true
+            hasCustomPasteModifierTapCandidate = true
+            suppressTranscriptionTapUntil = Date().addingTimeInterval(0.35)
+        }
+
+        if !comboIsDown && isCustomPasteKeyDown {
+            VoxtLog.hotkey("Hotkey detect custom paste modifier combo up.")
+            if hasCustomPasteModifierTapCandidate {
+                VoxtLog.hotkey("Hotkey custom paste modifier combo confirmed on release.")
+                emitCustomPasteKeyDown()
+            }
+            hasCustomPasteModifierTapCandidate = false
+            isCustomPasteKeyDown = false
+            suppressTranscriptionTapUntil = Date().addingTimeInterval(0.20)
+            return true
+        } else if customPasteFlags == .maskSecondaryFn && HotkeyModifierInterpreter.isFunctionKeyEvent(keyCode) {
+            if isCustomPasteKeyDown {
+                isCustomPasteKeyDown = false
+                hasCustomPasteModifierTapCandidate = false
+                emitCustomPasteKeyDown()
+            } else {
+                isCustomPasteKeyDown = true
+                hasCustomPasteModifierTapCandidate = true
+            }
+            return true
+        }
+
+        return wasCustomPasteKeyDown != isCustomPasteKeyDown || comboIsDown
+    }
+
     private func handleModifierOnlyTranscriptionEvent(
         type: CGEventType,
         keyCode: UInt16,
@@ -1249,6 +1379,27 @@ class HotkeyManager {
         pendingMeetingLongPressReleaseTask = nil
     }
 
+    private func scheduleCustomPasteLongPressRelease() {
+        pendingCustomPasteLongPressReleaseTask?.cancel()
+        pendingCustomPasteLongPressReleaseTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(80))
+            } catch {
+                return
+            }
+            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            guard self.isCustomPasteKeyDown else { return }
+            self.pendingCustomPasteLongPressReleaseTask = nil
+            self.isCustomPasteKeyDown = false
+        }
+    }
+
+    private func cancelPendingCustomPasteLongPressRelease() {
+        pendingCustomPasteLongPressReleaseTask?.cancel()
+        pendingCustomPasteLongPressReleaseTask = nil
+    }
+
     private func scheduleTranscriptionLongPressRelease() {
         pendingTranscriptionLongPressReleaseTask?.cancel()
         pendingTranscriptionLongPressReleaseTask = Task { [weak self] in
@@ -1299,11 +1450,22 @@ class HotkeyManager {
         onMeetingKeyDown?()
     }
 
+    private func emitCustomPasteKeyDown() {
+        onCustomPasteKeyDown?()
+    }
+
     private func clearMeetingTransientState() {
         isMeetingKeyDown = false
         activeMeetingKeyCode = nil
         hasMeetingModifierTapCandidate = false
         cancelPendingMeetingLongPressRelease()
+    }
+
+    private func clearCustomPasteTransientState() {
+        isCustomPasteKeyDown = false
+        activeCustomPasteKeyCode = nil
+        hasCustomPasteModifierTapCandidate = false
+        cancelPendingCustomPasteLongPressRelease()
     }
 
     private func debugDescription(for flags: CGEventFlags) -> String {
@@ -1335,10 +1497,13 @@ class HotkeyManager {
         activeRewriteKeyCode = nil
         isMeetingKeyDown = false
         activeMeetingKeyCode = nil
+        isCustomPasteKeyDown = false
+        activeCustomPasteKeyCode = nil
         hasTranscriptionModifierTapCandidate = false
         hasTranslationModifierTapCandidate = false
         hasRewriteModifierTapCandidate = false
         hasMeetingModifierTapCandidate = false
+        hasCustomPasteModifierTapCandidate = false
         sawNonModifierKeyDuringFunctionChord = false
         currentSidedModifiers = []
         suppressTranscriptionTapUntil = .distantPast
@@ -1357,6 +1522,8 @@ class HotkeyManager {
         pendingRewriteLongPressReleaseTask = nil
         pendingMeetingLongPressReleaseTask?.cancel()
         pendingMeetingLongPressReleaseTask = nil
+        pendingCustomPasteLongPressReleaseTask?.cancel()
+        pendingCustomPasteLongPressReleaseTask = nil
     }
 }
 
@@ -1367,10 +1534,12 @@ extension HotkeyManager {
         let isTranslationKeyDown: Bool
         let isRewriteKeyDown: Bool
         let isMeetingKeyDown: Bool
+        let isCustomPasteKeyDown: Bool
         let hasTranscriptionModifierTapCandidate: Bool
         let hasTranslationModifierTapCandidate: Bool
         let hasRewriteModifierTapCandidate: Bool
         let hasMeetingModifierTapCandidate: Bool
+        let hasCustomPasteModifierTapCandidate: Bool
         let sawNonModifierKeyDuringFunctionChord: Bool
         let currentSidedModifiers: SidedModifierFlags
     }
@@ -1392,18 +1561,26 @@ extension HotkeyManager {
         isKeyDown: Bool = false,
         isTranslationKeyDown: Bool = false,
         isRewriteKeyDown: Bool = false,
+        isMeetingKeyDown: Bool = false,
+        isCustomPasteKeyDown: Bool = false,
         hasTranscriptionModifierTapCandidate: Bool = false,
         hasTranslationModifierTapCandidate: Bool = false,
         hasRewriteModifierTapCandidate: Bool = false,
+        hasMeetingModifierTapCandidate: Bool = false,
+        hasCustomPasteModifierTapCandidate: Bool = false,
         sawNonModifierKeyDuringFunctionChord: Bool = false,
         currentSidedModifiers: SidedModifierFlags = []
     ) {
         self.isKeyDown = isKeyDown
         self.isTranslationKeyDown = isTranslationKeyDown
         self.isRewriteKeyDown = isRewriteKeyDown
+        self.isMeetingKeyDown = isMeetingKeyDown
+        self.isCustomPasteKeyDown = isCustomPasteKeyDown
         self.hasTranscriptionModifierTapCandidate = hasTranscriptionModifierTapCandidate
         self.hasTranslationModifierTapCandidate = hasTranslationModifierTapCandidate
         self.hasRewriteModifierTapCandidate = hasRewriteModifierTapCandidate
+        self.hasMeetingModifierTapCandidate = hasMeetingModifierTapCandidate
+        self.hasCustomPasteModifierTapCandidate = hasCustomPasteModifierTapCandidate
         self.sawNonModifierKeyDuringFunctionChord = sawNonModifierKeyDuringFunctionChord
         self.currentSidedModifiers = currentSidedModifiers
     }
@@ -1418,10 +1595,12 @@ extension HotkeyManager {
             isTranslationKeyDown: isTranslationKeyDown,
             isRewriteKeyDown: isRewriteKeyDown,
             isMeetingKeyDown: isMeetingKeyDown,
+            isCustomPasteKeyDown: isCustomPasteKeyDown,
             hasTranscriptionModifierTapCandidate: hasTranscriptionModifierTapCandidate,
             hasTranslationModifierTapCandidate: hasTranslationModifierTapCandidate,
             hasRewriteModifierTapCandidate: hasRewriteModifierTapCandidate,
             hasMeetingModifierTapCandidate: hasMeetingModifierTapCandidate,
+            hasCustomPasteModifierTapCandidate: hasCustomPasteModifierTapCandidate,
             sawNonModifierKeyDuringFunctionChord: sawNonModifierKeyDuringFunctionChord,
             currentSidedModifiers: currentSidedModifiers
         )
