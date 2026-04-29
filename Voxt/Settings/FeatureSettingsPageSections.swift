@@ -195,23 +195,27 @@ extension FeatureSettingsView {
                     )
                 }
 
-                FeatureToggleRow(
-                    title: featureSettingsLocalized("Translate selected text with translation shortcut"),
-                    detail: featureSettingsLocalized("If text is selected, the translation shortcut translates the selection directly instead of starting a recording."),
-                    isOn: binding(
-                        get: { featureSettings.translation.replaceSelectedText },
-                        set: { featureSettings.translation.replaceSelectedText = $0 }
+                FeatureEmbeddedFieldGroup {
+                    FeatureToggleRow(
+                        title: featureSettingsLocalized("Translate selected text with translation shortcut"),
+                        detail: featureSettingsLocalized("If text is selected, the translation shortcut translates the selection directly instead of starting a recording."),
+                        isOn: binding(
+                            get: { featureSettings.translation.replaceSelectedText },
+                            set: { featureSettings.translation.replaceSelectedText = $0 }
+                        )
                     )
-                )
 
-                FeatureToggleRow(
-                    title: featureSettingsLocalized("Replace Selected Text"),
-                    detail: featureSettingsLocalized("When enabled, selected-text translation replaces the current selection directly. When disabled, Voxt opens a result window after completion instead."),
-                    isOn: binding(
-                        get: { !featureSettings.translation.showResultWindow },
-                        set: { featureSettings.translation.showResultWindow = !$0 }
-                    )
-                )
+                    if featureSettings.translation.replaceSelectedText {
+                        FeatureToggleRow(
+                            title: featureSettingsLocalized("Replace Selected Text"),
+                            detail: featureSettingsLocalized("When enabled, selected-text translation replaces the current selection directly. When disabled, Voxt opens a result window after completion instead."),
+                            isOn: binding(
+                                get: { !featureSettings.translation.showResultWindow },
+                                set: { featureSettings.translation.showResultWindow = !$0 }
+                            )
+                        )
+                    }
+                }
 
                 if featureSettings.translation.modelSelectionID.translationSelection != .whisperDirectTranslate {
                     FeatureSettingSection(title: featureSettingsLocalized("Prompt"), detail: featureSettingsLocalized("Prompt controls are shown only when the selected translation model supports prompt-based generation.")) {

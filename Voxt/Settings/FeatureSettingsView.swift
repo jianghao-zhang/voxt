@@ -37,6 +37,7 @@ struct FeatureSettingsView: View {
                 meetingContent
             }
         }
+        .id(selectedTab)
         .sheet(item: $selectorSheet) { sheet in
             FeatureModelSelectorDialog(
                 title: sheet.title,
