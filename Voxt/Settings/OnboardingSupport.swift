@@ -139,6 +139,67 @@ enum OnboardingPermissionGrantResolver {
     }
 }
 
+enum OnboardingFeatureSelectionResolver {
+    static func asrSelectionID(
+        selectedEngine: TranscriptionEngine,
+        mlxModelRepo: String,
+        whisperModelID: String,
+        remoteASRProvider: RemoteASRProvider
+    ) -> FeatureModelSelectionID {
+        switch selectedEngine {
+        case .dictation:
+            return .dictation
+        case .mlxAudio:
+            return .mlx(mlxModelRepo)
+        case .whisperKit:
+            return .whisper(whisperModelID)
+        case .remote:
+            return .remoteASR(remoteASRProvider)
+        }
+    }
+
+    static func llmSelectionID(
+        choice: OnboardingTextModelPathChoice,
+        localLLMRepo: String,
+        remoteLLMProvider: RemoteLLMProvider
+    ) -> FeatureModelSelectionID {
+        switch choice {
+        case .local:
+            return .localLLM(localLLMRepo)
+        case .remote:
+            return .remoteLLM(remoteLLMProvider)
+        case .system:
+            return .appleIntelligence
+        }
+    }
+
+    static func translationSelectionID(
+        llmSelection: FeatureModelSelectionID,
+        asrSelection: FeatureModelSelectionID,
+        existingSelection: FeatureModelSelectionID,
+        fallbackLocalLLMRepo: String
+    ) -> FeatureModelSelectionID {
+        switch llmSelection.textSelection {
+        case .localLLM(let repo):
+            return .localLLM(repo)
+        case .remoteLLM(let provider):
+            return .remoteLLM(provider)
+        case .appleIntelligence:
+            if case .whisper = asrSelection.asrSelection {
+                return .whisperDirectTranslate
+            }
+            switch existingSelection.translationSelection {
+            case .localLLM, .remoteLLM, .whisperDirectTranslate:
+                return existingSelection
+            case .none:
+                return .localLLM(fallbackLocalLLMRepo)
+            }
+        case .none:
+            return .localLLM(fallbackLocalLLMRepo)
+        }
+    }
+}
+
 enum OnboardingRewriteTest {
     static var defaultPrompt: String {
         defaultPrompt(localeIdentifier: AppLocalization.language.localeIdentifier)

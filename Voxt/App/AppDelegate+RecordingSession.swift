@@ -55,11 +55,11 @@ extension AppDelegate {
 
     func beginRecording(outputMode: SessionOutputMode) {
         VoxtLog.info(
-            "Begin recording requested. output=\(sessionOutputLabel(for: outputMode)), isSessionActive=\(isSessionActive), isMeetingActive=\(meetingSessionCoordinator.isActive)"
+            "Begin recording requested. output=\(RecordingSessionSupport.outputLabel(for: outputMode)), isSessionActive=\(isSessionActive), isMeetingActive=\(meetingSessionCoordinator.isActive)"
         )
         guard !meetingSessionCoordinator.isActive else {
             VoxtLog.info(
-                "Begin recording ignored because Meeting Notes is active. output=\(sessionOutputLabel(for: outputMode))"
+                "Begin recording ignored because Meeting Notes is active. output=\(RecordingSessionSupport.outputLabel(for: outputMode))"
             )
             showOverlayStatus(
                 String(localized: "Meeting Notes is currently active. Close it before starting another recording."),
@@ -69,7 +69,7 @@ extension AppDelegate {
         }
         guard !isSessionActive else {
             VoxtLog.info(
-                "Begin recording ignored because a session is already active. output=\(sessionOutputLabel(for: outputMode)), activeOutput=\(sessionOutputLabel(for: sessionOutputMode))"
+                "Begin recording ignored because a session is already active. output=\(RecordingSessionSupport.outputLabel(for: outputMode)), activeOutput=\(RecordingSessionSupport.outputLabel(for: sessionOutputMode))"
             )
             return
         }
@@ -90,7 +90,7 @@ extension AppDelegate {
         }
         guard preflightPermissionsForRecording(engine: recordingEngine) else {
             VoxtLog.info(
-                "Begin recording blocked by preflight permissions. output=\(sessionOutputLabel(for: outputMode)), engine=\(recordingEngine.rawValue)"
+                "Begin recording blocked by preflight permissions. output=\(RecordingSessionSupport.outputLabel(for: outputMode)), engine=\(recordingEngine.rawValue)"
             )
             return
         }
@@ -114,7 +114,10 @@ extension AppDelegate {
         configureVoxtNoteSessionRuntimeStateForNewRecording()
         let frontmostApplication = NSWorkspace.shared.frontmostApplication
         let frontmostBundleID = frontmostApplication?.bundleIdentifier
-        let sessionTargetBundleID = fallbackInjectBundleID(from: frontmostBundleID)
+        let sessionTargetBundleID = RecordingSessionSupport.fallbackInjectBundleID(
+            from: frontmostBundleID,
+            ownBundleID: Bundle.main.bundleIdentifier
+        )
         sessionTargetApplicationBundleID = sessionTargetBundleID
         sessionTargetApplicationPID = sessionTargetBundleID == nil ? nil : frontmostApplication?.processIdentifier
         let isContinuingRewriteConversation = outputMode == .rewrite && overlayState.isRewriteConversationActive
@@ -125,7 +128,7 @@ extension AppDelegate {
         resetVoiceEndCommandState()
 
         VoxtLog.info(
-            "Recording started. output=\(sessionOutputLabel(for: outputMode)), engine=\(recordingEngine.rawValue)"
+            "Recording started. output=\(RecordingSessionSupport.outputLabel(for: outputMode)), engine=\(recordingEngine.rawValue)"
         )
         if outputMode == .rewrite {
             VoxtLog.info(
@@ -154,7 +157,7 @@ extension AppDelegate {
         } else {
             overlayState.reset()
             overlayState.statusMessage = ""
-            overlayState.presentRecording(iconMode: overlayIconMode(for: outputMode))
+            overlayState.presentRecording(iconMode: RecordingSessionSupport.overlayIconMode(for: outputMode))
         }
         if outputMode == .translation {
             prepareMicrophoneTranslationSessionState()
@@ -213,14 +216,17 @@ extension AppDelegate {
         if transcriptionProcessingStartedAt == nil {
             transcriptionProcessingStartedAt = recordingStoppedAt
         }
-        overlayState.presentProcessing(iconMode: overlayIconMode(for: sessionOutputMode))
+        overlayState.presentProcessing(iconMode: RecordingSessionSupport.overlayIconMode(for: sessionOutputMode))
         voiceEndCommandState.lastDetectedCommand = false
         enhancementContextSnapshot = captureEnhancementContextSnapshot()
         stopActiveRecordingTranscriber()
 
         // Safety fallback: some engine/device combinations may occasionally fail to
         // report completion. Ensure the session/UI can always recover.
-        let fallbackTimeoutSeconds = stopRecordingFallbackTimeoutSeconds()
+        let fallbackTimeoutSeconds = RecordingSessionSupport.stopRecordingFallbackTimeoutSeconds(
+            transcriptionEngine: transcriptionEngine,
+            remoteProvider: remoteASRSelectedProvider
+        )
         stopRecordingFallbackTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -285,7 +291,12 @@ extension AppDelegate {
         stopRecordingFallbackTask = nil
 
         transcriptionResultReceivedAt = Date()
-        let displayText = normalizedTranscriptionDisplayText(rawText)
+        let displayText = RecordingSessionSupport.normalizedTranscriptionDisplayText(
+            rawText,
+            transcriptionEngine: transcriptionEngine,
+            remoteProvider: remoteASRSelectedProvider,
+            userMainLanguage: userMainLanguage
+        )
         let text = sanitizedFinalTranscriptionText(displayText)
         guard !text.isEmpty else {
             if isCurrentTranscriptionNoteSessionActive {
@@ -312,8 +323,10 @@ extension AppDelegate {
         refreshVoxtNoteTranscriptDisplay()
 
         VoxtLog.info("Transcription result received. characters=\(text.count), output=\(sessionOutputMode == .translation ? "translation" : "transcription")")
-        VoxtLog.info("Transcription result output mode resolved as \(sessionOutputLabel(for: sessionOutputMode)).", verbose: true)
-        VoxtLog.info("Session text model routing: \(sessionTextModelRoutingDescription())")
+        VoxtLog.info("Transcription result output mode resolved as \(RecordingSessionSupport.outputLabel(for: sessionOutputMode)).", verbose: true)
+        VoxtLog.info(
+            "Session text model routing: \(RecordingSessionSupport.textModelRoutingDescription(outputMode: sessionOutputMode, transcriptionSettings: transcriptionFeatureSettings, translationSettings: translationFeatureSettings, rewriteSettings: rewriteFeatureSettings))"
+        )
 
         if sessionOutputMode == .translation {
             if sessionUsesWhisperDirectTranslation {
@@ -338,79 +351,6 @@ extension AppDelegate {
 
         VoxtLog.info("Transcription flow dispatch: standard. characters=\(text.count), enhancementMode=\(enhancementMode.rawValue)")
         processStandardTranscription(text, sessionID: sessionID)
-    }
-
-    private func sessionOutputLabel(for outputMode: SessionOutputMode) -> String {
-        switch outputMode {
-        case .transcription:
-            return "transcription"
-        case .translation:
-            return "translation"
-        case .rewrite:
-            return "rewrite"
-        }
-    }
-
-    private func sessionTextModelRoutingDescription() -> String {
-        switch sessionOutputMode {
-        case .transcription:
-            guard transcriptionFeatureSettings.llmEnabled else {
-                return "transcription: none"
-            }
-            switch transcriptionFeatureSettings.llmSelectionID.textSelection {
-            case .appleIntelligence:
-                return "transcription: apple-intelligence"
-            case .localLLM(let repo):
-                return "transcription: local-llm(\(repo))"
-            case .remoteLLM(let provider):
-                return "transcription: remote-llm(\(provider.rawValue))"
-            case .none:
-                return "transcription: none"
-            }
-        case .translation:
-            switch translationFeatureSettings.modelSelectionID.translationSelection {
-            case .whisperDirectTranslate:
-                return "translation: whisper-direct-translate"
-            case .localLLM(let repo):
-                return "translation: local-llm(\(repo))"
-            case .remoteLLM(let provider):
-                return "translation: remote-llm(\(provider.rawValue))"
-            case .none:
-                return "translation: none"
-            }
-        case .rewrite:
-            switch rewriteFeatureSettings.llmSelectionID.textSelection {
-            case .appleIntelligence:
-                return "rewrite: apple-intelligence"
-            case .localLLM(let repo):
-                return "rewrite: local-llm(\(repo))"
-            case .remoteLLM(let provider):
-                return "rewrite: remote-llm(\(provider.rawValue))"
-            case .none:
-                return "rewrite: none"
-            }
-        }
-    }
-
-    private func overlayIconMode(for outputMode: SessionOutputMode) -> OverlaySessionIconMode {
-        switch outputMode {
-        case .transcription:
-            return .transcription
-        case .translation:
-            return .translation
-        case .rewrite:
-            return .rewrite
-        }
-    }
-
-    private func fallbackInjectBundleID(from bundleID: String?) -> String? {
-        guard let bundleID,
-              let ownBundleID = Bundle.main.bundleIdentifier,
-              bundleID != ownBundleID
-        else {
-            return nil
-        }
-        return bundleID
     }
 
     func startPauseLLMIfNeeded() {
@@ -454,7 +394,7 @@ extension AppDelegate {
     func showOverlayStatus(_ message: String, clearAfter seconds: TimeInterval = 2.4) {
         overlayStatusClearTask?.cancel()
         overlayState.statusMessage = message
-        overlayState.presentRecording(iconMode: overlayIconMode(for: sessionOutputMode))
+        overlayState.presentRecording(iconMode: RecordingSessionSupport.overlayIconMode(for: sessionOutputMode))
         overlayStatusClearTask = Task { [weak self] in
             guard let self else { return }
             try? await Task.sleep(for: .seconds(seconds))
@@ -471,7 +411,7 @@ extension AppDelegate {
         overlayStatusClearTask?.cancel()
         overlayState.reset()
         overlayState.statusMessage = message
-        overlayState.presentRecording(iconMode: overlayIconMode(for: sessionOutputMode))
+        overlayState.presentRecording(iconMode: RecordingSessionSupport.overlayIconMode(for: sessionOutputMode))
         overlayWindow.show(state: overlayState, position: overlayPosition)
 
         overlayReminderTask = Task { [weak self] in
@@ -750,90 +690,6 @@ extension AppDelegate {
         return true
     }
 
-    private func normalizedTranscriptionDisplayText(_ rawText: String) -> String {
-        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
-
-        let extractedText: String
-        if transcriptionEngine == .remote, remoteASRSelectedProvider == .openAIWhisper {
-            guard (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
-                  (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) else {
-                extractedText = trimmed
-                let normalized = ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
-                return normalized
-            }
-
-            guard let data = trimmed.data(using: .utf8),
-                  let object = try? JSONSerialization.jsonObject(with: data),
-                  let extracted = extractTranscriptionTextValue(from: object),
-                  !extracted.isEmpty else {
-                extractedText = trimmed
-                let normalized = ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
-                return normalized
-            }
-            extractedText = extracted
-        } else {
-            extractedText = trimmed
-        }
-
-        let normalized = ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
-        if normalized != extractedText {
-            VoxtLog.info(
-                "Normalized Chinese script variant for ASR output. preferred=\(userMainLanguage.code), chars=\(normalized.count)",
-                verbose: true
-            )
-        }
-        return normalized
-    }
-
-    private func stopRecordingFallbackTimeoutSeconds() -> TimeInterval {
-        guard transcriptionEngine == .remote else { return 8 }
-        switch remoteASRSelectedProvider {
-        case .openAIWhisper, .glmASR:
-            // File-upload ASR can legitimately take longer than realtime providers.
-            return 60
-        case .doubaoASR, .aliyunBailianASR:
-            return 8
-        }
-    }
-
-    private func extractTranscriptionTextValue(from object: Any) -> String? {
-        if let text = object as? String {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
-        }
-
-        if let dict = object as? [String: Any] {
-            let preferredKeys = ["text", "transcript", "result_text", "utterance", "content", "data"]
-            for key in preferredKeys {
-                if let value = dict[key],
-                   let extracted = extractTranscriptionTextValue(from: value),
-                   !extracted.isEmpty {
-                    return extracted
-                }
-            }
-
-            for value in dict.values {
-                if let extracted = extractTranscriptionTextValue(from: value),
-                   !extracted.isEmpty {
-                    return extracted
-                }
-            }
-            return nil
-        }
-
-        if let array = object as? [Any] {
-            for item in array {
-                if let extracted = extractTranscriptionTextValue(from: item),
-                   !extracted.isEmpty {
-                    return extracted
-                }
-            }
-        }
-
-        return nil
-    }
-
     func applyPreferredInputDevice() {
         speechTranscriber.setPreferredInputDevice(selectedInputDeviceID)
         mlxTranscriber?.setPreferredInputDevice(selectedInputDeviceID)
@@ -877,7 +733,7 @@ extension AppDelegate {
 
         guard isSessionActive else { return }
 
-        let sessionKind = sessionOutputLabel(for: sessionOutputMode)
+        let sessionKind = RecordingSessionSupport.outputLabel(for: sessionOutputMode)
         let remoteDebugState = remoteASRTranscriber.activeRealtimeDebugSummary() ?? "none"
         VoxtLog.warning(
             """

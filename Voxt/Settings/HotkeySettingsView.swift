@@ -642,35 +642,8 @@ struct HotkeySettingsView: View {
     private func applyPreset(_ preset: HotkeyPreference.Preset) {
         discardPendingCapture()
         hotkeyPreset = preset.rawValue
-        guard let values = HotkeyPreference.presetHotkeys(for: preset) else { return }
-
+        guard let values = HotkeyPreference.applyPreset(preset) else { return }
         distinguishModifierSides = values.distinguishSides
-
-        HotkeyPreference.save(
-            keyCode: values.transcription.keyCode,
-            modifiers: values.transcription.modifiers,
-            sidedModifiers: values.transcription.sidedModifiers
-        )
-        HotkeyPreference.saveTranslation(
-            keyCode: values.translation.keyCode,
-            modifiers: values.translation.modifiers,
-            sidedModifiers: values.translation.sidedModifiers
-        )
-        HotkeyPreference.saveRewrite(
-            keyCode: values.rewrite.keyCode,
-            modifiers: values.rewrite.modifiers,
-            sidedModifiers: values.rewrite.sidedModifiers
-        )
-        HotkeyPreference.saveMeeting(
-            keyCode: values.meeting.keyCode,
-            modifiers: values.meeting.modifiers,
-            sidedModifiers: values.meeting.sidedModifiers
-        )
-        HotkeyPreference.saveCustomPaste(
-            keyCode: values.customPaste.keyCode,
-            modifiers: values.customPaste.modifiers,
-            sidedModifiers: values.customPaste.sidedModifiers
-        )
     }
 
     private func beginRecording(_ field: RecordingField) {

@@ -92,7 +92,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
         if provider == .aliyunBailianASR {
             do {
-                if isAliyunQwenRealtimeModel(configuration.model) {
+                if RemoteASREndpointSupport.isAliyunQwenRealtimeModel(configuration.model) {
                     try startAliyunQwenRealtimeStreaming(configuration: configuration, hintPayload: hintPayload)
                 } else {
                     try startAliyunFunStreaming(configuration: configuration, hintPayload: hintPayload)
@@ -494,7 +494,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         configuration: RemoteProviderConfiguration,
         hintPayload: ResolvedASRHintPayload
     ) async throws -> String {
-        let endpoint = URL(string: normalizedEndpoint(configuration.endpoint, defaultValue: "https://api.openai.com/v1/audio/transcriptions"))!
+        let endpoint = URL(string: RemoteASREndpointSupport.normalizedEndpoint(configuration.endpoint, defaultValue: "https://api.openai.com/v1/audio/transcriptions"))!
         let token = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else {
             throw NSError(domain: "Voxt.RemoteASR", code: -1, userInfo: [NSLocalizedDescriptionKey: "OpenAI API key is empty."])
@@ -555,14 +555,14 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
 
         if let object = try? JSONSerialization.jsonObject(with: data),
-           let text = extractText(in: object),
+           let text = RemoteASRTextSupport.extractText(in: object),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         let plainText = String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !plainText.isEmpty, !isLikelyJSONObjectString(plainText) {
+        if !plainText.isEmpty, !RemoteASRTextSupport.isLikelyJSONObjectString(plainText) {
             return plainText
         }
 
@@ -578,7 +578,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         configuration: RemoteProviderConfiguration,
         hintPayload: ResolvedASRHintPayload
     ) async throws -> String {
-        let endpoint = URL(string: normalizedEndpoint(configuration.endpoint, defaultValue: "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions"))!
+        let endpoint = URL(string: RemoteASREndpointSupport.normalizedEndpoint(configuration.endpoint, defaultValue: "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions"))!
         let token = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else {
             throw NSError(domain: "Voxt.RemoteASR", code: -2, userInfo: [NSLocalizedDescriptionKey: "GLM API key is empty."])
@@ -603,8 +603,8 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     ) async throws -> String {
         let accessToken = configuration.accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
         let appID = configuration.appID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resourceID = resolvedDoubaoResourceID(from: configuration)
-        let endpoint = resolvedDoubaoEndpoint(from: configuration)
+        let resourceID = RemoteASREndpointSupport.resolvedDoubaoResourceID(from: configuration)
+        let endpoint = RemoteASREndpointSupport.resolvedDoubaoEndpoint(from: configuration)
 
         guard !accessToken.isEmpty else {
             throw NSError(domain: "Voxt.RemoteASR", code: -3, userInfo: [NSLocalizedDescriptionKey: "Doubao Access Token is empty."])
@@ -682,10 +682,10 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
 
         let object = try JSONSerialization.jsonObject(with: data)
-        if let text = extractDoubaoText(in: object), !text.isEmpty {
+        if let text = RemoteASRTextSupport.extractDoubaoText(in: object), !text.isEmpty {
             return text
         }
-        if let text = extractText(in: object), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if let text = RemoteASRTextSupport.extractText(in: object), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return ""
@@ -695,9 +695,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? RemoteASRProvider.aliyunBailianASR.suggestedModel
             : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isAliyunFunRealtimeModel(model)
-                || isAliyunQwenRealtimeModel(model)
-                || isAliyunFileTranscriptionModel(model)
+        guard RemoteASREndpointSupport.isAliyunFunRealtimeModel(model)
+                || RemoteASREndpointSupport.isAliyunQwenRealtimeModel(model)
+                || RemoteASREndpointSupport.isAliyunFileTranscriptionModel(model)
                 || AliyunMeetingASRConfiguration.routing(for: model) == .compatibleShortAudio
         else {
             throw NSError(
@@ -714,7 +714,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         if let validationError = AliyunMeetingASRConfiguration.validationError(model: model, endpoint: configuration.endpoint) {
             throw NSError(domain: "Voxt.RemoteASR", code: -36, userInfo: [NSLocalizedDescriptionKey: validationError])
         }
-        if isAliyunFileTranscriptionModel(model) {
+        if RemoteASREndpointSupport.isAliyunFileTranscriptionModel(model) {
             return try await AliyunMeetingASRClient.transcribe(
                 fileURL: fileURL,
                 apiKey: token,
@@ -724,7 +724,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
         let endpoint = URL(string: AliyunMeetingASRConfiguration.resolvedCompatibleEndpoint(configuration.endpoint, model: model))!
         let fileData = try Data(contentsOf: fileURL)
-        let dataURI = "data:\(audioMIMEType(for: fileURL));base64,\(fileData.base64EncodedString())"
+        let dataURI = "data:\(RemoteASREndpointSupport.audioMIMEType(for: fileURL));base64,\(fileData.base64EncodedString())"
 
         let payload: [String: Any] = [
             "model": model,
@@ -785,7 +785,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? RemoteASRProvider.aliyunBailianASR.suggestedModel
             : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        let endpoint = resolvedAliyunFunRealtimeEndpoint(configuration.endpoint)
+        let endpoint = RemoteASREndpointSupport.resolvedAliyunFunRealtimeEndpoint(configuration.endpoint)
         guard let wsURL = URL(string: endpoint) else {
             throw NSError(domain: "Voxt.RemoteASR", code: -41, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun realtime WebSocket endpoint URL."])
         }
@@ -997,7 +997,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "qwen3-asr-flash-realtime"
             : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        let endpoint = resolvedAliyunQwenRealtimeEndpoint(configuration.endpoint, model: model)
+        let endpoint = RemoteASREndpointSupport.resolvedAliyunQwenRealtimeEndpoint(configuration.endpoint, model: model)
         guard let wsURL = URL(string: endpoint) else {
             throw NSError(domain: "Voxt.RemoteASR", code: -45, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun Qwen realtime WebSocket endpoint URL."])
         }
@@ -1327,7 +1327,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     ) throws {
         let accessToken = configuration.accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
         let appID = configuration.appID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resourceID = resolvedDoubaoResourceID(from: configuration)
+        let resourceID = RemoteASREndpointSupport.resolvedDoubaoResourceID(from: configuration)
 
         guard !accessToken.isEmpty else {
             throw NSError(domain: "Voxt.RemoteASR", code: -3, userInfo: [NSLocalizedDescriptionKey: "Doubao Access Token is empty."])
@@ -1336,7 +1336,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             throw NSError(domain: "Voxt.RemoteASR", code: -4, userInfo: [NSLocalizedDescriptionKey: "Doubao App ID is empty."])
         }
 
-        let endpoint = resolvedDoubaoStreamingEndpoint(from: configuration)
+        let endpoint = RemoteASREndpointSupport.resolvedDoubaoStreamingEndpoint(from: configuration)
         guard let wsURL = URL(string: endpoint) else {
             throw NSError(domain: "Voxt.RemoteASR", code: -5, userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao endpoint URL."])
         }
@@ -2009,9 +2009,9 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         data.append((serialization << 4) | compression)
         data.append(0x00)
         if (messageFlags & DoubaoProtocol.flagPositiveSequence) != 0 || (messageFlags & DoubaoProtocol.flagLastAudioPacket) != 0 {
-            data.append(sequence.bigEndianData)
+            data.append(remoteASRBigEndianData(sequence))
         }
-        data.append(UInt32(payload.count).bigEndianData)
+        data.append(remoteASRBigEndianData(UInt32(payload.count)))
         data.append(payload)
         return data
     }
@@ -2042,7 +2042,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         var headerSequence: Int32?
         if hasSequence {
             guard data.count >= cursor + 4 else { return nil }
-            headerSequence = Int32(bigEndianData: data.subdata(in: cursor..<(cursor + 4)))
+            headerSequence = remoteASRInt32(fromBigEndian: data.subdata(in: cursor..<(cursor + 4)))
             cursor += 4
         }
         if hasEvent {
@@ -2054,14 +2054,14 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         switch messageType {
         case DoubaoProtocol.messageTypeFullServerResponse:
             guard data.count >= cursor + 4 else { return nil }
-            let payloadSize = Int(UInt32(bigEndianData: data.subdata(in: cursor..<(cursor + 4))))
+            let payloadSize = Int(remoteASRUInt32(fromBigEndian: data.subdata(in: cursor..<(cursor + 4))))
             cursor += 4
             guard payloadSize >= 0, data.count >= cursor + payloadSize else { return nil }
             rawPayload = data.subdata(in: cursor..<(cursor + payloadSize))
         case DoubaoProtocol.messageTypeServerErrorResponse:
             guard data.count >= cursor + 8 else { return nil }
             cursor += 4 // server error code
-            let payloadSize = Int(UInt32(bigEndianData: data.subdata(in: cursor..<(cursor + 4))))
+            let payloadSize = Int(remoteASRUInt32(fromBigEndian: data.subdata(in: cursor..<(cursor + 4))))
             cursor += 4
             guard payloadSize >= 0, data.count >= cursor + payloadSize else { return nil }
             rawPayload = data.subdata(in: cursor..<(cursor + payloadSize))
@@ -2111,7 +2111,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         let isFinal = (messageFlags & DoubaoProtocol.flagLastAudioPacket) != 0
             || isLastPackage(in: object) == true
             || (sequenceFromJSON ?? headerSequence ?? 1) < 0
-        let fragment = extractDoubaoText(in: object)
+        let fragment = RemoteASRTextSupport.extractDoubaoText(in: object)
         return (fragment, isFinal)
     }
 
@@ -2240,7 +2240,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
 
         if !(200...299).contains(http.statusCode) {
-            let payload = try await collectText(from: bytes)
+            let payload = try await RemoteASRTextSupport.collectText(from: bytes)
             throw NSError(
                 domain: "Voxt.RemoteASR",
                 code: http.statusCode,
@@ -2264,8 +2264,8 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 break
             }
 
-            if let fragment = extractTextFragment(fromLine: line), !fragment.isEmpty {
-                aggregate = mergeStreamFragment(current: aggregate, incoming: fragment)
+            if let fragment = RemoteASRTextSupport.extractTextFragment(fromLine: line), !fragment.isEmpty {
+                aggregate = RemoteASRTextSupport.mergeStreamFragment(current: aggregate, incoming: fragment)
                 await MainActor.run {
                     self.transcribedText = aggregate
                 }
@@ -2276,215 +2276,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             return transcribedText
         }
         return aggregate
-    }
-
-    private func extractTextFragment(fromLine line: String) -> String? {
-        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        guard let data = line.data(using: .utf8) else {
-            return trimmed
-        }
-
-        if let object = try? JSONSerialization.jsonObject(with: data) {
-            if let value = extractText(in: object), !value.isEmpty {
-                return normalizedTextFragment(value)
-            }
-            return nil
-        }
-
-        if let loose = extractLooseTextField(from: trimmed), !loose.isEmpty {
-            return normalizedTextFragment(loose)
-        }
-
-        // If this looks like a JSON/object payload but is non-standard (e.g. single quotes),
-        // avoid rendering raw object text in UI.
-        if (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
-            (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) {
-            return nil
-        }
-
-        return normalizedTextFragment(trimmed)
-    }
-
-    private func extractLooseTextField(from line: String) -> String? {
-        let patterns = [
-            #"(?:["']?text["']?\s*:\s*["'])([^"']+)(?:["'])"#,
-            #"(?:["']?transcript["']?\s*:\s*["'])([^"']+)(?:["'])"#,
-            #"(?:["']?result_text["']?\s*:\s*["'])([^"']+)(?:["'])"#,
-            #"(?:["']?text["']?\s*:\s*)([^,}\]]+)"#,
-            #"(?:["']?transcript["']?\s*:\s*)([^,}\]]+)"#,
-            #"(?:["']?result_text["']?\s*:\s*)([^,}\]]+)"#
-        ]
-
-        for pattern in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-                continue
-            }
-            let range = NSRange(line.startIndex..<line.endIndex, in: line)
-            guard let match = regex.firstMatch(in: line, options: [], range: range),
-                  match.numberOfRanges > 1,
-                  let valueRange = Range(match.range(at: 1), in: line) else {
-                continue
-            }
-            var value = String(line[valueRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
-                (value.hasPrefix("'") && value.hasSuffix("'")) {
-                value.removeFirst()
-                value.removeLast()
-                value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            if !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
-    private func normalizedTextFragment(_ raw: String) -> String? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        if isLikelyJSONObjectString(trimmed) {
-            if let data = trimmed.data(using: .utf8),
-               let object = try? JSONSerialization.jsonObject(with: data),
-               let nested = extractText(in: object),
-               !nested.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               !isLikelyJSONObjectString(nested) {
-                return nested.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            if let loose = extractLooseTextField(from: trimmed),
-               !isLikelyJSONObjectString(loose) {
-                return loose.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            return nil
-        }
-
-        return trimmed
-    }
-
-    private func isLikelyJSONObjectString(_ value: String) -> Bool {
-        (value.hasPrefix("{") && value.hasSuffix("}")) ||
-        (value.hasPrefix("[") && value.hasSuffix("]"))
-    }
-
-    private func extractDoubaoText(in object: Any) -> String? {
-        if let dict = object as? [String: Any],
-           let result = dict["result"] as? [String: Any],
-           let text = result["text"] as? String {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty, !RemoteASRTextSanitizer.isLikelyIdentifierText(trimmed) {
-                return trimmed
-            }
-        }
-
-        var candidates: [String] = []
-
-        func appendCandidate(_ value: String) {
-            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, !RemoteASRTextSanitizer.isLikelyIdentifierText(trimmed) else { return }
-            candidates.append(trimmed)
-        }
-
-        func walk(_ node: Any) {
-            if let dict = node as? [String: Any] {
-                let directTextKeys = ["text", "transcript", "utterance", "utterance_text", "result_text"]
-                for key in directTextKeys {
-                    if let value = dict[key] as? String {
-                        appendCandidate(value)
-                    }
-                }
-
-                let containerKeys = ["result", "results", "utterances", "payload_msg", "payload", "data", "nbest", "alternatives"]
-                for key in containerKeys {
-                    if let value = dict[key] {
-                        walk(value)
-                    }
-                }
-
-                for (_, value) in dict {
-                    if value is [String: Any] || value is [Any] {
-                        walk(value)
-                    }
-                }
-                return
-            }
-
-            if let array = node as? [Any] {
-                for item in array {
-                    walk(item)
-                }
-            }
-        }
-
-        walk(object)
-        return candidates.max(by: { $0.count < $1.count })
-    }
-
-    private func extractText(in object: Any) -> String? {
-        if let text = object as? String {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return nil }
-            if isLikelyJSONObjectString(trimmed) {
-                if let data = trimmed.data(using: .utf8),
-                   let nestedObject = try? JSONSerialization.jsonObject(with: data),
-                   let nestedText = extractText(in: nestedObject),
-                   !nestedText.isEmpty {
-                    return nestedText
-                }
-                if let loose = extractLooseTextField(from: trimmed), !loose.isEmpty {
-                    return loose
-                }
-                return nil
-            }
-            return trimmed
-        }
-        if let dict = object as? [String: Any] {
-            let preferredKeys = ["delta", "text", "transcript", "result_text", "content", "utterance", "data"]
-            for key in preferredKeys {
-                if let value = dict[key], let text = extractText(in: value), !text.isEmpty {
-                    return text
-                }
-            }
-            for value in dict.values {
-                if (value is [String: Any] || value is [Any]),
-                   let text = extractText(in: value),
-                   !text.isEmpty {
-                    return text
-                }
-            }
-        }
-        if let array = object as? [Any] {
-            for item in array {
-                if let text = extractText(in: item), !text.isEmpty {
-                    return text
-                }
-            }
-        }
-        return nil
-    }
-
-    private func mergeStreamFragment(current: String, incoming: String) -> String {
-        let fragment = incoming.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !fragment.isEmpty else { return current }
-        if current.isEmpty { return fragment }
-        if fragment == current { return current }
-        if fragment.hasPrefix(current) { return fragment }
-        if current.hasPrefix(fragment) { return current }
-        if fragment.contains(current) { return fragment }
-        if current.contains(fragment) { return current }
-
-        let maxOverlap = min(current.count, fragment.count)
-        if maxOverlap > 0 {
-            for length in stride(from: maxOverlap, through: 1, by: -1) {
-                let currentSuffix = String(current.suffix(length))
-                let incomingPrefix = String(fragment.prefix(length))
-                if currentSuffix == incomingPrefix {
-                    return current + fragment.dropFirst(length)
-                }
-            }
-        }
-        return current + fragment
     }
 
     private func makeMultipartBody(
@@ -2519,137 +2310,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         return body
-    }
-
-    private func audioMIMEType(for fileURL: URL) -> String {
-        switch fileURL.pathExtension.lowercased() {
-        case "mp3":
-            return "audio/mpeg"
-        case "m4a":
-            return "audio/mp4"
-        case "ogg":
-            return "audio/ogg"
-        default:
-            return "audio/wav"
-        }
-    }
-
-    private func resolvedAliyunFunRealtimeEndpoint(_ endpoint: String) -> String {
-        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
-        }
-        if var components = URLComponents(string: trimmed) {
-            let normalizedPath = components.path.lowercased()
-            if normalizedPath.hasSuffix("/api-ws/v1/inference") {
-                return trimmed
-            }
-            if normalizedPath.hasSuffix("/api-ws/v1/realtime") {
-                components.path = components.path.replacingOccurrences(of: "/api-ws/v1/realtime", with: "/api-ws/v1/inference")
-                components.queryItems = nil
-                return components.string ?? trimmed
-            }
-            if normalizedPath.hasSuffix("/models") {
-                return replacingPathSuffix(in: trimmed, oldSuffix: "/models", newSuffix: "/api-ws/v1/inference")
-            }
-            if normalizedPath.hasSuffix("/chat/completions") {
-                return replacingPathSuffix(in: trimmed, oldSuffix: "/chat/completions", newSuffix: "/api-ws/v1/inference")
-            }
-            if normalizedPath.hasSuffix("/v1") {
-                return appendingPath(trimmed, suffix: "/inference")
-            }
-        }
-        return trimmed
-    }
-
-    private func isAliyunFunRealtimeModel(_ model: String) -> Bool {
-        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.hasPrefix("fun-asr") || normalized.hasPrefix("paraformer-realtime")
-    }
-
-    private func isAliyunQwenRealtimeModel(_ model: String) -> Bool {
-        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.hasPrefix("qwen3-asr-flash-realtime")
-    }
-
-    private func isAliyunFileTranscriptionModel(_ model: String) -> Bool {
-        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.hasPrefix("qwen3-asr-flash-filetrans")
-            || normalized == "fun-asr"
-            || normalized == "paraformer-v2"
-    }
-
-    private func resolvedAliyunQwenRealtimeEndpoint(_ endpoint: String, model: String) -> String {
-        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? model
-
-        guard !trimmed.isEmpty else {
-            return "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=\(encodedModel)"
-        }
-        guard var components = URLComponents(string: trimmed) else {
-            return trimmed
-        }
-        let normalizedPath = components.path.lowercased()
-        if normalizedPath.hasSuffix("/api-ws/v1/realtime") {
-            var items = components.queryItems ?? []
-            if !items.contains(where: { $0.name == "model" }) {
-                items.append(URLQueryItem(name: "model", value: model))
-                components.queryItems = items
-            }
-            return components.string ?? trimmed
-        }
-        if normalizedPath.hasSuffix("/api-ws/v1/inference") {
-            components.path = components.path.replacingOccurrences(of: "/api-ws/v1/inference", with: "/api-ws/v1/realtime")
-            var items = components.queryItems ?? []
-            if !items.contains(where: { $0.name == "model" }) {
-                items.append(URLQueryItem(name: "model", value: model))
-            }
-            components.queryItems = items
-            return components.string ?? trimmed
-        }
-        if normalizedPath.hasSuffix("/chat/completions") {
-            let base = replacingPathSuffix(in: trimmed, oldSuffix: "/chat/completions", newSuffix: "/api-ws/v1/realtime")
-            return base.contains("?") ? base : "\(base)?model=\(encodedModel)"
-        }
-        return trimmed
-    }
-
-    private func appendingPath(_ value: String, suffix: String) -> String {
-        value.hasSuffix("/") ? value + suffix.dropFirst() : value + suffix
-    }
-
-    private func replacingPathSuffix(in value: String, oldSuffix: String, newSuffix: String) -> String {
-        guard value.lowercased().hasSuffix(oldSuffix) else { return value }
-        return String(value.dropLast(oldSuffix.count)) + newSuffix
-    }
-
-    private func collectText(from bytes: URLSession.AsyncBytes) async throws -> String {
-        var chunks: [String] = []
-        for try await line in bytes.lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                chunks.append(trimmed)
-            }
-            if chunks.count >= 6 { break }
-        }
-        return chunks.joined(separator: " | ")
-    }
-
-    private func normalizedEndpoint(_ value: String, defaultValue: String) -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? defaultValue : trimmed
-    }
-
-    private func resolvedDoubaoResourceID(from configuration: RemoteProviderConfiguration) -> String {
-        DoubaoASRConfiguration.resolvedResourceID(configuration.model)
-    }
-
-    private func resolvedDoubaoEndpoint(from configuration: RemoteProviderConfiguration) -> String {
-        DoubaoASRConfiguration.resolvedEndpoint(configuration.endpoint, model: configuration.model)
-    }
-
-    private func resolvedDoubaoStreamingEndpoint(from configuration: RemoteProviderConfiguration) -> String {
-        DoubaoASRConfiguration.resolvedStreamingEndpoint(configuration.endpoint, model: configuration.model)
     }
 
     private func startMeteringTimer() {
@@ -2939,224 +2599,5 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         return description.isEmpty
             ? AppLocalization.localizedString("Remote ASR request failed.")
             : description
-    }
-}
-
-@MainActor
-private final class AliyunQwenStreamingContext {
-    let session: URLSession
-    let ws: URLSessionWebSocketTask
-    let responseState: AliyunQwenResponseState
-    let generationID: UUID
-    var isClosed = false
-    var didStartAudioStream = false
-
-    init(
-        session: URLSession,
-        ws: URLSessionWebSocketTask,
-        responseState: AliyunQwenResponseState,
-        generationID: UUID
-    ) {
-        self.session = session
-        self.ws = ws
-        self.responseState = responseState
-        self.generationID = generationID
-    }
-}
-
-private actor AliyunQwenResponseState {
-    private var committed: [String] = []
-    private var partial = ""
-    private var finishRequested = false
-    private var sessionFinished = false
-    private var completionError: Error?
-    private let onError: @Sendable (Error) -> Void
-
-    init(onError: @escaping @Sendable (Error) -> Void = { _ in }) {
-        self.onError = onError
-    }
-
-    func markFinishRequested() {
-        finishRequested = true
-    }
-
-    func markSessionFinished() {
-        sessionFinished = true
-    }
-
-    func markCompletedWithError(_ error: Error) {
-        if completionError == nil {
-            completionError = error
-            onError(error)
-        }
-    }
-
-    func setPartial(_ value: String) -> String {
-        partial = value
-        return mergedText()
-    }
-
-    func commit(_ value: String) -> String {
-        if committed.last != value {
-            committed.append(value)
-        }
-        partial = ""
-        return mergedText()
-    }
-
-    func waitForFinalResult(timeoutSeconds: TimeInterval) async throws -> String {
-        let deadline = Date().addingTimeInterval(max(timeoutSeconds, 0))
-        while !sessionFinished, completionError == nil, Date() < deadline {
-            try? await Task.sleep(for: .milliseconds(120))
-        }
-        if let completionError {
-            throw completionError
-        }
-        if finishRequested, !partial.isEmpty {
-            if committed.last != partial {
-                committed.append(partial)
-            }
-            partial = ""
-        }
-        return mergedText()
-    }
-
-    func currentText() -> String {
-        mergedText()
-    }
-
-    private func mergedText() -> String {
-        var values = committed
-        if !partial.isEmpty {
-            values.append(partial)
-        }
-        return values.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-@MainActor
-private final class AliyunFunStreamingContext {
-    let session: URLSession
-    let ws: URLSessionWebSocketTask
-    let taskID: String
-    let responseState: AliyunFunResponseState
-    let generationID: UUID
-    var isClosed = false
-    var didStartAudioStream = false
-
-    init(
-        session: URLSession,
-        ws: URLSessionWebSocketTask,
-        taskID: String,
-        responseState: AliyunFunResponseState,
-        generationID: UUID
-    ) {
-        self.session = session
-        self.ws = ws
-        self.taskID = taskID
-        self.responseState = responseState
-        self.generationID = generationID
-    }
-}
-
-private actor AliyunFunResponseState {
-    private var committedSegments: [String] = []
-    private var livePartial = ""
-    private var finishRequested = false
-    private var taskFinished = false
-    private var completionError: Error?
-    private let onError: @Sendable (Error) -> Void
-
-    init(onError: @escaping @Sendable (Error) -> Void = { _ in }) {
-        self.onError = onError
-    }
-
-    func markRunRequested() {}
-
-    func markFinishRequested() {
-        finishRequested = true
-    }
-
-    func markTaskFinished() {
-        taskFinished = true
-    }
-
-    func markCompletedWithError(_ error: Error) {
-        if completionError == nil {
-            completionError = error
-            onError(error)
-        }
-    }
-
-    func updateWithSentence(_ text: String, isSentenceEnd: Bool) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return joinedText()
-        }
-        if isSentenceEnd {
-            if committedSegments.last != trimmed {
-                committedSegments.append(trimmed)
-            }
-            livePartial = ""
-        } else {
-            livePartial = trimmed
-        }
-        return joinedText()
-    }
-
-    func waitForFinalResult(timeoutSeconds: TimeInterval) async throws -> String {
-        let deadline = Date().addingTimeInterval(max(timeoutSeconds, 0))
-        while !taskFinished, completionError == nil, Date() < deadline {
-            try? await Task.sleep(for: .milliseconds(120))
-        }
-        if let completionError {
-            throw completionError
-        }
-        if finishRequested, !livePartial.isEmpty {
-            if committedSegments.last != livePartial {
-                committedSegments.append(livePartial)
-            }
-            livePartial = ""
-        }
-        return joinedText()
-    }
-
-    func currentText() -> String {
-        joinedText()
-    }
-
-    private func joinedText() -> String {
-        var segments = committedSegments
-        if !livePartial.isEmpty {
-            segments.append(livePartial)
-        }
-        return segments.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-private extension UInt32 {
-    var bigEndianData: Data {
-        withUnsafeBytes(of: self.bigEndian) { Data($0) }
-    }
-
-    init(bigEndianData data: Data) {
-        precondition(data.count == 4)
-        self = data.reduce(UInt32(0)) { partial, byte in
-            (partial << 8) | UInt32(byte)
-        }
-    }
-}
-
-private extension Int32 {
-    var bigEndianData: Data {
-        withUnsafeBytes(of: self.bigEndian) { Data($0) }
-    }
-
-    init(bigEndianData data: Data) {
-        precondition(data.count == 4)
-        let value = data.reduce(UInt32(0)) { partial, byte in
-            (partial << 8) | UInt32(byte)
-        }
-        self = Int32(bitPattern: value)
     }
 }

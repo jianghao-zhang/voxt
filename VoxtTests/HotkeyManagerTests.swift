@@ -648,6 +648,7 @@ final class HotkeyManagerTests: XCTestCase {
     func testRightCommandTapRemainsStableAcrossDuplicateFlagsChangedEvents() async {
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
         HotkeyPreference.save(
             keyCode: HotkeyPreference.modifierOnlyKeyCode,
             modifiers: [.command],
@@ -704,6 +705,7 @@ final class HotkeyManagerTests: XCTestCase {
     func testLeftCommandDoesNotTriggerRightCommandTapHotkey() {
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
         HotkeyPreference.save(
             keyCode: HotkeyPreference.modifierOnlyKeyCode,
             modifiers: [.command],
@@ -732,6 +734,7 @@ final class HotkeyManagerTests: XCTestCase {
     func testCustomRightShiftTapRemainsStableAcrossDuplicateFlagsChangedEvents() async {
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
         HotkeyPreference.save(
             keyCode: HotkeyPreference.modifierOnlyKeyCode,
             modifiers: [.shift],
@@ -788,6 +791,7 @@ final class HotkeyManagerTests: XCTestCase {
     func testIdleGapRecoveryDoesNotSwallowFirstRightCommandTap() async {
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
         HotkeyPreference.save(
             keyCode: HotkeyPreference.modifierOnlyKeyCode,
             modifiers: [.command],

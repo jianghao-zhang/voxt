@@ -36,18 +36,22 @@ final class HotkeySupportTests: XCTestCase {
 
     func testLoadCanonicalizesStoredRightCommandModifierHotkey() {
         let defaults = UserDefaults.standard
+        let presetKey = AppPreferenceKey.hotkeyPreset
         let keyCodeKey = AppPreferenceKey.hotkeyKeyCode
         let modifiersKey = AppPreferenceKey.hotkeyModifiers
         let sidedModifiersKey = AppPreferenceKey.hotkeySidedModifiers
+        let savedPreset = defaults.object(forKey: presetKey)
         let savedKeyCode = defaults.object(forKey: keyCodeKey)
         let savedModifiers = defaults.object(forKey: modifiersKey)
         let savedSidedModifiers = defaults.object(forKey: sidedModifiersKey)
         defer {
+            restoreDefaultsValue(savedPreset, forKey: presetKey)
             restoreDefaultsValue(savedKeyCode, forKey: keyCodeKey)
             restoreDefaultsValue(savedModifiers, forKey: modifiersKey)
             restoreDefaultsValue(savedSidedModifiers, forKey: sidedModifiersKey)
         }
 
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: presetKey)
         defaults.set(Int(UInt16(kVK_RightCommand)), forKey: keyCodeKey)
         defaults.set(Int(NSEvent.ModifierFlags.command.rawValue), forKey: modifiersKey)
         defaults.set(0, forKey: sidedModifiersKey)
@@ -179,6 +183,48 @@ final class HotkeySupportTests: XCTestCase {
                 sidedModifiers: []
             )
         )
+    }
+
+    func testApplyPresetPersistsCommandPresetHotkeys() {
+        let defaults = UserDefaults.standard
+        let presetKey = AppPreferenceKey.hotkeyPreset
+        let distinguishSidesKey = AppPreferenceKey.hotkeyDistinguishModifierSides
+        let transcriptionKeyCodeKey = AppPreferenceKey.hotkeyKeyCode
+        let transcriptionModifiersKey = AppPreferenceKey.hotkeyModifiers
+        let transcriptionSidedKey = AppPreferenceKey.hotkeySidedModifiers
+        let customPasteKeyCodeKey = AppPreferenceKey.customPasteHotkeyKeyCode
+        let customPasteModifiersKey = AppPreferenceKey.customPasteHotkeyModifiers
+        let customPasteSidedKey = AppPreferenceKey.customPasteHotkeySidedModifiers
+        let savedPreset = defaults.object(forKey: presetKey)
+        let savedDistinguishSides = defaults.object(forKey: distinguishSidesKey)
+        let savedTranscriptionKeyCode = defaults.object(forKey: transcriptionKeyCodeKey)
+        let savedTranscriptionModifiers = defaults.object(forKey: transcriptionModifiersKey)
+        let savedTranscriptionSided = defaults.object(forKey: transcriptionSidedKey)
+        let savedCustomPasteKeyCode = defaults.object(forKey: customPasteKeyCodeKey)
+        let savedCustomPasteModifiers = defaults.object(forKey: customPasteModifiersKey)
+        let savedCustomPasteSided = defaults.object(forKey: customPasteSidedKey)
+        defer {
+            restoreDefaultsValue(savedPreset, forKey: presetKey)
+            restoreDefaultsValue(savedDistinguishSides, forKey: distinguishSidesKey)
+            restoreDefaultsValue(savedTranscriptionKeyCode, forKey: transcriptionKeyCodeKey)
+            restoreDefaultsValue(savedTranscriptionModifiers, forKey: transcriptionModifiersKey)
+            restoreDefaultsValue(savedTranscriptionSided, forKey: transcriptionSidedKey)
+            restoreDefaultsValue(savedCustomPasteKeyCode, forKey: customPasteKeyCodeKey)
+            restoreDefaultsValue(savedCustomPasteModifiers, forKey: customPasteModifiersKey)
+            restoreDefaultsValue(savedCustomPasteSided, forKey: customPasteSidedKey)
+        }
+
+        let values = HotkeyPreference.applyPreset(.commandCombo)
+
+        XCTAssertEqual(values?.distinguishSides, true)
+        XCTAssertEqual(defaults.string(forKey: presetKey), HotkeyPreference.Preset.commandCombo.rawValue)
+        XCTAssertTrue(defaults.bool(forKey: distinguishSidesKey))
+        XCTAssertEqual(defaults.integer(forKey: transcriptionKeyCodeKey), Int(HotkeyPreference.modifierOnlyKeyCode))
+        XCTAssertEqual(defaults.integer(forKey: transcriptionModifiersKey), Int(NSEvent.ModifierFlags.command.rawValue))
+        XCTAssertEqual(defaults.integer(forKey: transcriptionSidedKey), SidedModifierFlags.rightCommand.rawValue)
+        XCTAssertEqual(defaults.integer(forKey: customPasteKeyCodeKey), Int(UInt16(kVK_ANSI_V)))
+        XCTAssertEqual(defaults.integer(forKey: customPasteModifiersKey), Int(NSEvent.ModifierFlags([.control, .command]).rawValue))
+        XCTAssertEqual(defaults.integer(forKey: customPasteSidedKey), 0)
     }
 
     func testUpdatingKeepsModifierSetWhenDuplicatePressEventArrives() {

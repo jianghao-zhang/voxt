@@ -196,6 +196,15 @@ struct HotkeyPreference {
         let sidedModifiers: SidedModifierFlags
     }
 
+    struct PresetHotkeys: Equatable {
+        let distinguishSides: Bool
+        let transcription: Hotkey
+        let translation: Hotkey
+        let rewrite: Hotkey
+        let meeting: Hotkey
+        let customPaste: Hotkey
+    }
+
     static let modifierOnlyKeyCode: UInt16 = 0xFFFF
     static let defaultKeyCode: UInt16 = modifierOnlyKeyCode
     static let defaultModifiers: NSEvent.ModifierFlags = [.function]
@@ -369,7 +378,15 @@ struct HotkeyPreference {
         return Preset(rawValue: raw ?? "") ?? defaultPreset
     }
 
-    private static func resolvedPresetHotkeys() -> (distinguishSides: Bool, transcription: Hotkey, translation: Hotkey, rewrite: Hotkey, meeting: Hotkey, customPaste: Hotkey)? {
+    @discardableResult
+    static func applyPreset(_ preset: Preset) -> PresetHotkeys? {
+        UserDefaults.standard.set(preset.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+        guard let values = presetHotkeys(for: preset) else { return nil }
+        applyPresetHotkeys(values)
+        return values
+    }
+
+    private static func resolvedPresetHotkeys() -> PresetHotkeys? {
         let preset = loadPreset()
         guard preset != .custom else { return nil }
         return presetHotkeys(for: preset)
@@ -377,7 +394,10 @@ struct HotkeyPreference {
 
     private static func syncStoredPresetValuesIfNeeded() {
         guard let presetValues = resolvedPresetHotkeys() else { return }
+        applyPresetHotkeys(presetValues)
+    }
 
+    private static func applyPresetHotkeys(_ presetValues: PresetHotkeys) {
         UserDefaults.standard.set(presetValues.distinguishSides, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
         save(
             keyCode: presetValues.transcription.keyCode,
@@ -451,25 +471,25 @@ struct HotkeyPreference {
         return parts.joined(separator: usesSides ? " + " : "")
     }
 
-    static func presetHotkeys(for preset: Preset) -> (distinguishSides: Bool, transcription: Hotkey, translation: Hotkey, rewrite: Hotkey, meeting: Hotkey, customPaste: Hotkey)? {
+    static func presetHotkeys(for preset: Preset) -> PresetHotkeys? {
         switch preset {
         case .fnCombo:
-            return (
-                false,
-                Hotkey(keyCode: defaultKeyCode, modifiers: defaultModifiers, sidedModifiers: []),
-                Hotkey(keyCode: defaultTranslationKeyCode, modifiers: defaultTranslationModifiers, sidedModifiers: []),
-                Hotkey(keyCode: defaultRewriteKeyCode, modifiers: defaultRewriteModifiers, sidedModifiers: []),
-                Hotkey(keyCode: defaultMeetingKeyCode, modifiers: defaultMeetingModifiers, sidedModifiers: []),
-                Hotkey(keyCode: defaultCustomPasteKeyCode, modifiers: defaultCustomPasteModifiers, sidedModifiers: [])
+            return PresetHotkeys(
+                distinguishSides: false,
+                transcription: Hotkey(keyCode: defaultKeyCode, modifiers: defaultModifiers, sidedModifiers: []),
+                translation: Hotkey(keyCode: defaultTranslationKeyCode, modifiers: defaultTranslationModifiers, sidedModifiers: []),
+                rewrite: Hotkey(keyCode: defaultRewriteKeyCode, modifiers: defaultRewriteModifiers, sidedModifiers: []),
+                meeting: Hotkey(keyCode: defaultMeetingKeyCode, modifiers: defaultMeetingModifiers, sidedModifiers: []),
+                customPaste: Hotkey(keyCode: defaultCustomPasteKeyCode, modifiers: defaultCustomPasteModifiers, sidedModifiers: [])
             )
         case .commandCombo:
-            return (
-                true,
-                Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command], sidedModifiers: [.rightCommand]),
-                Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command, .shift], sidedModifiers: [.rightCommand, .rightShift]),
-                Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command, .option], sidedModifiers: [.rightCommand, .rightOption]),
-                Hotkey(keyCode: UInt16(kVK_ANSI_L), modifiers: [.command], sidedModifiers: [.rightCommand]),
-                Hotkey(keyCode: defaultCustomPasteKeyCode, modifiers: defaultCustomPasteModifiers, sidedModifiers: [])
+            return PresetHotkeys(
+                distinguishSides: true,
+                transcription: Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command], sidedModifiers: [.rightCommand]),
+                translation: Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command, .shift], sidedModifiers: [.rightCommand, .rightShift]),
+                rewrite: Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command, .option], sidedModifiers: [.rightCommand, .rightOption]),
+                meeting: Hotkey(keyCode: UInt16(kVK_ANSI_L), modifiers: [.command], sidedModifiers: [.rightCommand]),
+                customPaste: Hotkey(keyCode: defaultCustomPasteKeyCode, modifiers: defaultCustomPasteModifiers, sidedModifiers: [])
             )
         case .custom:
             return nil

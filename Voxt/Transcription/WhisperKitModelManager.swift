@@ -7,120 +7,6 @@ import WhisperKit
 final class WhisperKitModelManager: ObservableObject {
     private static let repo = "argmaxinc/whisperkit-coreml"
     private static let hubUserAgent = "Voxt/1.0 (WhisperKit)"
-    private struct RepoTreeItem {
-        let path: String
-        let type: String
-        let size: Int64
-    }
-    private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-        private let progress: Progress
-        private let stagedDownloadURL: URL
-        private let lock = NSLock()
-        private var continuation: CheckedContinuation<(URL, URLResponse), Error>?
-        private var downloadedFileResult: Result<URL, Error>?
-
-        init(progress: Progress, stagedDownloadURL: URL) {
-            self.progress = progress
-            self.stagedDownloadURL = stagedDownloadURL
-        }
-
-        func attach(
-            _ continuation: CheckedContinuation<(URL, URLResponse), Error>
-        ) {
-            lock.lock()
-            self.continuation = continuation
-            lock.unlock()
-        }
-
-        func urlSession(
-            _ session: URLSession,
-            downloadTask: URLSessionDownloadTask,
-            didWriteData bytesWritten: Int64,
-            totalBytesWritten: Int64,
-            totalBytesExpectedToWrite: Int64
-        ) {
-            if totalBytesExpectedToWrite > 0 {
-                progress.totalUnitCount = totalBytesExpectedToWrite
-            }
-            progress.completedUnitCount = max(totalBytesWritten, 0)
-        }
-
-        func urlSession(
-            _ session: URLSession,
-            downloadTask: URLSessionDownloadTask,
-            didFinishDownloadingTo location: URL
-        ) {
-            let result: Result<URL, Error>
-            do {
-                try? FileManager.default.removeItem(at: stagedDownloadURL)
-                try FileManager.default.moveItem(at: location, to: stagedDownloadURL)
-                result = .success(stagedDownloadURL)
-            } catch {
-                let nsError = error as NSError
-                let failureReason = nsError.localizedFailureReason ?? "no failure reason"
-                result = .failure(
-                    NSError(
-                        domain: "WhisperKitModelManager",
-                        code: 1005,
-                        userInfo: [
-                            NSLocalizedDescriptionKey: "Failed to stage downloaded Whisper file.",
-                            NSLocalizedFailureReasonErrorKey: "move \(location.path) -> \(stagedDownloadURL.path) failed: \(failureReason)",
-                            NSUnderlyingErrorKey: error,
-                        ]
-                    )
-                )
-            }
-
-            lock.lock()
-            downloadedFileResult = result
-            lock.unlock()
-        }
-
-        func urlSession(
-            _ session: URLSession,
-            task: URLSessionTask,
-            didCompleteWithError error: Error?
-        ) {
-            if let error {
-                resume(with: .failure(error))
-                return
-            }
-
-            lock.lock()
-            let downloadedFileResult = self.downloadedFileResult
-            lock.unlock()
-
-            guard let response = task.response,
-                  let downloadedFileResult else {
-                resume(with: .failure(URLError(.badServerResponse)))
-                return
-            }
-
-            switch downloadedFileResult {
-            case .success(let stagedDownloadURL):
-                resume(with: .success((stagedDownloadURL, response)))
-            case .failure(let error):
-                resume(with: .failure(error))
-            }
-        }
-
-        private func resume(with result: Result<(URL, URLResponse), Error>) {
-            lock.lock()
-            guard let continuation else {
-                lock.unlock()
-                return
-            }
-            self.continuation = nil
-            lock.unlock()
-
-            switch result {
-            case .success(let value):
-                continuation.resume(returning: value)
-            case .failure(let error):
-                continuation.resume(throwing: error)
-            }
-        }
-    }
 
     enum ModelState: Equatable {
         case notDownloaded
@@ -138,12 +24,7 @@ final class WhisperKitModelManager: ObservableObject {
         case error(String)
     }
 
-    struct ModelOption: Identifiable, Hashable {
-        let id: String
-        let title: String
-        let description: String
-        let remoteSizeText: String
-    }
+    typealias ModelOption = WhisperKitModelCatalog.Option
 
     struct ActiveDownload: Equatable {
         let modelID: String
@@ -162,47 +43,9 @@ final class WhisperKitModelManager: ObservableObject {
         let rawURL: URL?
     }
 
-    nonisolated static let defaultModelID = "base"
+    nonisolated static let defaultModelID = WhisperKitModelCatalog.defaultModelID
 
-    nonisolated static let availableModels: [ModelOption] = [
-        .init(
-            id: "tiny",
-            title: "Whisper Tiny",
-            description: "Smallest footprint for quick local drafts.",
-            remoteSizeText: "Unknown"
-        ),
-        .init(
-            id: "base",
-            title: "Whisper Base",
-            description: "Default balance between quality and speed.",
-            remoteSizeText: "Unknown"
-        ),
-        .init(
-            id: "small",
-            title: "Whisper Small",
-            description: "Higher quality with moderate local resource usage.",
-            remoteSizeText: "Unknown"
-        ),
-        .init(
-            id: "medium",
-            title: "Whisper Medium",
-            description: "High accuracy with heavier local compute requirements.",
-            remoteSizeText: "Unknown"
-        ),
-        .init(
-            id: "large-v3",
-            title: "Whisper Large v3",
-            description: "Best accuracy in the curated list with the largest footprint.",
-            remoteSizeText: "Unknown"
-        ),
-    ]
-    nonisolated private static let knownRemoteSizeBytesByID: [String: Int64] = [
-        "tiny": 76_635_397,
-        "base": 146_719_453,
-        "small": 486_487_465,
-        "medium": 1_529_654_233,
-        "large-v3": 3_090_319_899,
-    ]
+    nonisolated static let availableModels = WhisperKitModelCatalog.availableModels
 
     @Published private(set) var state: ModelState = .notDownloaded
     @Published private(set) var remoteSizeTextByID: [String: String] = [:]
@@ -227,7 +70,7 @@ final class WhisperKitModelManager: ObservableObject {
     init(modelID: String, hubBaseURL: URL) {
         self.modelID = Self.canonicalModelID(modelID)
         self.hubBaseURL = hubBaseURL
-        self.remoteSizeTextByID = Self.loadPersistedRemoteSizeCache()
+        self.remoteSizeTextByID = WhisperKitModelStorageSupport.loadPersistedRemoteSizeCache()
         checkExistingModel()
     }
 
@@ -241,18 +84,11 @@ final class WhisperKitModelManager: ObservableObject {
     }
 
     nonisolated static func canonicalModelID(_ modelID: String) -> String {
-        availableModels.contains(where: { $0.id == modelID }) ? modelID : defaultModelID
+        WhisperKitModelCatalog.canonicalModelID(modelID)
     }
 
     nonisolated static func fallbackRemoteSizeText(id: String) -> String? {
-        fallbackRemoteSizeInfo(id: id)?.text
-    }
-
-    nonisolated private static func formatByteCount(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+        WhisperKitModelCatalog.fallbackRemoteSizeText(id: id)
     }
 
     func updateModel(id: String) {
@@ -272,12 +108,6 @@ final class WhisperKitModelManager: ObservableObject {
         guard url != hubBaseURL else { return }
         hubBaseURL = url
         fetchRemoteSize(for: modelID)
-    }
-
-    nonisolated private static func fallbackRemoteSizeInfo(id: String) -> (bytes: Int64, text: String)? {
-        let canonicalModelID = canonicalModelID(id)
-        guard let bytes = knownRemoteSizeBytesByID[canonicalModelID] else { return nil }
-        return (bytes, formatByteCount(bytes))
     }
 
     func refreshResidencyPolicy() {
@@ -410,7 +240,7 @@ final class WhisperKitModelManager: ObservableObject {
             } catch {
                 let message = error.localizedDescription
                 VoxtLog.error(
-                    "Whisper download failed. model=\(targetID), error=\(Self.describeError(error))"
+                    "Whisper download failed. model=\(targetID), error=\(WhisperKitDownloadSupport.describeError(error))"
                 )
                 downloadErrorByID[targetID] = message
                 if targetID == modelID {
@@ -564,7 +394,7 @@ final class WhisperKitModelManager: ObservableObject {
         else {
             return ""
         }
-        let text = Self.formatByteCount(Int64(size))
+        let text = WhisperKitModelStorageSupport.formatByteCount(Int64(size))
         localSizeTextByID[canonicalModelID] = text
         return text
     }
@@ -584,10 +414,7 @@ final class WhisperKitModelManager: ObservableObject {
 
     func displayTitle(for id: String) -> String {
         let canonicalModelID = Self.canonicalModelID(id)
-        guard let title = Self.availableModels.first(where: { $0.id == canonicalModelID })?.title else {
-            return canonicalModelID
-        }
-        return AppLocalization.localizedString(title)
+        return AppLocalization.localizedString(WhisperKitModelCatalog.displayTitle(for: canonicalModelID))
     }
 
     func prefetchAllModelSizes() {
@@ -613,7 +440,7 @@ final class WhisperKitModelManager: ObservableObject {
                     )
                     guard !Task.isCancelled else { return }
                     let text = bytes > 0
-                        ? Self.formatByteCount(bytes)
+                        ? WhisperKitModelStorageSupport.formatByteCount(bytes)
                         : AppLocalization.localizedString("Unknown")
                     await MainActor.run {
                         self.updateRemoteSizeCache(id: modelID, text: text)
@@ -630,19 +457,6 @@ final class WhisperKitModelManager: ObservableObject {
                 }
             }
         }
-    }
-
-    private static func loadPersistedRemoteSizeCache() -> [String: String] {
-        guard let data = UserDefaults.standard.data(forKey: AppPreferenceKey.whisperRemoteSizeCache),
-              let decoded = try? JSONDecoder().decode([String: String].self, from: data) else {
-            return [:]
-        }
-        return decoded
-    }
-
-    private static func savePersistedRemoteSizeCache(_ cache: [String: String]) {
-        guard let data = try? JSONEncoder().encode(cache) else { return }
-        UserDefaults.standard.set(data, forKey: AppPreferenceKey.whisperRemoteSizeCache)
     }
 
     private func fetchRemoteSize(for id: String) {
@@ -662,7 +476,7 @@ final class WhisperKitModelManager: ObservableObject {
                 let bytes = try await self.fetchRemoteModelBytesWithFallback(modelID: canonicalModelID)
                 guard !Task.isCancelled else { return }
                 let text = bytes > 0
-                    ? Self.formatByteCount(bytes)
+                    ? WhisperKitModelStorageSupport.formatByteCount(bytes)
                     : AppLocalization.localizedString("Unknown")
                 await MainActor.run {
                     self.updateRemoteSizeCache(id: canonicalModelID, text: text)
@@ -689,7 +503,7 @@ final class WhisperKitModelManager: ObservableObject {
 
     private func updateRemoteSizeCache(id: String, text: String) {
         remoteSizeTextByID[id] = text
-        Self.savePersistedRemoteSizeCache(remoteSizeTextByID)
+        WhisperKitModelStorageSupport.savePersistedRemoteSizeCache(remoteSizeTextByID)
     }
 
     private func fallbackHubBaseURL(from baseURL: URL) -> URL? {
@@ -770,7 +584,7 @@ final class WhisperKitModelManager: ObservableObject {
     }
 
     private static func topLevelFolderName(for modelID: String) -> String {
-        "openai_whisper-\(canonicalModelID(modelID))"
+        WhisperKitModelCatalog.topLevelFolderName(for: modelID)
     }
 
     private func shouldFetchRemoteSize(for id: String) -> Bool {
@@ -819,8 +633,9 @@ final class WhisperKitModelManager: ObservableObject {
     }
 
     private func downloadRootURL() -> URL {
-        ModelStorageDirectoryManager.resolvedRootURL()
-            .appendingPathComponent("whisperkit", isDirectory: true)
+        WhisperKitModelStorageSupport.downloadRootURL(
+            rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
+        )
     }
 
     private func performModelDownload(targetID: String, baseURL: URL) async throws -> URL {
@@ -851,7 +666,11 @@ final class WhisperKitModelManager: ObservableObject {
 
     private func performMirrorModelDownload(targetID: String, baseURL: URL) async throws -> URL {
         let rootFolderName = Self.topLevelFolderName(for: targetID)
-        let repoItems = try await Self.fetchRepoTreeItems(baseURL: baseURL)
+            let repoItems = try await WhisperKitDownloadSupport.fetchRepoTreeItems(
+                baseURL: baseURL,
+                repo: Self.repo,
+                userAgent: Self.hubUserAgent
+            )
         let fileItems = repoItems
             .filter { $0.type == "file" && $0.path.hasPrefix(rootFolderName + "/") }
             .sorted { $0.path < $1.path }
@@ -901,7 +720,7 @@ final class WhisperKitModelManager: ObservableObject {
             let sampler = Task { [weak self] in
                 let startTime = Date()
                 while !Task.isCancelled {
-                    let inFlightBytes = Self.inFlightBytes(
+                    let inFlightBytes = WhisperKitDownloadSupport.inFlightBytes(
                         progress: progress,
                         expectedEntryBytes: expectedEntryBytes,
                         startTime: startTime
@@ -926,12 +745,12 @@ final class WhisperKitModelManager: ObservableObject {
             }
             defer { sampler.cancel() }
 
-            let remoteURL = try Self.fileResolveURL(
+            let remoteURL = try WhisperKitDownloadSupport.fileResolveURL(
                 baseURL: baseURL,
                 repo: Self.repo,
                 path: item.path
             )
-            try await Self.downloadFile(
+            try await WhisperKitDownloadSupport.downloadFile(
                 from: remoteURL,
                 to: destinationURL,
                 userAgent: Self.hubUserAgent,
@@ -958,10 +777,7 @@ final class WhisperKitModelManager: ObservableObject {
     }
 
     private func shouldRetryAfterMetadataRecovery(for error: Error) -> Bool {
-        let combined = "\(error.localizedDescription) \(String(describing: error))".lowercased()
-        return combined.contains("invalid metadata")
-            || combined.contains("metadata file")
-            || combined.contains("file metadata must have been retrieved")
+        WhisperKitDownloadSupport.shouldRetryAfterMetadataRecovery(for: error)
     }
 
     private func finalizeDownloadState(for targetID: String) {
@@ -980,158 +796,9 @@ final class WhisperKitModelManager: ObservableObject {
     }
 
     private func clearRepositoryMetadataCache() {
-        let repoRoot = downloadRootURL()
-            .appendingPathComponent("models", isDirectory: true)
-            .appendingPathComponent("argmaxinc", isDirectory: true)
-            .appendingPathComponent("whisperkit-coreml", isDirectory: true)
-        let metadataCacheURL = repoRoot
-            .appendingPathComponent(".cache", isDirectory: true)
-            .appendingPathComponent("huggingface", isDirectory: true)
-            .appendingPathComponent("download", isDirectory: true)
-        try? FileManager.default.removeItem(at: metadataCacheURL)
-    }
-
-    private static func fetchRepoTreeItems(baseURL: URL) async throws -> [RepoTreeItem] {
-        guard let encodedRepo = repo.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
-            throw URLError(.badURL)
-        }
-
-        let base = baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: "\(base)/api/models/\(encodedRepo)/tree/main?recursive=1") else {
-            throw URLError(.badURL)
-        }
-
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 60
-        configuration.timeoutIntervalForResource = 60
-        if baseURL.host?.contains("hf-mirror.com") == true {
-            configuration.connectionProxyDictionary = [
-                kCFNetworkProxiesHTTPEnable as String: false,
-                kCFNetworkProxiesHTTPSEnable as String: false,
-                kCFNetworkProxiesSOCKSEnable as String: false,
-            ]
-        }
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
-
-        var request = URLRequest(url: url)
-        request.setValue(hubUserAgent, forHTTPHeaderField: "User-Agent")
-
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200..<300).contains(httpResponse.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
-
-        let rawItems = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []
-        return rawItems.compactMap { item in
-            guard let path = item["path"] as? String,
-                  let type = item["type"] as? String else {
-                return nil
-            }
-
-            let size: Int64
-            if let raw = item["size"] as? Int64 {
-                size = raw
-            } else if let raw = item["size"] as? Int {
-                size = Int64(raw)
-            } else {
-                size = 0
-            }
-
-            return RepoTreeItem(path: path, type: type, size: size)
-        }
-    }
-
-    private static func fileResolveURL(baseURL: URL, repo: String, path: String) throws -> URL {
-        let base = baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let encodedPath = path
-            .split(separator: "/")
-            .map { component in
-                String(component).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String(component)
-            }
-            .joined(separator: "/")
-        guard let url = URL(string: "\(base)/\(repo)/resolve/main/\(encodedPath)?download=true") else {
-            throw URLError(.badURL)
-        }
-        return url
-    }
-
-    private static func downloadFile(
-        from remoteURL: URL,
-        to destinationURL: URL,
-        userAgent: String,
-        disableProxy: Bool,
-        progress: Progress
-    ) async throws {
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 120
-        configuration.timeoutIntervalForResource = 3600
-        if disableProxy {
-            configuration.connectionProxyDictionary = [
-                kCFNetworkProxiesHTTPEnable as String: false,
-                kCFNetworkProxiesHTTPSEnable as String: false,
-                kCFNetworkProxiesSOCKSEnable as String: false,
-            ]
-        }
-        let temporaryURL = destinationURL.appendingPathExtension("download")
-        try? FileManager.default.removeItem(at: temporaryURL)
-        try FileManager.default.createDirectory(
-            at: destinationURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
+        WhisperKitModelStorageSupport.clearRepositoryMetadataCache(
+            rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
         )
-        let delegate = DownloadDelegate(progress: progress, stagedDownloadURL: temporaryURL)
-        let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
-        defer { session.finishTasksAndInvalidate() }
-
-        var request = URLRequest(url: remoteURL)
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-
-        let (downloadedURL, response) = try await withCheckedThrowingContinuation { continuation in
-            delegate.attach(continuation)
-            let task = session.downloadTask(with: request)
-            task.resume()
-        }
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200..<300).contains(httpResponse.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
-
-        if response.expectedContentLength > 0 {
-            progress.totalUnitCount = response.expectedContentLength
-        }
-
-        try? FileManager.default.removeItem(at: destinationURL)
-        try FileManager.default.moveItem(at: downloadedURL, to: destinationURL)
-        if let finalSize = try? destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-            progress.completedUnitCount = Int64(finalSize)
-        }
-    }
-
-    private static func describeError(_ error: Error) -> String {
-        let nsError = error as NSError
-        let failureReason = nsError.localizedFailureReason ?? "nil"
-        let recoverySuggestion = nsError.localizedRecoverySuggestion ?? "nil"
-        let underlying = (nsError.userInfo[NSUnderlyingErrorKey] as? NSError)
-            .map { "underlyingDomain=\($0.domain), underlyingCode=\($0.code), underlyingDesc=\($0.localizedDescription)" }
-            ?? "underlying=nil"
-        return "domain=\(nsError.domain), code=\(nsError.code), desc=\(nsError.localizedDescription), failureReason=\(failureReason), recovery=\(recoverySuggestion), \(underlying)"
-    }
-
-    private static func inFlightBytes(
-        progress: Progress,
-        expectedEntryBytes: Int64,
-        startTime: Date
-    ) -> Int64 {
-        let reported = max(progress.completedUnitCount, 0)
-        guard reported == 0 else { return reported }
-
-        let elapsed = Date().timeIntervalSince(startTime)
-        let expectedForTenMinutes = Double(expectedEntryBytes) / (10 * 60)
-        let fallbackRate = max(expectedForTenMinutes, 256 * 1024)
-        let estimated = Int64(elapsed * fallbackRate)
-        let cap = Int64(Double(expectedEntryBytes) * 0.95)
-        return min(max(estimated, 0), max(cap, 0))
     }
 
     private func scheduleIdleUnloadIfNeeded() {

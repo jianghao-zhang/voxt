@@ -26,181 +26,10 @@ class MLXModelManager: ObservableObject {
         case error(String)
     }
 
-    struct ModelOption: Identifiable, Hashable {
-        let id: String
-        let title: String
-        let description: String
-    }
+    typealias ModelOption = MLXModelCatalog.Option
 
-    nonisolated private static let realtimeCapableModelRepos: Set<String> = [
-        "mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit",
-        "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
-        "mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16",
-    ]
-
-    nonisolated static let defaultModelRepo = "mlx-community/Qwen3-ASR-0.6B-4bit"
-
-    nonisolated static let availableModels: [ModelOption] = [
-        ModelOption(
-            id: "mlx-community/Qwen3-ASR-0.6B-4bit",
-            title: "Qwen3-ASR 0.6B (4bit)",
-            description: "Balanced quality and speed with low memory use."
-        ),
-        ModelOption(
-            id: "mlx-community/Qwen3-ASR-0.6B-6bit",
-            title: "Qwen3-ASR 0.6B (6bit)",
-            description: "Better accuracy than 4bit with moderate memory usage."
-        ),
-        ModelOption(
-            id: "mlx-community/Qwen3-ASR-0.6B-8bit",
-            title: "Qwen3-ASR 0.6B (8bit)",
-            description: "Highest-precision 0.6B option with higher memory usage."
-        ),
-        ModelOption(
-            id: "mlx-community/Qwen3-ASR-0.6B-bf16",
-            title: "Qwen3-ASR 0.6B (bf16)",
-            description: "Full-precision 0.6B model for maximum local quality."
-        ),
-        ModelOption(
-            id: "mlx-community/Qwen3-ASR-1.7B-4bit",
-            title: "Qwen3-ASR 1.7B (4bit)",
-            description: "Larger multilingual model tuned for accuracy at lower memory cost."
-        ),
-        ModelOption(
-            id: "mlx-community/Qwen3-ASR-1.7B-6bit",
-            title: "Qwen3-ASR 1.7B (6bit)",
-            description: "High-accuracy flagship model with a balanced memory footprint."
-        ),
-        ModelOption(
-            id: "mlx-community/Qwen3-ASR-1.7B-8bit",
-            title: "Qwen3-ASR 1.7B (8bit)",
-            description: "High-precision 1.7B model for stronger recognition quality."
-        ),
-        ModelOption(
-            id: "mlx-community/Qwen3-ASR-1.7B-bf16",
-            title: "Qwen3-ASR 1.7B (bf16)",
-            description: "High accuracy flagship model with higher memory usage."
-        ),
-        ModelOption(
-            id: "mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit",
-            title: "Voxtral Realtime Mini 4B (4bit)",
-            description: "Realtime-oriented multilingual model with reduced memory use."
-        ),
-        ModelOption(
-            id: "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
-            title: "Voxtral Realtime Mini 4B (6bit)",
-            description: "Realtime multilingual model with a balanced quality-to-memory tradeoff."
-        ),
-        ModelOption(
-            id: "mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16",
-            title: "Voxtral Realtime Mini 4B (fp16)",
-            description: "Realtime-oriented model with larger memory footprint."
-        ),
-        ModelOption(
-            id: "beshkenadze/cohere-transcribe-03-2026-mlx-fp16",
-            title: "Cohere Transcribe 03-2026 (fp16)",
-            description: "High-accuracy multilingual encoder-decoder model with punctuation enabled."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-tdt_ctc-110m",
-            title: "Parakeet TDT CTC 110M",
-            description: "Smallest Parakeet option for fast English transcription."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-tdt-0.6b-v2",
-            title: "Parakeet TDT 0.6B v2",
-            description: "Lightweight English TDT model for lower-memory local transcription."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-tdt-0.6b-v3",
-            title: "Parakeet TDT 0.6B v3",
-            description: "Fast, lightweight English STT."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-ctc-0.6b",
-            title: "Parakeet CTC 0.6B",
-            description: "Compact English CTC model with low memory use."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-rnnt-0.6b",
-            title: "Parakeet RNNT 0.6B",
-            description: "Compact English RNNT model for streaming-friendly decoding."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-tdt-1.1b",
-            title: "Parakeet TDT 1.1B",
-            description: "Larger English model with improved recognition quality."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-tdt_ctc-1.1b",
-            title: "Parakeet TDT CTC 1.1B",
-            description: "Higher-capacity Parakeet hybrid model for English transcription."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-ctc-1.1b",
-            title: "Parakeet CTC 1.1B",
-            description: "Higher-accuracy English CTC model with increased memory usage."
-        ),
-        ModelOption(
-            id: "mlx-community/parakeet-rnnt-1.1b",
-            title: "Parakeet RNNT 1.1B",
-            description: "Higher-accuracy English RNNT model for heavier local setups."
-        ),
-        ModelOption(
-            id: "mlx-community/GLM-ASR-Nano-2512-4bit",
-            title: "GLM-ASR Nano (4bit)",
-            description: "Smallest footprint for quick drafts."
-        ),
-        ModelOption(
-            id: "mlx-community/granite-4.0-1b-speech-5bit",
-            title: "Granite Speech 4.0 1B (5bit)",
-            description: "Multilingual speech model with stronger accuracy than the nano tier."
-        ),
-        ModelOption(
-            id: "mlx-community/FireRedASR2-AED-mlx",
-            title: "FireRed ASR 2",
-            description: "Beam-search ASR model tuned for higher offline accuracy."
-        ),
-        ModelOption(
-            id: "mlx-community/SenseVoiceSmall",
-            title: "SenseVoice Small",
-            description: "Fast multilingual model with built-in language and event detection."
-        )
-    ]
-    nonisolated private static let legacyModelRepoMap: [String: String] = [
-        "mlx-community/Parakeet-0.6B": "mlx-community/parakeet-tdt-0.6b-v3",
-        "mlx-community/GLM-ASR-Nano-4bit": "mlx-community/GLM-ASR-Nano-2512-4bit",
-        "mlx-community/Voxtral-Mini-4B-Realtime-2602": "mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16",
-        "mlx-community/Voxtral-Mini-4B-Realtime-2602-6bit": "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
-        "mlx-community/FireRedASR2": "mlx-community/FireRedASR2-AED-mlx",
-    ]
-    nonisolated private static let knownRemoteSizeBytesByRepo: [String: Int64] = [
-        "mlx-community/Qwen3-ASR-0.6B-4bit": 712_781_279,
-        "mlx-community/Qwen3-ASR-0.6B-6bit": 861_777_567,
-        "mlx-community/Qwen3-ASR-0.6B-8bit": 1_010_773_761,
-        "mlx-community/Qwen3-ASR-0.6B-bf16": 1_569_438_434,
-        "mlx-community/Qwen3-ASR-1.7B-4bit": 1_607_633_106,
-        "mlx-community/Qwen3-ASR-1.7B-6bit": 2_037_746_046,
-        "mlx-community/Qwen3-ASR-1.7B-8bit": 2_467_859_030,
-        "mlx-community/Qwen3-ASR-1.7B-bf16": 4_080_710_353,
-        "mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit": 3_148_833_321,
-        "mlx-community/Voxtral-Mini-4B-Realtime-6bit": 3_624_337_564,
-        "mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16": 8_885_525_001,
-        "beshkenadze/cohere-transcribe-03-2026-mlx-fp16": 4_132_564_062,
-        "mlx-community/parakeet-tdt_ctc-110m": 458_961_098,
-        "mlx-community/parakeet-tdt-0.6b-v2": 2_471_865_399,
-        "mlx-community/parakeet-tdt-0.6b-v3": 2_509_044_141,
-        "mlx-community/parakeet-ctc-0.6b": 2_435_805_367,
-        "mlx-community/parakeet-rnnt-0.6b": 2_467_370_930,
-        "mlx-community/parakeet-tdt-1.1b": 4_282_575_398,
-        "mlx-community/parakeet-tdt_ctc-1.1b": 4_286_788_359,
-        "mlx-community/parakeet-ctc-1.1b": 4_250_996_647,
-        "mlx-community/parakeet-rnnt-1.1b": 4_282_562_211,
-        "mlx-community/GLM-ASR-Nano-2512-4bit": 1_288_437_789,
-        "mlx-community/granite-4.0-1b-speech-5bit": 2_226_816_753,
-        "mlx-community/FireRedASR2-AED-mlx": 4_566_119_694,
-        "mlx-community/SenseVoiceSmall": 936_491_235,
-    ]
+    nonisolated static let defaultModelRepo = MLXModelCatalog.defaultModelRepo
+    nonisolated static let availableModels = MLXModelCatalog.availableModels
 
     enum ModelSizeState: Equatable {
         case unknown
@@ -249,7 +78,7 @@ class MLXModelManager: ObservableObject {
     init(modelRepo: String, hubBaseURL: URL = URL(string: "https://huggingface.co")!) {
         self.modelRepo = Self.canonicalModelRepo(modelRepo)
         self.hubBaseURL = hubBaseURL
-        self.remoteSizeTextByRepo = Self.loadPersistedRemoteSizeCache()
+        self.remoteSizeTextByRepo = MLXModelStorageSupport.loadPersistedRemoteSizeCache()
         checkExistingModel()
     }
 
@@ -257,22 +86,11 @@ class MLXModelManager: ObservableObject {
     var isCurrentModelLoaded: Bool { loadedModel != nil && loadedRepo == modelRepo }
 
     func displayTitle(for repo: String) -> String {
-        let canonicalRepo = Self.canonicalModelRepo(repo)
-        if let option = Self.availableModels.first(where: { $0.id == canonicalRepo }) {
-            return option.title
-        }
-        return canonicalRepo
+        MLXModelCatalog.displayTitle(for: repo)
     }
 
     nonisolated static func fallbackRemoteSizeText(repo: String) -> String? {
-        fallbackRemoteSizeInfo(repo: repo)?.text
-    }
-
-    nonisolated private static func formatByteCount(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+        MLXModelCatalog.fallbackRemoteSizeText(repo: repo)
     }
 
     func isModelDownloaded(repo: String) -> Bool {
@@ -297,7 +115,7 @@ class MLXModelManager: ObservableObject {
         else {
             return ""
         }
-        let text = Self.formatByteCount(Int64(size))
+        let text = MLXModelStorageSupport.formatByteCount(Int64(size))
         localSizeTextByRepo[canonicalRepo] = text
         return text
     }
@@ -318,7 +136,7 @@ class MLXModelManager: ObservableObject {
         }
 
         if let repoID = Repo.ID(rawValue: canonicalRepo) {
-            clearHubCache(for: repoID)
+            MLXModelStorageSupport.clearHubCache(for: repoID)
         }
         if let modelDir = cacheDirectory(for: canonicalRepo) {
             try? FileManager.default.removeItem(at: modelDir)
@@ -348,11 +166,11 @@ class MLXModelManager: ObservableObject {
     }
 
     nonisolated static func canonicalModelRepo(_ repo: String) -> String {
-        legacyModelRepoMap[repo] ?? repo
+        MLXModelCatalog.canonicalModelRepo(repo)
     }
 
     nonisolated static func isRealtimeCapableModelRepo(_ repo: String) -> Bool {
-        realtimeCapableModelRepos.contains(canonicalModelRepo(repo))
+        MLXModelCatalog.isRealtimeCapableModelRepo(repo)
     }
 
     nonisolated static func transcriptionBehavior(for repo: String) -> TranscriptionBehavior {
@@ -374,12 +192,6 @@ class MLXModelManager: ObservableObject {
 
     var currentTranscriptionBehavior: TranscriptionBehavior {
         Self.transcriptionBehavior(for: modelRepo)
-    }
-
-    nonisolated private static func fallbackRemoteSizeInfo(repo: String) -> (bytes: Int64, text: String)? {
-        let canonicalRepo = canonicalModelRepo(repo)
-        guard let bytes = knownRemoteSizeBytesByRepo[canonicalRepo] else { return nil }
-        return (bytes, formatByteCount(bytes))
     }
 
     func updateHubBaseURL(_ url: URL) {
@@ -596,15 +408,10 @@ class MLXModelManager: ObservableObject {
     }
 
     private func cacheDirectory(for repo: String) -> URL? {
-        Self.cacheDirectory(for: repo, rootDirectory: ModelStorageDirectoryManager.resolvedRootURL())
-    }
-
-    private static func cacheDirectory(for repo: String, rootDirectory: URL) -> URL? {
-        guard let repoID = Repo.ID(rawValue: repo) else { return nil }
-        let modelSubdir = repoID.description.replacingOccurrences(of: "/", with: "_")
-        return rootDirectory
-            .appendingPathComponent("mlx-audio")
-            .appendingPathComponent(modelSubdir)
+        MLXModelStorageSupport.cacheDirectory(
+            for: repo,
+            rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
+        )
     }
 
     private func cleanupPartialDownload() {
@@ -631,7 +438,7 @@ class MLXModelManager: ObservableObject {
             } catch is CancellationError {
                 return
             } catch {
-                if let fallback = Self.fallbackRemoteSizeInfo(repo: repo) {
+                if let fallback = MLXModelCatalog.fallbackRemoteSizeInfo(repo: repo) {
                     sizeState = .ready(bytes: fallback.bytes, text: fallback.text)
                     updateRemoteSizeCache(repo: repo, text: fallback.text)
                 } else {
@@ -717,22 +524,9 @@ class MLXModelManager: ObservableObject {
         }
     }
 
-    private static func loadPersistedRemoteSizeCache() -> [String: String] {
-        guard let data = UserDefaults.standard.data(forKey: AppPreferenceKey.mlxRemoteSizeCache),
-              let decoded = try? JSONDecoder().decode([String: String].self, from: data) else {
-            return [:]
-        }
-        return decoded
-    }
-
-    private static func savePersistedRemoteSizeCache(_ cache: [String: String]) {
-        guard let data = try? JSONEncoder().encode(cache) else { return }
-        UserDefaults.standard.set(data, forKey: AppPreferenceKey.mlxRemoteSizeCache)
-    }
-
     private func updateRemoteSizeCache(repo: String, text: String) {
         remoteSizeTextByRepo[repo] = text
-        Self.savePersistedRemoteSizeCache(remoteSizeTextByRepo)
+        MLXModelStorageSupport.savePersistedRemoteSizeCache(remoteSizeTextByRepo)
     }
 
     private func fallbackHubBaseURL(from baseURL: URL) -> URL? {
@@ -750,7 +544,7 @@ class MLXModelManager: ObservableObject {
                 repo: repo,
                 baseURL: baseURL,
                 userAgent: Self.hubUserAgent,
-                formatByteCount: Self.formatByteCount
+                formatByteCount: MLXModelStorageSupport.formatByteCount
             )
         } catch {
             guard let fallbackBaseURL = fallbackHubBaseURL(from: baseURL) else {
@@ -763,7 +557,7 @@ class MLXModelManager: ObservableObject {
                 repo: repo,
                 baseURL: fallbackBaseURL,
                 userAgent: Self.hubUserAgent,
-                formatByteCount: Self.formatByteCount
+                formatByteCount: MLXModelStorageSupport.formatByteCount
             )
         }
     }
@@ -940,7 +734,7 @@ class MLXModelManager: ObservableObject {
         tempDir: URL,
         progress: Progress
     ) async throws {
-        let destination = try destinationFileURL(for: entryPath, under: tempDir)
+        let destination = try MLXModelStorageSupport.destinationFileURL(for: entryPath, under: tempDir)
         var attempt = 0
         while true {
             do {
@@ -967,24 +761,6 @@ class MLXModelManager: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(delayMs))
             }
         }
-    }
-
-    private func destinationFileURL(for entryPath: String, under directory: URL) throws -> URL {
-        let base = directory.standardizedFileURL
-        let destination = base.appendingPathComponent(entryPath).standardizedFileURL
-        let basePrefix = base.path.hasSuffix("/") ? base.path : "\(base.path)/"
-        guard destination.path.hasPrefix(basePrefix) else {
-            throw NSError(
-                domain: "MLXModelManager",
-                code: 1002,
-                userInfo: [NSLocalizedDescriptionKey: "Invalid model file path: \(entryPath)"]
-            )
-        }
-        try FileManager.default.createDirectory(
-            at: destination.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        return destination
     }
 
     private func setDownloadingState(
@@ -1126,17 +902,9 @@ class MLXModelManager: ObservableObject {
         VoxtLog.info("MLX Audio model released after idle period.", verbose: true)
     }
 
-    private func clearHubCache(for repoID: Repo.ID) {
-        let cache = HubCache.default
-        let repoDir = cache.repoDirectory(repo: repoID, kind: .model)
-        let metadataDir = cache.metadataDirectory(repo: repoID, kind: .model)
-        try? FileManager.default.removeItem(at: repoDir)
-        try? FileManager.default.removeItem(at: metadataDir)
-    }
-
     private func clearCurrentRepoHubCache() {
         guard let repoID = Repo.ID(rawValue: modelRepo) else { return }
-        clearHubCache(for: repoID)
+        MLXModelStorageSupport.clearHubCache(for: repoID)
     }
 }
 
