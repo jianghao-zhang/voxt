@@ -650,6 +650,7 @@ class MLXModelManager: ObservableObject {
             let expectedEntryBytes = max(entry.size ?? 0, 0)
             let progress = Progress(totalUnitCount: max(expectedEntryBytes, 1))
             let baseCompletedBytes = completedBytes
+            let isLastEntry = index == totalFiles - 1
             let beforeFraction = totalBytes > 0 ? Double(completedBytes) / Double(totalBytes) : 0
             setDownloadingState(
                 progress: min(1, beforeFraction),
@@ -671,13 +672,16 @@ class MLXModelManager: ObservableObject {
                     )
                     let currentCompleted = min(baseCompletedBytes + effectiveInFlight, totalBytes)
                     let fraction = totalBytes > 0 ? Double(currentCompleted) / Double(totalBytes) : 0
+                    let fileTransferLooksComplete = expectedEntryBytes > 0 && effectiveInFlight >= expectedEntryBytes
+                    let displayCompletedFiles = (isLastEntry && fileTransferLooksComplete) ? totalFiles : completedFiles
+                    let displayCurrentFile = (isLastEntry && fileTransferLooksComplete) ? nil : entry.path
                     await MainActor.run {
                         self?.setDownloadingState(
                             progress: min(1, fraction),
                             completed: currentCompleted,
                             total: totalBytes,
-                            currentFile: entry.path,
-                            completedFiles: completedFiles,
+                            currentFile: displayCurrentFile,
+                            completedFiles: displayCompletedFiles,
                             totalFiles: totalFiles
                         )
                     }

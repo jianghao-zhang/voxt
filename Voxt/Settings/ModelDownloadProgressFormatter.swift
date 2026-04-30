@@ -35,6 +35,9 @@ enum ModelDownloadProgressFormatter {
         }
 
         guard let currentFile, !currentFile.isEmpty else {
+            if totalFiles > 0, completedFiles >= totalFiles {
+                return AppLocalization.format("Finalizing download... (%@)", filesText)
+            }
             return AppLocalization.format("Preparing download... (%@)", filesText)
         }
 

@@ -16,11 +16,17 @@ struct ModelDownloadStatusSnapshot: Equatable {
     private let completedFiles: Int
     private let totalFiles: Int
 
+    private var displayedPercent: Int {
+        let clampedProgress = max(0, min(progress, 1))
+        let rawPercent = Int(clampedProgress * 100)
+        return min(rawPercent, 99)
+    }
+
     var titleText: String {
         let formatKey = kind == .customLLM ? "Custom LLM downloading: %d%% • %@" : "Downloading: %d%% • %@"
         return AppLocalization.format(
             formatKey,
-            Int(progress * 100),
+            displayedPercent,
             ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
         )
     }
