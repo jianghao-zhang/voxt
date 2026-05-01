@@ -144,6 +144,7 @@ extension OnboardingSettingsView {
                     showsCardSurface: false,
                     isInstalling: isSelectedMLXModelDownloading,
                     isPaused: isSelectedMLXModelPaused,
+                    isInstallEnabled: !isAnotherMLXModelDownloading,
                     installLabel: "Download",
                     openLabel: "Open Folder",
                     downloadStatus: selectedMLXDownloadStatus,
@@ -166,15 +167,18 @@ extension OnboardingSettingsView {
                         guard let folderURL = mlxModelManager.modelDirectoryURL(repo: mlxModelRepo) else { return }
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
                     },
+                    onPause: {
+                        mlxModelManager.pauseDownload()
+                    },
                     onResume: {
                         Task { await mlxModelManager.downloadModel(repo: mlxModelRepo) }
                     },
                     onCancel: {
-                        if isSelectedMLXModelDownloading {
-                            mlxModelManager.pauseDownload()
-                        } else {
-                            mlxModelManager.cancelDownload()
-                        }
+                        mlxModelManager.cancelDownload()
+                    },
+                    onUninstall: {
+                        mlxModelManager.deleteModel(repo: mlxModelRepo)
+                        mlxModelManager.checkExistingModel()
                     }
                 )
             } else {
@@ -186,6 +190,7 @@ extension OnboardingSettingsView {
                     showsCardSurface: false,
                     isInstalling: isSelectedWhisperModelDownloading,
                     isPaused: isSelectedWhisperModelPaused,
+                    isInstallEnabled: !isAnotherWhisperModelDownloading,
                     installLabel: "Download",
                     openLabel: "Open Folder",
                     downloadStatus: selectedWhisperDownloadStatus,
@@ -208,15 +213,17 @@ extension OnboardingSettingsView {
                         guard let folderURL = whisperModelManager.modelDirectoryURL(id: whisperModelID) else { return }
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
                     },
+                    onPause: {
+                        whisperModelManager.pauseDownload()
+                    },
                     onResume: {
                         Task { await whisperModelManager.downloadModel(id: whisperModelID) }
                     },
                     onCancel: {
-                        if isSelectedWhisperModelDownloading {
-                            whisperModelManager.pauseDownload()
-                        } else {
-                            whisperModelManager.cancelDownload()
-                        }
+                        whisperModelManager.cancelDownload()
+                    },
+                    onUninstall: {
+                        whisperModelManager.deleteModel(id: whisperModelID)
                     }
                 )
             }
@@ -262,64 +269,57 @@ extension OnboardingSettingsView {
 
     var localLLMSetupContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SettingsMenuPicker(
-                selection: Binding(
-                    get: { customLLMRepo },
-                    set: { newValue in
-                        customLLMRepo = newValue
-                        translationCustomLLMRepo = newValue
-                        rewriteCustomLLMRepo = newValue
-                    }
-                ),
-                options: CustomLLMModelManager.availableModels.map { model in
-                    SettingsMenuOption(value: model.id, title: model.title)
+            LocalModelPickerCard(
+                title: "Language Model",
+                selectionTitle: customLLMManager.displayTitle(for: customLLMRepo),
+                selectionDescription: customLLMDescription(for: customLLMRepo),
+                isInstalled: customLLMManager.isModelDownloaded(repo: customLLMRepo),
+                showsCardSurface: false,
+                isInstalling: isSelectedCustomLLMDownloading,
+                isPaused: isSelectedCustomLLMPaused,
+                isInstallEnabled: !isAnotherCustomLLMDownloading,
+                installLabel: "Download",
+                openLabel: "Open Folder",
+                downloadStatus: customLLMDownloadStatus,
+                errorMessage: customLLMDownloadErrorMessage,
+                onChoose: {},
+                pickerContent: {
+                    SettingsMenuPicker(
+                        selection: Binding(
+                            get: { customLLMRepo },
+                            set: { newValue in
+                                customLLMRepo = newValue
+                                translationCustomLLMRepo = newValue
+                                rewriteCustomLLMRepo = newValue
+                            }
+                        ),
+                        options: CustomLLMModelManager.availableModels.map { model in
+                            SettingsMenuOption(value: model.id, title: model.title)
+                        },
+                        selectedTitle: customLLMManager.displayTitle(for: customLLMRepo),
+                        width: 280
+                    )
                 },
-                selectedTitle: customLLMManager.displayTitle(for: customLLMRepo),
-                width: 280
-            )
-
-            Text(customLLMDescription(for: customLLMRepo))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                if customLLMManager.isModelDownloaded(repo: customLLMRepo) {
-                    Button(localized("Open Folder")) {
-                        guard let folderURL = customLLMManager.modelDirectoryURL(repo: customLLMRepo) else { return }
-                        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
-                    }
-                } else if isSelectedCustomLLMDownloading {
-                    Button(localized("Pause")) {
-                        customLLMManager.pauseDownload()
-                    }
-                    Button(localized("Cancel")) {
-                        customLLMManager.cancelDownload()
-                    }
-                } else if isSelectedCustomLLMPaused {
-                    Button(localized("Continue")) {
-                        Task { await customLLMManager.downloadModel(repo: customLLMRepo) }
-                    }
-                    Button(localized("Cancel")) {
-                        customLLMManager.cancelDownload()
-                    }
-                } else {
-                    Button(localized("Download")) {
-                        Task { await customLLMManager.downloadModel(repo: customLLMRepo) }
-                    }
+                onInstall: {
+                    Task { await customLLMManager.downloadModel(repo: customLLMRepo) }
+                },
+                onOpen: {
+                    guard let folderURL = customLLMManager.modelDirectoryURL(repo: customLLMRepo) else { return }
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
+                },
+                onPause: {
+                    customLLMManager.pauseDownload()
+                },
+                onResume: {
+                    Task { await customLLMManager.downloadModel(repo: customLLMRepo) }
+                },
+                onCancel: {
+                    customLLMManager.cancelDownload()
+                },
+                onUninstall: {
+                    customLLMManager.deleteModel(repo: customLLMRepo)
                 }
-            }
-            .buttonStyle(SettingsPillButtonStyle())
-
-            if let customLLMDownloadStatus {
-                ModelDownloadStatusView(status: customLLMDownloadStatus)
-            }
-
-            if let customLLMDownloadErrorMessage {
-                Text(customLLMDownloadErrorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            )
         }
     }
 
@@ -856,6 +856,11 @@ extension OnboardingSettingsView {
         return MLXModelManager.canonicalModelRepo(mlxModelManager.currentModelRepo) == MLXModelManager.canonicalModelRepo(mlxModelRepo)
     }
 
+    var isAnotherMLXModelDownloading: Bool {
+        guard case .downloading = mlxModelManager.state else { return false }
+        return MLXModelManager.canonicalModelRepo(mlxModelManager.currentModelRepo) != MLXModelManager.canonicalModelRepo(mlxModelRepo)
+    }
+
     var isSelectedMLXModelPaused: Bool {
         guard case .paused = mlxModelManager.state else { return false }
         return MLXModelManager.canonicalModelRepo(mlxModelManager.currentModelRepo) == MLXModelManager.canonicalModelRepo(mlxModelRepo)
@@ -882,6 +887,11 @@ extension OnboardingSettingsView {
         return activeDownload.modelID == WhisperKitModelManager.canonicalModelID(whisperModelID) && !activeDownload.isPaused
     }
 
+    var isAnotherWhisperModelDownloading: Bool {
+        guard let activeDownload = whisperModelManager.activeDownload else { return false }
+        return activeDownload.modelID != WhisperKitModelManager.canonicalModelID(whisperModelID) && !activeDownload.isPaused
+    }
+
     var isSelectedWhisperModelPaused: Bool {
         guard let activeDownload = whisperModelManager.activeDownload else { return false }
         return activeDownload.modelID == WhisperKitModelManager.canonicalModelID(whisperModelID) && activeDownload.isPaused
@@ -902,6 +912,11 @@ extension OnboardingSettingsView {
     var isSelectedCustomLLMDownloading: Bool {
         guard case .downloading = customLLMManager.state else { return false }
         return customLLMManager.currentModelRepo == customLLMRepo
+    }
+
+    var isAnotherCustomLLMDownloading: Bool {
+        guard case .downloading = customLLMManager.state else { return false }
+        return customLLMManager.currentModelRepo != customLLMRepo
     }
 
     var isSelectedCustomLLMPaused: Bool {

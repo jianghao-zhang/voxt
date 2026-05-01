@@ -134,6 +134,7 @@ struct LocalModelPickerCard<PickerContent: View>: View {
     var showsCardSurface: Bool = true
     var isInstalling: Bool = false
     var isPaused: Bool = false
+    var isInstallEnabled: Bool = true
     let installLabel: LocalizedStringKey
     let openLabel: LocalizedStringKey
     var downloadStatus: ModelDownloadStatusSnapshot? = nil
@@ -142,8 +143,10 @@ struct LocalModelPickerCard<PickerContent: View>: View {
     @ViewBuilder let pickerContent: () -> PickerContent
     let onInstall: () -> Void
     let onOpen: () -> Void
+    var onPause: (() -> Void)? = nil
     var onResume: (() -> Void)? = nil
     var onCancel: (() -> Void)? = nil
+    var onUninstall: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -159,18 +162,26 @@ struct LocalModelPickerCard<PickerContent: View>: View {
 
             HStack(spacing: 8) {
                 if isInstalled {
-                    Text(selectionTitle)
+                    Text(localized("Installed"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.green)
                     Button(openLabel, action: onOpen)
                         .buttonStyle(SettingsPillButtonStyle())
+                    if let onUninstall {
+                        Button(localized("Uninstall"), role: .destructive, action: onUninstall)
+                            .buttonStyle(SettingsPillButtonStyle(tone: .destructive))
+                    }
                 } else if isInstalling {
                     Text(localized("Downloading"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.accentColor)
-                    if let onCancel {
-                        Button(localized("Pause"), action: onCancel)
+                    if let onPause {
+                        Button(localized("Pause"), action: onPause)
                             .buttonStyle(SettingsPillButtonStyle())
+                    }
+                    if let onCancel {
+                        Button(localized("Cancel"), role: .destructive, action: onCancel)
+                            .buttonStyle(SettingsPillButtonStyle(tone: .destructive))
                     }
                 } else if isPaused {
                     Text(localized("Paused"))
@@ -179,8 +190,8 @@ struct LocalModelPickerCard<PickerContent: View>: View {
                     Button(localized("Continue"), action: onResume ?? onInstall)
                         .buttonStyle(SettingsPillButtonStyle())
                     if let onCancel {
-                        Button(localized("Cancel"), action: onCancel)
-                            .buttonStyle(SettingsPillButtonStyle())
+                        Button(localized("Cancel"), role: .destructive, action: onCancel)
+                            .buttonStyle(SettingsPillButtonStyle(tone: .destructive))
                     }
                 } else {
                     Text(localized("Not installed"))
@@ -188,6 +199,7 @@ struct LocalModelPickerCard<PickerContent: View>: View {
                         .foregroundStyle(.orange)
                     Button(installLabel, action: onInstall)
                         .buttonStyle(SettingsPillButtonStyle())
+                        .disabled(!isInstallEnabled)
                 }
             }
 

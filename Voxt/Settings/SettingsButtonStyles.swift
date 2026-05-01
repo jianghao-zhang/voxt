@@ -24,22 +24,34 @@ struct SettingsSidebarItemButtonStyle: ButtonStyle {
 }
 
 struct SettingsPillButtonStyle: ButtonStyle {
+    enum Tone {
+        case neutral
+        case destructive
+    }
+
+    var tone: Tone = .neutral
     var horizontalPadding: CGFloat = 12
     var height: CGFloat = 32
 
     func makeBody(configuration: Configuration) -> some View {
+        let foreground: Color = tone == .destructive ? .red : .primary
+        let fill: Color = tone == .destructive
+            ? .red.opacity(configuration.isPressed ? 0.16 : 0.10)
+            : SettingsUIStyle.subtleFillColor.opacity(configuration.isPressed ? 0.88 : 1)
+        let stroke: Color = tone == .destructive ? .red.opacity(0.22) : SettingsUIStyle.subtleBorderColor
+
         configuration.label
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.primary.opacity(configuration.isPressed ? 0.72 : 0.92))
+            .foregroundStyle(foreground.opacity(configuration.isPressed ? 0.72 : 0.92))
             .padding(.horizontal, horizontalPadding)
             .frame(height: height)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(SettingsUIStyle.subtleFillColor.opacity(configuration.isPressed ? 0.88 : 1))
+                    .fill(fill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                    .strokeBorder(stroke, lineWidth: 1)
             )
     }
 }
