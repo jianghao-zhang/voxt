@@ -742,6 +742,7 @@ private struct SettingsSidebar: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .disabled(updateBadgeState.isTriggerDisabled)
                 .buttonStyle(SettingsStatusButtonStyle(tint: updateBadgeState.tintColor))
             }
 
@@ -807,6 +808,15 @@ private enum UpdateBadgeState: Equatable {
     }
 
     var showsSpinner: Bool {
+        switch self {
+        case .openingWindow:
+            return true
+        case .none, .checkFailed, .newVersion:
+            return false
+        }
+    }
+
+    var isTriggerDisabled: Bool {
         switch self {
         case .openingWindow:
             return true

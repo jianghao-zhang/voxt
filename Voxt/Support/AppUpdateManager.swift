@@ -60,6 +60,10 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         }
     }
 
+    var shouldDisableInteractiveUpdateTrigger: Bool {
+        isPreparingInteractiveUpdateUI
+    }
+
     func syncAutomaticallyChecksForUpdates(_ newValue: Bool) {
         guard automaticallyChecksForUpdates != newValue else { return }
         automaticallyChecksForUpdates = newValue
@@ -72,6 +76,18 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
             reportIssue(AppLocalization.localizedString("Installer service is unavailable."))
             return
         }
+
+        if isPreparingInteractiveUpdateUI {
+            NSApp.activate(ignoringOtherApps: true)
+            VoxtLog.info("Manual update trigger ignored because Sparkle UI is still preparing.")
+            return
+        }
+
+        if isPresentingUpdateUI {
+            focusExistingUpdateUI(using: updaterController.updater, reason: "manual-repeat")
+            return
+        }
+
         configureUpdaterRequestContext(updaterController.updater)
         guard isInstallerServiceAvailable() else {
             VoxtLog.error("Sparkle installer services unavailable. Unable to present interactive update flow.")
@@ -263,6 +279,7 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
     }
 
     func standardUserDriverDidShowModalAlert() {
+        NSApp.activate(ignoringOtherApps: true)
         VoxtLog.info("Sparkle did show modal alert.")
     }
 
@@ -449,6 +466,7 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         setPreparingInteractiveUpdateUI(false)
         guard !isPresentingUpdateUI else { return }
         isPresentingUpdateUI = true
+        NSApp.activate(ignoringOtherApps: true)
         VoxtLog.info("Sparkle update UI became active. reason=\(reason), source=\(lastCheckSource.description)")
         onUpdatePresentationWillBegin?()
     }
@@ -460,6 +478,20 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         isPresentingUpdateUI = false
         VoxtLog.info("Sparkle update UI finished. source=\(lastCheckSource.description)")
         onUpdatePresentationDidEnd?()
+    }
+
+    private func focusExistingUpdateUI(using updater: SPUUpdater, reason: String) {
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Sparkle documents that invoking checkForUpdates again while an update or its
+        // progress is already shown can bring that existing UI back into frontmost focus.
+        guard updater.canCheckForUpdates else {
+            VoxtLog.info("Sparkle update UI focus request skipped because updater cannot check right now. reason=\(reason)")
+            return
+        }
+
+        VoxtLog.info("Sparkle update UI focus requested. reason=\(reason)")
+        updater.checkForUpdates()
     }
 
     static func localizedFeedURLString(baseURLString: String, interfaceLanguage: AppInterfaceLanguage) -> String {

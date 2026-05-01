@@ -49,6 +49,7 @@ struct AboutSettingsView: View {
                         Button(String(localized: "Check for Updates…")) {
                             appUpdateManager.checkForUpdatesWithUserInterface()
                         }
+                        .disabled(appUpdateManager.shouldDisableInteractiveUpdateTrigger)
                         .buttonStyle(SettingsPillButtonStyle())
                     }
                     .font(.caption)

@@ -111,6 +111,7 @@ extension AppDelegate {
             keyEquivalent: ""
         )
         checkUpdatesItem.target = self
+        checkUpdatesItem.isEnabled = !appUpdateManager.shouldDisableInteractiveUpdateTrigger
         menu.addItem(checkUpdatesItem)
 
         let feedbackItem = NSMenuItem(
@@ -598,28 +599,15 @@ extension AppDelegate {
     }
 
     func prepareMainWindowForUpdatePresentation() {
-        guard let window = mainWindowController?.window else {
-            mainWindowPresentationState = MainWindowPresentationState()
-            return
-        }
-
-        let shouldRestore = window.isVisible && !window.isMiniaturized
-        mainWindowPresentationState.shouldRestoreAfterUpdate = shouldRestore
-        guard shouldRestore else { return }
-
-        VoxtLog.info("Temporarily hiding main window before presenting update UI.")
-        setMainWindowVisibility(false)
-        window.orderOut(nil)
+        mainWindowPresentationState = MainWindowPresentationState()
+        synchronizeAppActivationPolicy(mainWindowVisible: true)
+        NSApp.activate(ignoringOtherApps: true)
+        VoxtLog.info("Preparing Sparkle update UI without hiding main window.")
     }
 
     func restoreMainWindowAfterUpdateSessionIfNeeded() {
-        guard mainWindowPresentationState.shouldRestoreAfterUpdate else { return }
         mainWindowPresentationState = MainWindowPresentationState()
-
-        guard let window = mainWindowController?.window else { return }
-        VoxtLog.info("Restoring main window after update UI finished.")
-        setMainWindowVisibility(true)
-        bringWindowToFront(window)
+        VoxtLog.info("Sparkle update UI finished; leaving main window state unchanged.")
     }
 
     func showPermissionAlert() {
