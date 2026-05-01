@@ -2,6 +2,15 @@ import XCTest
 @testable import Voxt
 
 final class CustomLLMModelDownloadSupportTests: XCTestCase {
+    private let resumableTestPolicy = ResumableDownloadPolicy(
+        resumeThresholdBytes: 1,
+        stallTimeout: .seconds(45),
+        stallPollInterval: .seconds(5),
+        maxRecoveryAttempts: 5,
+        initialBackoffSeconds: 1,
+        maxBackoffSeconds: 30
+    )
+
     private final class MockResumableDownloadURLProtocol: URLProtocol, @unchecked Sendable {
         struct Stub {
             let statusCode: Int
@@ -196,6 +205,7 @@ final class CustomLLMModelDownloadSupportTests: XCTestCase {
                 expectedSize: 10,
                 userAgent: "VoxtTests",
                 disableProxy: false,
+                policy: resumableTestPolicy,
                 protocolClasses: [MockResumableDownloadURLProtocol.self]
             ),
             progress: progress
@@ -265,6 +275,7 @@ final class CustomLLMModelDownloadSupportTests: XCTestCase {
                 expectedSize: 10,
                 userAgent: "VoxtTests",
                 disableProxy: false,
+                policy: resumableTestPolicy,
                 protocolClasses: [MockResumableDownloadURLProtocol.self]
             ),
             progress: progress
@@ -322,6 +333,7 @@ final class CustomLLMModelDownloadSupportTests: XCTestCase {
                 expectedSize: 10,
                 userAgent: "VoxtTests",
                 disableProxy: false,
+                policy: resumableTestPolicy,
                 protocolClasses: [MockResumableDownloadURLProtocol.self]
             ),
             progress: progress
@@ -389,6 +401,7 @@ final class CustomLLMModelDownloadSupportTests: XCTestCase {
                 expectedSize: 10,
                 userAgent: "VoxtTests",
                 disableProxy: false,
+                policy: resumableTestPolicy,
                 protocolClasses: [MockResumableDownloadURLProtocol.self]
             ),
             progress: progress
@@ -437,6 +450,7 @@ final class CustomLLMModelDownloadSupportTests: XCTestCase {
                 expectedSize: 10,
                 userAgent: "VoxtTests",
                 disableProxy: false,
+                policy: resumableTestPolicy,
                 protocolClasses: [MockResumableDownloadURLProtocol.self]
             ),
             progress: progress

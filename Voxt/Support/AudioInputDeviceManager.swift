@@ -52,14 +52,6 @@ enum AudioInputDeviceManager {
             return AudioInputDevice(id: id, uid: uid, name: name)
         }
 
-        let excludedDevices = discoveredDevices.filter { !shouldIncludeInSnapshot(uid: $0.uid, name: $0.name) }
-        if !excludedDevices.isEmpty {
-            VoxtLog.info(
-                "Filtered non-microphone input devices from snapshot: \(excludedDevices.map { "\($0.name){uid=\($0.uid),id=\($0.id)}" }.joined(separator: ", "))",
-                verbose: true
-            )
-        }
-
         let devices = discoveredDevices
             .filter { shouldIncludeInSnapshot(uid: $0.uid, name: $0.name) }
             .sorted { (lhs: AudioInputDevice, rhs: AudioInputDevice) in

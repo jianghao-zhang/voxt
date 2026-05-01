@@ -103,12 +103,12 @@ final class VoxtRemindersSyncCoordinator {
         settingsProvider: @escaping () -> RemindersNoteSyncSettings,
         exportStore: VoxtNoteRemindersExportStore? = nil,
         notificationCenter: NotificationCenter = .default,
-        backendFactory: @escaping () -> any VoxtRemindersSyncBackend = { EventKitVoxtRemindersSyncBackend() }
+        backendFactory: (() -> any VoxtRemindersSyncBackend)? = nil
     ) {
         self.noteStore = noteStore
         self.settingsProvider = settingsProvider
         self.exportStore = exportStore ?? VoxtNoteRemindersExportStore()
-        self.backendFactory = backendFactory
+        self.backendFactory = backendFactory ?? { EventKitVoxtRemindersSyncBackend() }
         self.notificationCenter = notificationCenter
         self.latestNotesSnapshot = noteStore.items
 
@@ -250,7 +250,7 @@ final class VoxtRemindersSyncCoordinator {
         )
     }
 
-    private static func noteSortOrder(lhs: VoxtNoteItem, rhs: VoxtNoteItem) -> Bool {
+    nonisolated private static func noteSortOrder(lhs: VoxtNoteItem, rhs: VoxtNoteItem) -> Bool {
         if lhs.createdAt == rhs.createdAt {
             return lhs.id.uuidString < rhs.id.uuidString
         }

@@ -27,6 +27,6 @@ final class ModelDownloadStatusSnapshotTests: XCTestCase {
         )
 
         let filesText = AppLocalization.format("%d/%d files", 9, 9)
-        XCTAssertEqual(text, AppLocalization.format("Finalizing download... (%@)", filesText))
+        XCTAssertEqual(text, AppLocalization.format("Finalizing download… (%@)", filesText))
     }
 }

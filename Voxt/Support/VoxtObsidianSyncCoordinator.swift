@@ -739,7 +739,7 @@ final class VoxtObsidianSyncCoordinator {
         ) != nil
     }
 
-    private static func noteSortOrder(_ lhs: VoxtNoteItem, _ rhs: VoxtNoteItem) -> Bool {
+    nonisolated private static func noteSortOrder(_ lhs: VoxtNoteItem, _ rhs: VoxtNoteItem) -> Bool {
         if lhs.createdAt == rhs.createdAt {
             return lhs.id.uuidString < rhs.id.uuidString
         }
