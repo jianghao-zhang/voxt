@@ -5,10 +5,18 @@ struct PromptEditorView: View {
     @Binding var text: String
     var height: CGFloat = 100
     var contentPadding: CGFloat = 6
+    var variables: [PromptTemplateVariableDescriptor] = []
+    var variablesLayout: PromptTemplateVariablesLayout = .adaptive
 
     var body: some View {
-        TextEditor(text: $text)
-            .settingsPromptEditor(height: height, contentPadding: contentPadding)
+        VStack(alignment: .leading, spacing: 8) {
+            TextEditor(text: $text)
+                .settingsPromptEditor(height: height, contentPadding: contentPadding)
+
+            if !variables.isEmpty {
+                PromptTemplateVariablesView(variables: variables, layout: variablesLayout)
+            }
+        }
     }
 }
 
@@ -19,19 +27,29 @@ struct PromptTemplateVariableDescriptor: Identifiable {
     var id: String { token }
 }
 
+enum PromptTemplateVariablesLayout {
+    case adaptive
+    case twoColumns
+}
+
 struct PromptTemplateVariablesView: View {
     let variables: [PromptTemplateVariableDescriptor]
+    let layout: PromptTemplateVariablesLayout
 
     @State private var copiedToken: String?
     @State private var resetTask: Task<Void, Never>?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(AppLocalization.localizedString("Supported variables"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 8) {
+            LazyVGrid(
+                columns: gridColumns,
+                alignment: .leading,
+                spacing: 8
+            ) {
                 ForEach(variables) { variable in
                     PromptTemplateVariableChip(
                         variable: variable,
@@ -40,7 +58,18 @@ struct PromptTemplateVariablesView: View {
                     )
                 }
             }
-            Spacer(minLength: 0)
+        }
+    }
+
+    private var gridColumns: [GridItem] {
+        switch layout {
+        case .adaptive:
+            return [GridItem(.adaptive(minimum: 220), alignment: .leading)]
+        case .twoColumns:
+            return [
+                GridItem(.flexible(minimum: 180), alignment: .leading),
+                GridItem(.flexible(minimum: 180), alignment: .leading)
+            ]
         }
     }
 
@@ -51,7 +80,7 @@ struct PromptTemplateVariablesView: View {
         copiedToken = token
         resetTask?.cancel()
         resetTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.6))
+            try? await Task.sleep(for: .seconds(1.2))
             guard !Task.isCancelled else { return }
             if copiedToken == token {
                 copiedToken = nil
@@ -61,153 +90,53 @@ struct PromptTemplateVariablesView: View {
     }
 }
 
-private enum PromptTemplateTooltipPlacement {
-    case above
-    case below
-}
-
 private struct PromptTemplateVariableChip: View {
     let variable: PromptTemplateVariableDescriptor
     let isCopied: Bool
     let onCopy: () -> Void
 
     @State private var isShowingTip = false
-    @State private var isHoveringBadge = false
-    @State private var isHoveringTip = false
-    @State private var badgeScreenFrame: CGRect = .zero
-    @State private var dismissTask: Task<Void, Never>?
 
     var body: some View {
-        Button(action: onCopy) {
-            HStack(spacing: 2) {
-                Image(systemName: isCopied ? "checkmark.circle.fill" : "document.on.document")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(isCopied ? Color.green : Color.secondary)
-                    .frame(width: 10, height: 10)
-                Text(variable.token)
-                    .font(.caption.monospaced())
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 0)
-            .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(SettingsUIStyle.controlFillColor)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .background(
-            PromptTemplateBadgeFrameReader { frame in
-                badgeScreenFrame = frame
-            }
-        )
-        .onHover { hovering in
-            isHoveringBadge = hovering
-            if hovering {
-                dismissTask?.cancel()
-                isShowingTip = true
-            } else {
-                scheduleTipDismissal()
-            }
-        }
-        .popover(
-            isPresented: $isShowingTip,
-            attachmentAnchor: .rect(.bounds),
-            arrowEdge: tooltipPlacement == .above ? .bottom : .top
-        ) {
-            Text(AppLocalization.localizedString(variable.tipKey))
-                .font(.caption)
-                .multilineTextAlignment(.leading)
-                .frame(width: 260, alignment: .leading)
-                .padding(10)
+        HStack(spacing: 0) {
+            Text(variable.token)
+                .font(.caption.monospaced())
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
                 .onHover { hovering in
-                    isHoveringTip = hovering
-                    if hovering {
-                        dismissTask?.cancel()
-                    } else {
-                        scheduleTipDismissal()
-                    }
+                    isShowingTip = hovering
                 }
+                .popover(isPresented: $isShowingTip, arrowEdge: .bottom) {
+                    Text(AppLocalization.localizedString(variable.tipKey))
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                        .padding(10)
+                        .frame(width: 260, alignment: .leading)
+                }
+
+            Divider()
+                .frame(height: 18)
+
+            Button(isCopied ? AppLocalization.localizedString("Copied") : AppLocalization.localizedString("Copy")) {
+                onCopy()
+            }
+            .buttonStyle(.plain)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(isCopied ? Color.green : Color.accentColor)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
         }
-    }
-
-    private var tooltipPlacement: PromptTemplateTooltipPlacement {
-        guard
-            !badgeScreenFrame.isEmpty,
-            let visibleFrame = NSScreen.main?.visibleFrame
-        else {
-            return .above
-        }
-
-        let preferredHeight: CGFloat = 72
-        let availableAbove = visibleFrame.maxY - badgeScreenFrame.maxY
-        let availableBelow = badgeScreenFrame.minY - visibleFrame.minY
-
-        if availableAbove >= preferredHeight {
-            return .above
-        }
-        if availableBelow >= preferredHeight {
-            return .below
-        }
-        return availableAbove >= availableBelow ? .above : .below
-    }
-
-    private func scheduleTipDismissal() {
-        dismissTask?.cancel()
-        dismissTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(220))
-            guard !Task.isCancelled else { return }
-            guard !isHoveringBadge, !isHoveringTip else { return }
-            isShowingTip = false
-            dismissTask = nil
-        }
-    }
-}
-
-private struct PromptTemplateBadgeFrameReader: NSViewRepresentable {
-    let onUpdate: (CGRect) -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let view = FrameReportingView()
-        view.onUpdate = onUpdate
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        guard let view = nsView as? FrameReportingView else { return }
-        view.onUpdate = onUpdate
-        DispatchQueue.main.async {
-            view.reportFrameIfNeeded()
-        }
-    }
-}
-
-private final class FrameReportingView: NSView {
-    var onUpdate: ((CGRect) -> Void)?
-    private var lastReportedFrame: CGRect = .zero
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        reportFrameIfNeeded()
-    }
-
-    override func layout() {
-        super.layout()
-        reportFrameIfNeeded()
-    }
-
-    func reportFrameIfNeeded() {
-        guard let window else { return }
-        let frameInWindow = convert(bounds, to: nil)
-        let frameInScreen = window.convertToScreen(frameInWindow)
-        guard frameInScreen != lastReportedFrame else { return }
-        lastReportedFrame = frameInScreen
-        onUpdate?(frameInScreen)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(SettingsUIStyle.controlFillColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+        )
     }
 }
 

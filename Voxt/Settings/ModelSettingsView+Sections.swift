@@ -361,8 +361,7 @@ private struct MLXASRConfigurationSheetView: View {
             if family.supportsContextBias {
                 Text("Recognition Context")
                     .font(.subheadline.weight(.medium))
-                PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110)
-                PromptTemplateVariablesView(variables: Self.asrLanguageVariables)
+                PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110, variables: Self.asrLanguageVariables)
                 Text("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -371,8 +370,7 @@ private struct MLXASRConfigurationSheetView: View {
             if family.supportsPromptBias {
                 Text("Recognition Prompt")
                     .font(.subheadline.weight(.medium))
-                PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110)
-                PromptTemplateVariablesView(variables: Self.asrLanguageVariables)
+                PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110, variables: Self.asrLanguageVariables)
                 Text("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -504,8 +502,7 @@ private struct WhisperASRConfigurationSheetView: View {
 
                     Text("Recognition Prompt")
                         .font(.subheadline.weight(.medium))
-                    PromptEditorView(text: $hintSettings.promptTemplate, height: 110)
-                    PromptTemplateVariablesView(variables: Self.asrLanguageVariables)
+                    PromptEditorView(text: $hintSettings.promptTemplate, height: 110, variables: Self.asrLanguageVariables)
                     Text("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

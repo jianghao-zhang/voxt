@@ -403,7 +403,7 @@ extension AppEnhancementSettingsView {
                     saveAddedURLs()
                 }
             )
-            .frame(width: 500, height: 420)
+            .frame(width: 500, height: 460)
 
         case .editURL(let urlID):
             URLBatchEditorSheet(
@@ -418,7 +418,7 @@ extension AppEnhancementSettingsView {
                     saveEditedURL(urlID: urlID)
                 }
             )
-            .frame(width: 500, height: 360)
+            .frame(width: 500, height: 460)
 
         case .urlDetail(let item):
             URLDetailSheet(

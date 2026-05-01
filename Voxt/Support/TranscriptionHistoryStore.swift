@@ -29,7 +29,9 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
     let transcriptionProcessingDurationSeconds: TimeInterval?
     let llmDurationSeconds: TimeInterval?
     let focusedAppName: String?
+    let focusedAppBundleID: String?
     let matchedGroupID: UUID?
+    let matchedGroupName: String?
     let matchedAppGroupName: String?
     let matchedURLGroupName: String?
     let remoteASRProvider: String?
@@ -63,7 +65,9 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         case transcriptionProcessingDurationSeconds
         case llmDurationSeconds
         case focusedAppName
+        case focusedAppBundleID
         case matchedGroupID
+        case matchedGroupName
         case matchedAppGroupName
         case matchedURLGroupName
         case remoteASRProvider
@@ -98,7 +102,9 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         transcriptionProcessingDurationSeconds: TimeInterval?,
         llmDurationSeconds: TimeInterval?,
         focusedAppName: String?,
+        focusedAppBundleID: String?,
         matchedGroupID: UUID?,
+        matchedGroupName: String?,
         matchedAppGroupName: String?,
         matchedURLGroupName: String?,
         remoteASRProvider: String?,
@@ -131,7 +137,9 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         self.transcriptionProcessingDurationSeconds = transcriptionProcessingDurationSeconds
         self.llmDurationSeconds = llmDurationSeconds
         self.focusedAppName = focusedAppName
+        self.focusedAppBundleID = focusedAppBundleID
         self.matchedGroupID = matchedGroupID
+        self.matchedGroupName = matchedGroupName
         self.matchedAppGroupName = matchedAppGroupName
         self.matchedURLGroupName = matchedURLGroupName
         self.remoteASRProvider = remoteASRProvider
@@ -169,9 +177,15 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         transcriptionProcessingDurationSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .transcriptionProcessingDurationSeconds)
         llmDurationSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .llmDurationSeconds)
         focusedAppName = try container.decodeIfPresent(String.self, forKey: .focusedAppName)
+        focusedAppBundleID = try container.decodeIfPresent(String.self, forKey: .focusedAppBundleID)
+        let decodedMatchedAppGroupName = try container.decodeIfPresent(String.self, forKey: .matchedAppGroupName)
+        let decodedMatchedURLGroupName = try container.decodeIfPresent(String.self, forKey: .matchedURLGroupName)
         matchedGroupID = try container.decodeIfPresent(UUID.self, forKey: .matchedGroupID)
-        matchedAppGroupName = try container.decodeIfPresent(String.self, forKey: .matchedAppGroupName)
-        matchedURLGroupName = try container.decodeIfPresent(String.self, forKey: .matchedURLGroupName)
+        matchedGroupName = try container.decodeIfPresent(String.self, forKey: .matchedGroupName)
+            ?? decodedMatchedURLGroupName
+            ?? decodedMatchedAppGroupName
+        matchedAppGroupName = decodedMatchedAppGroupName
+        matchedURLGroupName = decodedMatchedURLGroupName
         remoteASRProvider = try container.decodeIfPresent(String.self, forKey: .remoteASRProvider)
         remoteASRModel = try container.decodeIfPresent(String.self, forKey: .remoteASRModel)
         remoteASREndpoint = try container.decodeIfPresent(String.self, forKey: .remoteASREndpoint)
@@ -297,7 +311,9 @@ final class TranscriptionHistoryStore: ObservableObject {
         transcriptionProcessingDurationSeconds: TimeInterval?,
         llmDurationSeconds: TimeInterval?,
         focusedAppName: String?,
+        focusedAppBundleID: String?,
         matchedGroupID: UUID?,
+        matchedGroupName: String?,
         matchedAppGroupName: String?,
         matchedURLGroupName: String?,
         remoteASRProvider: String?,
@@ -333,7 +349,9 @@ final class TranscriptionHistoryStore: ObservableObject {
             transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            focusedAppBundleID: focusedAppBundleID,
             matchedGroupID: matchedGroupID,
+            matchedGroupName: matchedGroupName,
             matchedAppGroupName: matchedAppGroupName,
             matchedURLGroupName: matchedURLGroupName,
             remoteASRProvider: remoteASRProvider,
@@ -608,7 +626,9 @@ private extension TranscriptionHistoryEntry {
             transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            focusedAppBundleID: focusedAppBundleID,
             matchedGroupID: matchedGroupID,
+            matchedGroupName: matchedGroupName,
             matchedAppGroupName: matchedAppGroupName,
             matchedURLGroupName: matchedURLGroupName,
             remoteASRProvider: remoteASRProvider,
@@ -645,7 +665,9 @@ private extension TranscriptionHistoryEntry {
             transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            focusedAppBundleID: focusedAppBundleID,
             matchedGroupID: matchedGroupID,
+            matchedGroupName: matchedGroupName,
             matchedAppGroupName: matchedAppGroupName,
             matchedURLGroupName: matchedURLGroupName,
             remoteASRProvider: remoteASRProvider,
@@ -682,7 +704,9 @@ private extension TranscriptionHistoryEntry {
             transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            focusedAppBundleID: focusedAppBundleID,
             matchedGroupID: matchedGroupID,
+            matchedGroupName: matchedGroupName,
             matchedAppGroupName: matchedAppGroupName,
             matchedURLGroupName: matchedURLGroupName,
             remoteASRProvider: remoteASRProvider,
@@ -719,7 +743,9 @@ private extension TranscriptionHistoryEntry {
             transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            focusedAppBundleID: focusedAppBundleID,
             matchedGroupID: matchedGroupID,
+            matchedGroupName: matchedGroupName,
             matchedAppGroupName: matchedAppGroupName,
             matchedURLGroupName: matchedURLGroupName,
             remoteASRProvider: remoteASRProvider,
@@ -767,7 +793,9 @@ private extension TranscriptionHistoryEntry {
             transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            focusedAppBundleID: focusedAppBundleID,
             matchedGroupID: matchedGroupID,
+            matchedGroupName: matchedGroupName,
             matchedAppGroupName: matchedAppGroupName,
             matchedURLGroupName: matchedURLGroupName,
             remoteASRProvider: remoteASRProvider,

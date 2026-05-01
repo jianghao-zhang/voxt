@@ -72,6 +72,8 @@ struct TranscriptionDetailContentView: View {
                     optionalDetailLine(label: String(localized: "Remote LLM Model"), value: entry.remoteLLMModel)
                     optionalDetailLine(label: String(localized: "Remote LLM Endpoint"), value: entry.remoteLLMEndpoint)
                     optionalDetailLine(label: String(localized: "Focused App"), value: entry.focusedAppName)
+                    optionalDetailLine(label: String(localized: "Focused App Bundle ID"), value: entry.focusedAppBundleID)
+                    optionalDetailLine(label: String(localized: "Matched Group"), value: entry.matchedGroupName)
                     optionalDetailLine(label: String(localized: "App Group"), value: entry.matchedAppGroupName)
                     optionalDetailLine(label: String(localized: "URL Group"), value: entry.matchedURLGroupName)
                 }

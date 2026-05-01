@@ -63,8 +63,7 @@ struct ResettablePromptSection: View {
             .disabled(text == defaultText)
         }
 
-        PromptEditorView(text: $text, height: promptHeight)
-        PromptTemplateVariablesView(variables: variables)
+        PromptEditorView(text: $text, height: promptHeight, variables: variables)
     }
 }
 

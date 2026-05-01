@@ -125,8 +125,9 @@ struct ASRHintSettingsSheet: View {
             if target.supportsPromptEditor {
                 Text("Prompt")
                     .font(.subheadline.weight(.medium))
-                PromptEditorView(text: $draftSettings.promptTemplate, height: 128)
-                PromptTemplateVariablesView(
+                PromptEditorView(
+                    text: $draftSettings.promptTemplate,
+                    height: 128,
                     variables: [
                         PromptTemplateVariableDescriptor(
                             token: AppPreferenceKey.asrUserMainLanguageTemplateVariable,

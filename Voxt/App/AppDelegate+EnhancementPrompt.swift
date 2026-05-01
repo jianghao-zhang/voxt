@@ -66,7 +66,9 @@ extension AppDelegate {
 
         lastEnhancementPromptContext = EnhancementPromptContext(
             focusedAppName: resolution.promptContext.focusedAppName,
+            focusedAppBundleID: frontmostBundleID,
             matchedGroupID: resolution.promptContext.matchedGroupID,
+            matchedGroupName: resolution.promptContext.matchedURLGroupName ?? resolution.promptContext.matchedAppGroupName,
             matchedAppGroupName: resolution.promptContext.matchedAppGroupName,
             matchedURLGroupName: resolution.promptContext.matchedURLGroupName
         )

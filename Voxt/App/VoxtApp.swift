@@ -60,7 +60,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     struct EnhancementPromptContext {
         let focusedAppName: String?
+        let focusedAppBundleID: String?
         let matchedGroupID: UUID?
+        let matchedGroupName: String?
         let matchedAppGroupName: String?
         let matchedURLGroupName: String?
     }

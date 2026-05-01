@@ -317,6 +317,9 @@ extension AppDelegate {
         let processingEnd = transcriptionResultReceivedAt ?? now
         let processingDuration = resolvedDuration(from: transcriptionProcessingStartedAt, to: processingEnd)
         let focusedAppName = lastEnhancementPromptContext?.focusedAppName ?? NSWorkspace.shared.frontmostApplication?.localizedName
+        let focusedAppBundleID = lastEnhancementPromptContext?.focusedAppBundleID
+            ?? enhancementContextSnapshot?.bundleID
+            ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
 
         let remoteASRProviderInfo: String?
         let remoteASRModelInfo: String?
@@ -365,7 +368,9 @@ extension AppDelegate {
             transcriptionProcessingDurationSeconds: processingDuration,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            focusedAppBundleID: focusedAppBundleID,
             matchedGroupID: lastEnhancementPromptContext?.matchedGroupID,
+            matchedGroupName: lastEnhancementPromptContext?.matchedGroupName,
             matchedAppGroupName: lastEnhancementPromptContext?.matchedAppGroupName,
             matchedURLGroupName: lastEnhancementPromptContext?.matchedURLGroupName,
             remoteASRProvider: remoteASRProviderInfo,

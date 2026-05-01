@@ -95,7 +95,21 @@ struct DictionaryAdvancedSettingsDialog: View {
                     PromptEditorView(
                         text: $draftPrompt,
                         height: 180,
-                        contentPadding: 2
+                        contentPadding: 2,
+                        variables: [
+                            PromptTemplateVariableDescriptor(
+                                token: "{{USER_MAIN_LANGUAGE}}",
+                                tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
+                            ),
+                            PromptTemplateVariableDescriptor(
+                                token: "{{USER_OTHER_LANGUAGES}}",
+                                tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
+                            ),
+                            PromptTemplateVariableDescriptor(
+                                token: "{{HISTORY_RECORDS}}",
+                                tipKey: "Template tip {{HISTORY_RECORDS}}"
+                            )
+                        ]
                     )
                 }
 
