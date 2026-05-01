@@ -335,7 +335,6 @@ private final class ModelRowActionMenuHostView: NSView {
     private let popupMenu = NSMenu()
     private let iconView = NSImageView()
     private var trackingAreaRef: NSTrackingArea?
-    private var cachedSignature = ""
     private var isHovered = false {
         didSet { updateAppearance() }
     }
@@ -423,25 +422,17 @@ private final class ModelRowActionMenuHostView: NSView {
     }
 
     func update(actions: [ModelTableAction], target: AnyObject) {
-        let signature = actions.map { action in
-            let roleMarker = action.role == .destructive ? "destructive" : "neutral"
-            return "\(action.title)|\(action.isEnabled)|\(roleMarker)"
-        }.joined(separator: "||")
-
-        if signature != cachedSignature {
-            popupMenu.removeAllItems()
-            for (index, action) in actions.enumerated() {
-                let item = NSMenuItem(
-                    title: action.title,
-                    action: #selector(ModelRowActionMenuButton.Coordinator.performAction(_:)),
-                    keyEquivalent: ""
-                )
-                item.target = target
-                item.tag = index
-                item.isEnabled = action.isEnabled
-                popupMenu.addItem(item)
-            }
-            cachedSignature = signature
+        popupMenu.removeAllItems()
+        for (index, action) in actions.enumerated() {
+            let item = NSMenuItem(
+                title: action.title,
+                action: #selector(ModelRowActionMenuButton.Coordinator.performAction(_:)),
+                keyEquivalent: ""
+            )
+            item.target = target
+            item.tag = index
+            item.isEnabled = action.isEnabled
+            popupMenu.addItem(item)
         }
     }
 

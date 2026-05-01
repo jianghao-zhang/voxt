@@ -16,32 +16,7 @@ extension ModelSettingsView {
     var whisperRows: [ModelTableRow] {
         WhisperKitModelManager.availableModels.map { model in
             let isDownloaded = whisperModelManager.isModelDownloaded(id: model.id)
-            let actions: [ModelTableAction]
-            if isDownloadingWhisperModel(model.id) {
-                actions = [
-                    ModelTableAction(title: "Cancel") {
-                        whisperModelManager.cancelDownload()
-                    }
-                ]
-            } else if isDownloaded {
-                actions = [
-                    ModelTableAction(
-                        title: isCurrentWhisperModel(model.id) ? "Using" : "Use",
-                        isEnabled: !isCurrentWhisperModel(model.id)
-                    ) {
-                        useWhisperModel(model.id)
-                    },
-                    ModelTableAction(title: "Delete", role: .destructive) {
-                        deleteWhisperModel(model.id)
-                    }
-                ]
-            } else {
-                actions = [
-                    ModelTableAction(title: "Download", isEnabled: !isAnotherWhisperModelDownloading(model.id)) {
-                        downloadWhisperModel(model.id)
-                    }
-                ]
-            }
+            let actions = whisperActions(for: model.id, isDownloaded: isDownloaded)
 
             return ModelTableRow(
                 id: model.id,
@@ -81,12 +56,12 @@ extension ModelSettingsView {
                 badgeText: (hasIssue(for: .remoteASRProvider(provider)) || needsMeetingSetup) ? AppLocalization.localizedString("Needs Setup") : nil,
                 actions: [
                     ModelTableAction(
-                        title: isSelected ? "Using" : "Use",
+                        title: selectionActionTitle(isSelected: isSelected),
                         isEnabled: !isSelected
                     ) {
                         useRemoteASRProvider(provider)
                     },
-                    ModelTableAction(title: "Configure") {
+                    ModelTableAction(title: AppLocalization.localizedString("Configure")) {
                         editingASRProvider = provider
                     }
                 ]
@@ -111,12 +86,12 @@ extension ModelSettingsView {
                 badgeText: remoteLLMBadgeText(for: provider),
                 actions: [
                     ModelTableAction(
-                        title: selectedRemoteLLMProvider == provider ? "Using" : "Use",
+                        title: selectionActionTitle(isSelected: selectedRemoteLLMProvider == provider),
                         isEnabled: selectedRemoteLLMProvider != provider
                     ) {
                         useRemoteLLMProvider(provider)
                     },
-                    ModelTableAction(title: "Configure") {
+                    ModelTableAction(title: AppLocalization.localizedString("Configure")) {
                         editingLLMProvider = provider
                     }
                 ]
@@ -127,32 +102,7 @@ extension ModelSettingsView {
     var mlxRows: [ModelTableRow] {
         MLXModelManager.availableModels.map { model in
             let isDownloaded = mlxModelManager.isModelDownloaded(repo: model.id)
-            let actions: [ModelTableAction]
-            if isDownloadingModel(model.id) {
-                actions = [
-                    ModelTableAction(title: "Cancel") {
-                        mlxModelManager.cancelDownload()
-                    }
-                ]
-            } else if isDownloaded {
-                actions = [
-                    ModelTableAction(
-                        title: isCurrentModel(model.id) ? "Using" : "Use",
-                        isEnabled: !isCurrentModel(model.id)
-                    ) {
-                        useModel(model.id)
-                    },
-                    ModelTableAction(title: "Delete", role: .destructive) {
-                        deleteModel(model.id)
-                    }
-                ]
-            } else {
-                actions = [
-                    ModelTableAction(title: "Download", isEnabled: !isAnotherModelDownloading(model.id)) {
-                        downloadModel(model.id)
-                    }
-                ]
-            }
+            let actions = mlxActions(for: model.id, isDownloaded: isDownloaded)
 
             return ModelTableRow(
                 id: model.id,
@@ -170,32 +120,7 @@ extension ModelSettingsView {
     var customLLMRows: [ModelTableRow] {
         CustomLLMModelManager.availableModels.map { model in
             let isDownloaded = customLLMManager.isModelDownloaded(repo: model.id)
-            let actions: [ModelTableAction]
-            if isDownloadingCustomLLM(model.id) {
-                actions = [
-                    ModelTableAction(title: "Cancel") {
-                        customLLMManager.cancelDownload()
-                    }
-                ]
-            } else if isDownloaded {
-                actions = [
-                    ModelTableAction(
-                        title: isCurrentCustomLLM(model.id) ? "Using" : "Use",
-                        isEnabled: !isCurrentCustomLLM(model.id)
-                    ) {
-                        useCustomLLM(model.id)
-                    },
-                    ModelTableAction(title: "Delete", role: .destructive) {
-                        deleteCustomLLM(model.id)
-                    }
-                ]
-            } else {
-                actions = [
-                    ModelTableAction(title: "Download", isEnabled: !isAnotherCustomLLMDownloading(model.id)) {
-                        downloadCustomLLM(model.id)
-                    }
-                ]
-            }
+            let actions = customLLMActions(for: model.id, isDownloaded: isDownloaded)
 
             return ModelTableRow(
                 id: model.id,
@@ -230,6 +155,97 @@ extension ModelSettingsView {
             .rewriteCustomLLM(repo)
         ]
         return missingConfigurationIssues.contains(where: { scopes.contains($0.scope) }) ? AppLocalization.localizedString("Needs Setup") : nil
+    }
+
+    private func whisperActions(for modelID: String, isDownloaded: Bool) -> [ModelTableAction] {
+        if isDownloadingWhisperModel(modelID) {
+            return ModelDownloadPresentationSupport.downloadingActions(
+                onPause: { whisperModelManager.pauseDownload() },
+                onCancel: { whisperModelManager.cancelDownload() }
+            )
+        }
+
+        if isPausedWhisperModel(modelID) {
+            return ModelDownloadPresentationSupport.pausedActions(
+                onResume: { downloadWhisperModel(modelID) },
+                onCancel: { whisperModelManager.cancelDownload() }
+            )
+        }
+
+        if isDownloaded {
+            return ModelDownloadPresentationSupport.installedActions(
+                isCurrent: isCurrentWhisperModel(modelID),
+                onUse: { useWhisperModel(modelID) },
+                onUninstall: { deleteWhisperModel(modelID) }
+            )
+        }
+
+        return ModelDownloadPresentationSupport.installActions(
+            isEnabled: !isAnotherWhisperModelDownloading(modelID),
+            onInstall: { downloadWhisperModel(modelID) }
+        )
+    }
+
+    private func mlxActions(for repo: String, isDownloaded: Bool) -> [ModelTableAction] {
+        if isDownloadingModel(repo) {
+            return ModelDownloadPresentationSupport.downloadingActions(
+                onPause: { mlxModelManager.pauseDownload() },
+                onCancel: { mlxModelManager.cancelDownload() }
+            )
+        }
+
+        if isPausedModel(repo) {
+            return ModelDownloadPresentationSupport.pausedActions(
+                onResume: { downloadModel(repo) },
+                onCancel: { mlxModelManager.cancelDownload() }
+            )
+        }
+
+        if isDownloaded {
+            return ModelDownloadPresentationSupport.installedActions(
+                isCurrent: isCurrentModel(repo),
+                onUse: { useModel(repo) },
+                onUninstall: { deleteModel(repo) }
+            )
+        }
+
+        return ModelDownloadPresentationSupport.installActions(
+            isEnabled: !isAnotherModelDownloading(repo),
+            onInstall: { downloadModel(repo) }
+        )
+    }
+
+    private func customLLMActions(for repo: String, isDownloaded: Bool) -> [ModelTableAction] {
+        if isDownloadingCustomLLM(repo) {
+            return ModelDownloadPresentationSupport.downloadingActions(
+                onPause: { customLLMManager.pauseDownload() },
+                onCancel: { customLLMManager.cancelDownload() }
+            )
+        }
+
+        if isPausedCustomLLM(repo) {
+            return ModelDownloadPresentationSupport.pausedActions(
+                onResume: { downloadCustomLLM(repo) },
+                onCancel: { customLLMManager.cancelDownload() }
+            )
+        }
+
+        if isDownloaded {
+            return ModelDownloadPresentationSupport.installedActions(
+                isCurrent: isCurrentCustomLLM(repo),
+                onUse: { useCustomLLM(repo) },
+                onUninstall: { deleteCustomLLM(repo) }
+            )
+        }
+
+        return ModelDownloadPresentationSupport.installActions(
+            isEnabled: !isAnotherCustomLLMDownloading(repo),
+            onInstall: { downloadCustomLLM(repo) }
+        )
+    }
+
+    private func selectionActionTitle(isSelected: Bool) -> String {
+        AppLocalization.localizedString(isSelected ? "Using" : "Use")
     }
 
     func useModel(_ repo: String) {
@@ -287,8 +303,22 @@ extension ModelSettingsView {
         return false
     }
 
+    func isPausedModel(_ repo: String) -> Bool {
+        guard isCurrentModel(repo) else { return false }
+        if case .paused = mlxModelManager.state {
+            return true
+        }
+        return false
+    }
+
     func isDownloadingWhisperModel(_ modelID: String) -> Bool {
-        whisperModelManager.activeDownload?.modelID == WhisperKitModelManager.canonicalModelID(modelID)
+        guard let activeDownload = whisperModelManager.activeDownload else { return false }
+        return activeDownload.modelID == WhisperKitModelManager.canonicalModelID(modelID) && !activeDownload.isPaused
+    }
+
+    func isPausedWhisperModel(_ modelID: String) -> Bool {
+        guard let activeDownload = whisperModelManager.activeDownload else { return false }
+        return activeDownload.modelID == WhisperKitModelManager.canonicalModelID(modelID) && activeDownload.isPaused
     }
 
     func isAnotherModelDownloading(_ repo: String) -> Bool {
@@ -304,52 +334,50 @@ extension ModelSettingsView {
     func modelStatusText(for repo: String) -> String {
         if isDownloadingModel(repo),
            case .downloading(_, let completed, let total, _, _, _) = mlxModelManager.state {
-            return AppLocalization.format(
-                "Downloading %@",
-                ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .downloading(completed: completed, total: total)
+            )
+        }
+
+        if isPausedModel(repo),
+           case .paused(_, let completed, let total, _, _, _) = mlxModelManager.state {
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .paused(
+                    completed: completed,
+                    total: total,
+                    pauseMessage: mlxModelManager.pausedStatusMessage
+                )
             )
         }
 
         if isCurrentModel(repo), case .error(let message) = mlxModelManager.state {
-            return "Error: \(message)"
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .idle,
+                errorMessage: message
+            )
         }
 
         return ""
     }
 
     func whisperModelStatusText(for modelID: String) -> String {
-        if let activeDownload = whisperModelManager.activeDownload,
-           activeDownload.modelID == WhisperKitModelManager.canonicalModelID(modelID) {
-            let overallText = AppLocalization.format(
-                "Downloading %@",
-                ModelDownloadProgressFormatter.progressText(
-                    completed: activeDownload.completed,
-                    total: activeDownload.total
-                )
-            )
-            let fileText = ModelDownloadProgressFormatter.fileProgressText(
-                currentFile: activeDownload.currentFile,
-                currentFileCompleted: activeDownload.currentFileCompleted,
-                currentFileTotal: activeDownload.currentFileTotal,
-                completedFiles: activeDownload.completedFiles,
-                totalFiles: activeDownload.totalFiles
-            )
-            return AppLocalization.format(
-                "%@ • %@",
-                overallText,
-                fileText
-            )
-        }
+        let canonicalModelID = WhisperKitModelManager.canonicalModelID(modelID)
+        let activeDownload = whisperModelManager.activeDownload?.modelID == canonicalModelID
+            ? whisperModelManager.activeDownload
+            : nil
+        let errorMessage = whisperModelManager.downloadErrorMessage(for: modelID)
+            ?? {
+                guard isCurrentWhisperModel(modelID), case .error(let message) = whisperModelManager.state else {
+                    return nil
+                }
+                return message
+            }()
 
-        if let message = whisperModelManager.downloadErrorMessage(for: modelID) {
-            return "Error: \(message)"
-        }
-
-        if isCurrentWhisperModel(modelID), case .error(let message) = whisperModelManager.state {
-            return "Error: \(message)"
-        }
-
-        return ""
+        return ModelDownloadPresentationSupport.whisperStatusText(
+            activeDownload: activeDownload,
+            pauseMessage: whisperModelManager.pausedStatusMessage(for: modelID),
+            errorMessage: errorMessage
+        )
     }
 
     func useCustomLLM(_ repo: String) {
@@ -383,6 +411,14 @@ extension ModelSettingsView {
         return false
     }
 
+    func isPausedCustomLLM(_ repo: String) -> Bool {
+        guard isCurrentCustomLLM(repo) else { return false }
+        if case .paused = customLLMManager.state {
+            return true
+        }
+        return false
+    }
+
     func isAnotherCustomLLMDownloading(_ repo: String) -> Bool {
         guard case .downloading = customLLMManager.state else { return false }
         return !isCurrentCustomLLM(repo)
@@ -391,14 +427,27 @@ extension ModelSettingsView {
     func customLLMStatusText(for repo: String) -> String {
         if isDownloadingCustomLLM(repo),
            case .downloading(_, let completed, let total, _, _, _) = customLLMManager.state {
-            return AppLocalization.format(
-                "Downloading %@",
-                ModelDownloadProgressFormatter.progressText(completed: completed, total: total)
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .downloading(completed: completed, total: total)
+            )
+        }
+
+        if isPausedCustomLLM(repo),
+           case .paused(_, let completed, let total, _, _, _) = customLLMManager.state {
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .paused(
+                    completed: completed,
+                    total: total,
+                    pauseMessage: customLLMManager.pausedStatusMessage
+                )
             )
         }
 
         if isCurrentCustomLLM(repo), case .error(let message) = customLLMManager.state {
-            return "Error: \(message)"
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .idle,
+                errorMessage: message
+            )
         }
 
         return ""

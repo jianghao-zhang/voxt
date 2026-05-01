@@ -4,7 +4,6 @@ import HuggingFace
 enum CustomLLMModelDownloadSupport {
     struct DownloadContext {
         let repoID: Repo.ID
-        let client: HubClient
         let entries: [MLXModelDownloadSupport.ModelFileEntry]
         let totalBytes: Int64
     }
@@ -49,13 +48,6 @@ enum CustomLLMModelDownloadSupport {
         }
 
         let session = MLXModelDownloadSupport.makeDownloadSession(for: baseURL)
-        let client = MLXModelDownloadSupport.makeHubClient(
-            session: session,
-            baseURL: baseURL,
-            cache: cache,
-            token: token,
-            userAgent: userAgent
-        )
         let entries = try await MLXModelDownloadSupport.fetchModelEntries(
             repo: repoID.description,
             baseURL: baseURL,
@@ -73,7 +65,6 @@ enum CustomLLMModelDownloadSupport {
         let totalBytes = max(entries.reduce(Int64(0)) { $0 + max($1.size ?? 0, 0) }, 1)
         return DownloadContext(
             repoID: repoID,
-            client: client,
             entries: entries,
             totalBytes: totalBytes
         )

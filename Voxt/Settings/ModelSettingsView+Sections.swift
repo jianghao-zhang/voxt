@@ -99,7 +99,10 @@ extension ModelSettingsView {
 
         ModelTableView(title: "Models", rows: mlxRows, viewportHeight: 320)
 
-        if let downloadStatus = ModelDownloadStatusSnapshot.fromMLXState(mlxModelManager.state) {
+        if let downloadStatus = ModelDownloadStatusSnapshot.fromMLXState(
+            mlxModelManager.state,
+            pauseMessage: mlxModelManager.pausedStatusMessage
+        ) {
             ModelDownloadStatusView(status: downloadStatus)
         }
     }
@@ -160,7 +163,10 @@ extension ModelSettingsView {
 
         ModelTableView(title: "Whisper Models", rows: whisperRows, viewportHeight: 260)
 
-        if let downloadStatus = ModelDownloadStatusSnapshot.fromWhisperDownload(whisperModelManager.activeDownload) {
+        if let downloadStatus = ModelDownloadStatusSnapshot.fromWhisperDownload(
+            whisperModelManager.activeDownload,
+            pauseMessage: whisperModelManager.pausedStatusMessage(for: whisperModelID)
+        ) {
             ModelDownloadStatusView(status: downloadStatus)
         }
     }
@@ -232,7 +238,10 @@ extension ModelSettingsView {
 
         ModelTableView(title: "Custom LLM Models", rows: customLLMRows, viewportHeight: 260)
 
-        if let downloadStatus = ModelDownloadStatusSnapshot.fromCustomLLMState(customLLMManager.state) {
+        if let downloadStatus = ModelDownloadStatusSnapshot.fromCustomLLMState(
+            customLLMManager.state,
+            pauseMessage: customLLMManager.pausedStatusMessage
+        ) {
             ModelDownloadStatusView(status: downloadStatus)
         }
     }

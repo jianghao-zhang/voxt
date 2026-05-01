@@ -123,14 +123,14 @@ enum MeetingASRSupport {
             switch state {
             case .downloaded, .loading, .ready:
                 return true
-            case .notDownloaded, .downloading, .error:
+            case .notDownloaded, .downloading, .paused, .error:
                 return false
             }
         case let state as MLXModelManager.ModelState:
             switch state {
             case .downloaded, .loading, .ready:
                 return true
-            case .notDownloaded, .downloading, .error:
+            case .notDownloaded, .downloading, .paused, .error:
                 return false
             }
         default:

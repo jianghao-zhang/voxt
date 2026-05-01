@@ -836,7 +836,7 @@ struct ModelSettingsView: View {
         switch state {
         case .downloading, .loading:
             return true
-        case .notDownloaded, .downloaded, .ready, .error:
+        case .notDownloaded, .downloaded, .paused, .ready, .error:
             return false
         }
     }
@@ -845,7 +845,7 @@ struct ModelSettingsView: View {
         switch state {
         case .downloading, .loading:
             return true
-        case .notDownloaded, .downloaded, .ready, .error:
+        case .notDownloaded, .downloaded, .paused, .ready, .error:
             return false
         }
     }
@@ -854,7 +854,7 @@ struct ModelSettingsView: View {
         switch state {
         case .downloading:
             return true
-        case .notDownloaded, .downloaded, .error:
+        case .notDownloaded, .downloaded, .paused, .error:
             return false
         }
     }

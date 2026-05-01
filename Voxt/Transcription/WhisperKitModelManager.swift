@@ -18,6 +18,14 @@ final class WhisperKitModelManager: ObservableObject {
             completedFiles: Int,
             totalFiles: Int
         )
+        case paused(
+            progress: Double,
+            completed: Int64,
+            total: Int64,
+            currentFile: String?,
+            completedFiles: Int,
+            totalFiles: Int
+        )
         case downloaded
         case loading
         case ready
@@ -28,6 +36,7 @@ final class WhisperKitModelManager: ObservableObject {
 
     struct ActiveDownload: Equatable {
         let modelID: String
+        let isPaused: Bool
         let progress: Double
         let completed: Int64
         let total: Int64
@@ -43,6 +52,11 @@ final class WhisperKitModelManager: ObservableObject {
         let rawURL: URL?
     }
 
+    private enum DownloadStopAction {
+        case pause
+        case cancel
+    }
+
     nonisolated static let defaultModelID = WhisperKitModelCatalog.defaultModelID
 
     nonisolated static let availableModels = WhisperKitModelCatalog.availableModels
@@ -50,6 +64,7 @@ final class WhisperKitModelManager: ObservableObject {
     @Published private(set) var state: ModelState = .notDownloaded
     @Published private(set) var remoteSizeTextByID: [String: String] = [:]
     @Published private(set) var activeDownload: ActiveDownload?
+    @Published private(set) var pausedStatusMessageByID: [String: String] = [:]
 
     private var downloadedStateByID: [String: Bool] = [:]
     private var directoryLookupCacheByID: [String: DirectoryLookupCache] = [:]
@@ -60,6 +75,7 @@ final class WhisperKitModelManager: ObservableObject {
     private var loadedModelID: String?
     private var loadingTask: Task<WhisperKit, Error>?
     private var downloadTask: Task<Void, Never>?
+    private var downloadStopAction: DownloadStopAction?
     private var sizeTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
     private var idleUnloadTask: Task<Void, Never>?
@@ -201,23 +217,44 @@ final class WhisperKitModelManager: ObservableObject {
         downloadErrorByID[Self.canonicalModelID(id)]
     }
 
+    func pausedStatusMessage(for id: String) -> String? {
+        pausedStatusMessageByID[Self.canonicalModelID(id)]
+    }
+
     private func downloadModel(targetID: String) async {
         if downloadTask != nil { return }
         if case .loading = state { return }
 
         downloadTask = Task { [weak self] in
             guard let self else { return }
-            defer { downloadTask = nil }
+            defer {
+                downloadTask = nil
+                downloadStopAction = nil
+            }
             let targetID = Self.canonicalModelID(targetID)
             downloadErrorByID[targetID] = nil
-            setDownloadingState(for: targetID, progress: 0, completed: 0, total: 0)
+            pausedStatusMessageByID[targetID] = nil
+            if let activeDownload, activeDownload.modelID == targetID {
+                setDownloadingState(
+                    for: targetID,
+                    progress: activeDownload.progress,
+                    completed: activeDownload.completed,
+                    total: activeDownload.total,
+                    currentFile: activeDownload.currentFile,
+                    currentFileCompleted: activeDownload.currentFileCompleted,
+                    currentFileTotal: activeDownload.currentFileTotal,
+                    completedFiles: activeDownload.completedFiles,
+                    totalFiles: activeDownload.totalFiles
+                )
+            } else {
+                setDownloadingState(for: targetID, progress: 0, completed: 0, total: 0)
+            }
 
             do {
                 try FileManager.default.createDirectory(at: downloadRootURL(), withIntermediateDirectories: true)
                 let downloadedFolder = try await performModelDownloadWithFallback(targetID: targetID)
 
                 guard !Task.isCancelled else {
-                    removeModelDirectoryIfPresent(id: targetID)
                     finalizeDownloadState(for: targetID)
                     return
                 }
@@ -236,17 +273,31 @@ final class WhisperKitModelManager: ObservableObject {
                 downloadErrorByID[targetID] = nil
                 finalizeDownloadState(for: targetID)
             } catch is CancellationError {
-                finalizeDownloadState(for: targetID)
+                switch downloadStopAction {
+                case .pause:
+                    pausedStatusMessageByID[targetID] = nil
+                    VoxtLog.info("Whisper download paused. model=\(targetID)")
+                case .cancel, .none:
+                    pausedStatusMessageByID[targetID] = nil
+                    activeDownload = nil
+                    removeModelDirectoryIfPresent(id: targetID)
+                    if targetID == modelID {
+                        state = .notDownloaded
+                    }
+                }
             } catch {
                 let message = error.localizedDescription
+                if pauseDownloadIfNetworkIssue(error, targetID: targetID) {
+                    return
+                }
                 VoxtLog.error(
                     "Whisper download failed. model=\(targetID), error=\(WhisperKitDownloadSupport.describeError(error))"
                 )
                 downloadErrorByID[targetID] = message
+                pausedStatusMessageByID[targetID] = nil
                 if targetID == modelID {
                     state = .error(message)
                 }
-                removeModelDirectoryIfPresent(id: targetID)
                 activeDownload = nil
             }
         }
@@ -257,6 +308,8 @@ final class WhisperKitModelManager: ObservableObject {
     private func performModelDownloadWithFallback(targetID: String) async throws -> URL {
         do {
             return try await performModelDownloadWithMetadataRecovery(targetID: targetID, baseURL: hubBaseURL)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             guard let fallbackBaseURL = fallbackHubBaseURL(from: hubBaseURL) else {
                 throw error
@@ -264,9 +317,7 @@ final class WhisperKitModelManager: ObservableObject {
             VoxtLog.warning(
                 "Primary Whisper download endpoint failed. Retrying with mirror. model=\(targetID), baseURL=\(hubBaseURL.absoluteString), error=\(error.localizedDescription)"
             )
-            removeModelDirectoryIfPresent(id: targetID)
             clearRepositoryMetadataCache()
-            setDownloadingState(for: targetID, progress: 0, completed: 0, total: 0)
             return try await performModelDownloadWithMetadataRecovery(targetID: targetID, baseURL: fallbackBaseURL)
         }
     }
@@ -274,6 +325,8 @@ final class WhisperKitModelManager: ObservableObject {
     private func performModelDownloadWithMetadataRecovery(targetID: String, baseURL: URL) async throws -> URL {
         do {
             return try await performModelDownload(targetID: targetID, baseURL: baseURL)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             guard shouldRetryAfterMetadataRecovery(for: error) else {
                 throw error
@@ -283,17 +336,40 @@ final class WhisperKitModelManager: ObservableObject {
                 "Whisper download hit invalid metadata cache. Clearing local metadata and retrying once. model=\(targetID), baseURL=\(baseURL.absoluteString), error=\(error.localizedDescription)"
             )
             clearRepositoryMetadataCache()
-            setDownloadingState(for: targetID, progress: 0, completed: 0, total: 0)
             return try await performModelDownload(targetID: targetID, baseURL: baseURL)
         }
     }
 
-    func cancelDownload() {
-        guard downloadTask != nil else { return }
+    func pauseDownload() {
+        guard downloadTask != nil, let activeDownload else { return }
+        downloadStopAction = .pause
+        pausedStatusMessageByID[Self.canonicalModelID(activeDownload.modelID)] = nil
+        setPausedState(activeDownload)
         downloadTask?.cancel()
-        downloadTask = nil
+    }
+
+    func cancelDownload() {
+        if downloadTask != nil {
+            downloadStopAction = .cancel
+            if let activeDownload {
+                let canonicalModelID = Self.canonicalModelID(activeDownload.modelID)
+                pausedStatusMessageByID.removeValue(forKey: canonicalModelID)
+                downloadErrorByID.removeValue(forKey: canonicalModelID)
+                self.activeDownload = nil
+                if canonicalModelID == modelID {
+                    state = .notDownloaded
+                }
+            }
+            downloadTask?.cancel()
+            return
+        }
+
+        guard let pausedDownload = activeDownload, pausedDownload.isPaused else { return }
+        pausedStatusMessageByID.removeValue(forKey: Self.canonicalModelID(pausedDownload.modelID))
         activeDownload = nil
+        removeModelDirectoryIfPresent(id: pausedDownload.modelID)
         checkExistingModel()
+        VoxtLog.info("Whisper download cancelled from paused state. model=\(pausedDownload.modelID)")
     }
 
     func checkExistingModel() {
@@ -362,19 +438,31 @@ final class WhisperKitModelManager: ObservableObject {
 
     private func removeModelDirectoryIfPresent(id: String) {
         if let directoryURL = rawModelDirectoryURL(id: id) {
-            try? FileManager.default.removeItem(at: directoryURL)
+            try? removeModelDirectory(at: directoryURL, modelID: id, updatesCurrentState: false)
         }
         invalidateLocalCache(id: id)
     }
 
     func deleteModel(id: String) {
         let canonicalModelID = Self.canonicalModelID(id)
-        removeModelDirectoryIfPresent(id: canonicalModelID)
-
+        pausedStatusMessageByID.removeValue(forKey: canonicalModelID)
         if loadedModelID == canonicalModelID {
+            cancelIdleUnloadTask()
+            loadingTask?.cancel()
+            loadingTask = nil
             loadedWhisper = nil
             loadedModelID = nil
             activeUseCount = 0
+        }
+
+        do {
+            try removeModelDirectoryIfPresentIfNeeded(id: canonicalModelID)
+        } catch {
+            if canonicalModelID == modelID {
+                state = .error("Couldn't uninstall Whisper model. It may still be in use.")
+            }
+            VoxtLog.error("Failed to delete Whisper model directory. id=\(canonicalModelID), error=\(error.localizedDescription)")
+            return
         }
 
         if canonicalModelID == modelID {
@@ -604,8 +692,10 @@ final class WhisperKitModelManager: ObservableObject {
         completedFiles: Int = 0,
         totalFiles: Int = 0
     ) {
+        guard downloadTask != nil, downloadStopAction == nil else { return }
         let nextActiveDownload = ActiveDownload(
             modelID: targetID,
+            isPaused: false,
             progress: progress,
             completed: completed,
             total: total,
@@ -632,6 +722,66 @@ final class WhisperKitModelManager: ObservableObject {
         }
     }
 
+    private func setPausedState(_ activeDownload: ActiveDownload) {
+        let canonicalTargetID = Self.canonicalModelID(activeDownload.modelID)
+        let nextActiveDownload = ActiveDownload(
+            modelID: canonicalTargetID,
+            isPaused: true,
+            progress: activeDownload.progress,
+            completed: activeDownload.completed,
+            total: activeDownload.total,
+            currentFile: activeDownload.currentFile,
+            currentFileCompleted: activeDownload.currentFileCompleted,
+            currentFileTotal: activeDownload.currentFileTotal,
+            completedFiles: activeDownload.completedFiles,
+            totalFiles: activeDownload.totalFiles
+        )
+        if self.activeDownload != nextActiveDownload {
+            self.activeDownload = nextActiveDownload
+        }
+        guard canonicalTargetID == modelID else { return }
+        let nextState = ModelState.paused(
+            progress: activeDownload.progress,
+            completed: activeDownload.completed,
+            total: activeDownload.total,
+            currentFile: activeDownload.currentFile,
+            completedFiles: activeDownload.completedFiles,
+            totalFiles: activeDownload.totalFiles
+        )
+        if state != nextState {
+            state = nextState
+        }
+    }
+
+    private func pauseDownloadIfNetworkIssue(_ error: Error, targetID: String) -> Bool {
+        guard let message = MLXModelDownloadSupport.pauseMessageForInterruptedDownload(error) else {
+            return false
+        }
+        let canonicalTargetID = Self.canonicalModelID(targetID)
+        pausedStatusMessageByID[canonicalTargetID] = message
+        downloadErrorByID[canonicalTargetID] = nil
+        if let activeDownload, activeDownload.modelID == canonicalTargetID {
+            setPausedState(activeDownload)
+        } else {
+            setPausedState(
+                ActiveDownload(
+                    modelID: canonicalTargetID,
+                    isPaused: true,
+                    progress: 0,
+                    completed: 0,
+                    total: 0,
+                    currentFile: nil,
+                    currentFileCompleted: 0,
+                    currentFileTotal: 0,
+                    completedFiles: 0,
+                    totalFiles: 0
+                )
+            )
+        }
+        VoxtLog.warning("Whisper download auto-paused after network issue. model=\(canonicalTargetID), error=\(error.localizedDescription)")
+        return true
+    }
+
     private func downloadRootURL() -> URL {
         WhisperKitModelStorageSupport.downloadRootURL(
             rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
@@ -639,38 +789,17 @@ final class WhisperKitModelManager: ObservableObject {
     }
 
     private func performModelDownload(targetID: String, baseURL: URL) async throws -> URL {
-        if baseURL.host?.contains("hf-mirror.com") == true {
-            VoxtLog.info("Whisper download using direct mirror fetch path. model=\(targetID), baseURL=\(baseURL.absoluteString)")
-            return try await performMirrorModelDownload(targetID: targetID, baseURL: baseURL)
-        }
-
-        return try await WhisperKit.download(
-            variant: targetID,
-            downloadBase: downloadRootURL(),
-            from: Self.repo,
-            endpoint: baseURL.absoluteString
-        ) { [weak self] progress in
-            guard let self else { return }
-            let completed = max(progress.completedUnitCount, 0)
-            let total = max(progress.totalUnitCount, completed)
-            Task { @MainActor in
-                self.setDownloadingState(
-                    for: targetID,
-                    progress: total > 0 ? Double(completed) / Double(total) : 0,
-                    completed: completed,
-                    total: total
-                )
-            }
-        }
+        VoxtLog.info("Whisper download using direct file fetch path. model=\(targetID), baseURL=\(baseURL.absoluteString)")
+        return try await performDirectModelDownload(targetID: targetID, baseURL: baseURL)
     }
 
-    private func performMirrorModelDownload(targetID: String, baseURL: URL) async throws -> URL {
+    private func performDirectModelDownload(targetID: String, baseURL: URL) async throws -> URL {
         let rootFolderName = Self.topLevelFolderName(for: targetID)
-            let repoItems = try await WhisperKitDownloadSupport.fetchRepoTreeItems(
-                baseURL: baseURL,
-                repo: Self.repo,
-                userAgent: Self.hubUserAgent
-            )
+        let repoItems = try await WhisperKitDownloadSupport.fetchRepoTreeItems(
+            baseURL: baseURL,
+            repo: Self.repo,
+            userAgent: Self.hubUserAgent
+        )
         let fileItems = repoItems
             .filter { $0.type == "file" && $0.path.hasPrefix(rootFolderName + "/") }
             .sorted { $0.path < $1.path }
@@ -684,7 +813,6 @@ final class WhisperKitModelManager: ObservableObject {
         }
 
         let targetFolder = downloadRootURL().appendingPathComponent(rootFolderName, isDirectory: true)
-        try? FileManager.default.removeItem(at: targetFolder)
         try FileManager.default.createDirectory(at: targetFolder, withIntermediateDirectories: true)
 
         let totalBytes = max(fileItems.reduce(Int64(0)) { $0 + max($1.size, 0) }, 1)
@@ -745,17 +873,41 @@ final class WhisperKitModelManager: ObservableObject {
             }
             defer { sampler.cancel() }
 
+            if MLXModelDownloadSupport.canReuseExistingDownload(
+                at: destinationURL,
+                expectedSize: item.size,
+                fileManager: .default
+            ) {
+                let delta = max(expectedEntryBytes, Int64((try? destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0))
+                completedBytes += max(delta, 0)
+                completedFiles += 1
+                setDownloadingState(
+                    for: targetID,
+                    progress: Double(completedBytes) / Double(totalBytes),
+                    completed: completedBytes,
+                    total: totalBytes,
+                    currentFile: nil,
+                    currentFileCompleted: delta,
+                    currentFileTotal: expectedEntryBytes,
+                    completedFiles: completedFiles,
+                    totalFiles: totalFiles
+                )
+                VoxtLog.info("Whisper download resume reused existing file: \(relativePath)", verbose: true)
+                continue
+            }
+
             let remoteURL = try WhisperKitDownloadSupport.fileResolveURL(
                 baseURL: baseURL,
                 repo: Self.repo,
                 path: item.path
             )
-            try await WhisperKitDownloadSupport.downloadFile(
+            try await downloadFileWithRetry(
                 from: remoteURL,
                 to: destinationURL,
-                userAgent: Self.hubUserAgent,
-                disableProxy: true,
-                progress: progress
+                disableProxy: baseURL.host?.contains("hf-mirror.com") == true,
+                progress: progress,
+                relativePath: relativePath,
+                expectedSize: expectedEntryBytes
             )
 
             completedBytes += max(expectedEntryBytes, max(progress.completedUnitCount, 0))
@@ -776,12 +928,34 @@ final class WhisperKitModelManager: ObservableObject {
         return targetFolder
     }
 
+    private func downloadFileWithRetry(
+        from remoteURL: URL,
+        to destinationURL: URL,
+        disableProxy: Bool,
+        progress: Progress,
+        relativePath: String,
+        expectedSize: Int64
+    ) async throws {
+        _ = try await ResumableModelDownloadSupport.download(
+            ResumableDownloadDescriptor(
+                sourceURL: remoteURL,
+                destinationURL: destinationURL,
+                relativePath: relativePath,
+                expectedSize: expectedSize > 0 ? expectedSize : nil,
+                userAgent: Self.hubUserAgent,
+                disableProxy: disableProxy
+            ),
+            progress: progress
+        )
+    }
+
     private func shouldRetryAfterMetadataRecovery(for error: Error) -> Bool {
         WhisperKitDownloadSupport.shouldRetryAfterMetadataRecovery(for: error)
     }
 
     private func finalizeDownloadState(for targetID: String) {
         activeDownload = nil
+        pausedStatusMessageByID.removeValue(forKey: Self.canonicalModelID(targetID))
         invalidateLocalCache(id: targetID)
         if targetID == modelID {
             checkExistingModel()
@@ -793,6 +967,28 @@ final class WhisperKitModelManager: ObservableObject {
         downloadedStateByID.removeValue(forKey: canonicalModelID)
         directoryLookupCacheByID.removeValue(forKey: canonicalModelID)
         localSizeTextByID.removeValue(forKey: canonicalModelID)
+    }
+
+    private func removeModelDirectoryIfPresentIfNeeded(id: String) throws {
+        if let directoryURL = rawModelDirectoryURL(id: id) {
+            try removeModelDirectory(
+                at: directoryURL,
+                modelID: id,
+                updatesCurrentState: Self.canonicalModelID(id) == modelID
+            )
+        }
+    }
+
+    private func removeModelDirectory(at directoryURL: URL, modelID: String, updatesCurrentState: Bool) throws {
+        do {
+            try FileManager.default.removeItem(at: directoryURL)
+            VoxtLog.info("Deleted Whisper model directory. id=\(Self.canonicalModelID(modelID)), path=\(directoryURL.path)")
+        } catch {
+            if updatesCurrentState {
+                state = .error("Couldn't uninstall Whisper model. It may still be in use.")
+            }
+            throw error
+        }
     }
 
     private func clearRepositoryMetadataCache() {

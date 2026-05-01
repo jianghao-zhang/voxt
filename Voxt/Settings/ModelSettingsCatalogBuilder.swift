@@ -81,28 +81,40 @@ struct ModelCatalogBuilder {
             let status = modelStatusText(repo)
 
             let primaryAction: ModelTableAction?
+            let secondaryActions: [ModelTableAction]
             if isDownloadingModel(repo) {
-                primaryAction = ModelTableAction(title: localized("Cancel")) {
-                    mlxModelManager.cancelDownload()
+                primaryAction = ModelTableAction(title: localized("Pause")) {
+                    mlxModelManager.pauseDownload()
                 }
+                secondaryActions = [
+                    ModelTableAction(title: localized("Cancel"), role: .destructive) {
+                        mlxModelManager.cancelDownload()
+                    }
+                ]
+            } else if mlxModelManager.currentModelRepo == repo, case .paused = mlxModelManager.state {
+                primaryAction = ModelTableAction(title: localized("Continue")) {
+                    downloadModel(repo)
+                }
+                secondaryActions = [
+                    ModelTableAction(title: localized("Cancel"), role: .destructive) {
+                        mlxModelManager.cancelDownload()
+                    }
+                ]
             } else if isInstalled {
                 primaryAction = ModelTableAction(title: localized("Uninstall"), role: .destructive) {
                     deleteModel(repo)
                 }
-            } else {
-                primaryAction = ModelTableAction(title: localized("Install"), isEnabled: !isAnotherModelDownloading(repo)) {
-                    downloadModel(repo)
-                }
-            }
-
-            let secondaryActions: [ModelTableAction] = {
-                guard isInstalled else { return [] }
-                return [
+                secondaryActions = [
                     ModelTableAction(title: localized("Open Location")) {
                         openMLXModelDirectory(repo)
                     }
                 ]
-            }()
+            } else {
+                primaryAction = ModelTableAction(title: localized("Install"), isEnabled: !isAnotherModelDownloading(repo)) {
+                    downloadModel(repo)
+                }
+                secondaryActions = []
+            }
 
             return ModelCatalogEntry(
                 id: "mlx:\(repo)",
@@ -139,10 +151,26 @@ struct ModelCatalogBuilder {
             let status = whisperModelStatusText(modelID)
 
             let primaryAction: ModelTableAction?
+            var secondaryActions = [ModelTableAction]()
             if isDownloadingWhisperModel(modelID) {
-                primaryAction = ModelTableAction(title: localized("Cancel")) {
-                    whisperModelManager.cancelDownload()
+                primaryAction = ModelTableAction(title: localized("Pause")) {
+                    whisperModelManager.pauseDownload()
                 }
+                secondaryActions.append(
+                    ModelTableAction(title: localized("Cancel"), role: .destructive) {
+                        whisperModelManager.cancelDownload()
+                    }
+                )
+            } else if whisperModelManager.activeDownload?.modelID == modelID,
+                      whisperModelManager.activeDownload?.isPaused == true {
+                primaryAction = ModelTableAction(title: localized("Continue")) {
+                    downloadWhisperModel(modelID)
+                }
+                secondaryActions.append(
+                    ModelTableAction(title: localized("Cancel"), role: .destructive) {
+                        whisperModelManager.cancelDownload()
+                    }
+                )
             } else if isInstalled {
                 primaryAction = ModelTableAction(title: localized("Uninstall"), role: .destructive) {
                     deleteWhisperModel(modelID)
@@ -153,7 +181,6 @@ struct ModelCatalogBuilder {
                 }
             }
 
-            var secondaryActions = [ModelTableAction]()
             if isInstalled {
                 secondaryActions.append(
                     ModelTableAction(title: localized("Open Location")) {
@@ -251,28 +278,40 @@ struct ModelCatalogBuilder {
             let status = customLLMStatusText(repo)
 
             let primaryAction: ModelTableAction?
+            let secondaryActions: [ModelTableAction]
             if isDownloadingCustomLLM(repo) {
-                primaryAction = ModelTableAction(title: localized("Cancel")) {
-                    customLLMManager.cancelDownload()
+                primaryAction = ModelTableAction(title: localized("Pause")) {
+                    customLLMManager.pauseDownload()
                 }
+                secondaryActions = [
+                    ModelTableAction(title: localized("Cancel"), role: .destructive) {
+                        customLLMManager.cancelDownload()
+                    }
+                ]
+            } else if customLLMManager.currentModelRepo == repo, case .paused = customLLMManager.state {
+                primaryAction = ModelTableAction(title: localized("Continue")) {
+                    downloadCustomLLM(repo)
+                }
+                secondaryActions = [
+                    ModelTableAction(title: localized("Cancel"), role: .destructive) {
+                        customLLMManager.cancelDownload()
+                    }
+                ]
             } else if isInstalled {
                 primaryAction = ModelTableAction(title: localized("Uninstall"), role: .destructive) {
                     deleteCustomLLM(repo)
                 }
-            } else {
-                primaryAction = ModelTableAction(title: localized("Install"), isEnabled: !isAnotherCustomLLMDownloading(repo)) {
-                    downloadCustomLLM(repo)
-                }
-            }
-
-            let secondaryActions: [ModelTableAction] = {
-                guard isInstalled else { return [] }
-                return [
+                secondaryActions = [
                     ModelTableAction(title: localized("Open Location")) {
                         openCustomLLMModelDirectory(repo)
                     }
                 ]
-            }()
+            } else {
+                primaryAction = ModelTableAction(title: localized("Install"), isEnabled: !isAnotherCustomLLMDownloading(repo)) {
+                    downloadCustomLLM(repo)
+                }
+                secondaryActions = []
+            }
 
             return ModelCatalogEntry(
                 id: "local-llm:\(repo)",

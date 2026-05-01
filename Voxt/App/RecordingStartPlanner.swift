@@ -65,7 +65,7 @@ enum RecordingStartPlanner {
                 return .start(.mlxAudio)
             case .notDownloaded:
                 return .blocked(.mlxModelNotInstalled)
-            case .downloading:
+            case .downloading, .paused:
                 return .blocked(.mlxModelDownloading)
             case .error:
                 return .blocked(.mlxModelUnavailable)
@@ -76,7 +76,7 @@ enum RecordingStartPlanner {
                 return .start(.whisperKit)
             case .notDownloaded:
                 return .blocked(.whisperModelNotInstalled)
-            case .downloading:
+            case .downloading, .paused:
                 return .blocked(.whisperModelDownloading)
             case .error:
                 return .blocked(.whisperModelUnavailable)

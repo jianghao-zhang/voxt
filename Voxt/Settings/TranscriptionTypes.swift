@@ -233,7 +233,7 @@ enum TranslationProviderResolver {
         switch state {
         case .downloaded, .loading, .ready:
             return true
-        case .notDownloaded, .downloading, .error:
+        case .notDownloaded, .downloading, .paused, .error:
             return false
         }
     }

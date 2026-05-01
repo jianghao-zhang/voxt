@@ -7,6 +7,7 @@ struct ModelDownloadStatusSnapshot: Equatable {
     }
 
     let progress: Double
+    private let isPaused: Bool
     private let kind: Kind
     private let completed: Int64
     private let total: Int64
@@ -15,6 +16,7 @@ struct ModelDownloadStatusSnapshot: Equatable {
     private let currentFileTotal: Int64
     private let completedFiles: Int
     private let totalFiles: Int
+    private let pauseMessage: String?
 
     private var displayedPercent: Int {
         let clampedProgress = max(0, min(progress, 1))
@@ -23,7 +25,12 @@ struct ModelDownloadStatusSnapshot: Equatable {
     }
 
     var titleText: String {
-        let formatKey = kind == .customLLM ? "Custom LLM downloading: %d%% • %@" : "Downloading: %d%% • %@"
+        let formatKey: String
+        if isPaused {
+            formatKey = kind == .customLLM ? "Custom LLM paused: %d%% • %@" : "Paused: %d%% • %@"
+        } else {
+            formatKey = kind == .customLLM ? "Custom LLM downloading: %d%% • %@" : "Downloading: %d%% • %@"
+        }
         return AppLocalization.format(
             formatKey,
             displayedPercent,
@@ -32,7 +39,21 @@ struct ModelDownloadStatusSnapshot: Equatable {
     }
 
     var detailText: String {
-        ModelDownloadProgressFormatter.fileProgressText(
+        if isPaused {
+            let progressText = ModelDownloadProgressFormatter.pausedFileProgressText(
+                currentFile: currentFile,
+                currentFileCompleted: currentFileCompleted,
+                currentFileTotal: currentFileTotal,
+                completedFiles: completedFiles,
+                totalFiles: totalFiles
+            )
+            guard let pauseMessage, !pauseMessage.isEmpty else {
+                return progressText
+            }
+            guard !progressText.isEmpty else { return pauseMessage }
+            return AppLocalization.format("%@ • %@", pauseMessage, progressText)
+        }
+        return ModelDownloadProgressFormatter.fileProgressText(
             currentFile: currentFile,
             currentFileCompleted: currentFileCompleted,
             currentFileTotal: currentFileTotal,
@@ -41,29 +62,50 @@ struct ModelDownloadStatusSnapshot: Equatable {
         )
     }
 
-    static func fromMLXState(_ state: MLXModelManager.ModelState) -> Self? {
-        guard case .downloading(let progress, let completed, let total, let currentFile, let completedFiles, let totalFiles) = state else {
+    static func fromMLXState(_ state: MLXModelManager.ModelState, pauseMessage: String? = nil) -> Self? {
+        switch state {
+        case .downloading(let progress, let completed, let total, let currentFile, let completedFiles, let totalFiles):
+            return .init(
+                progress: progress,
+                isPaused: false,
+                kind: .standard,
+                completed: completed,
+                total: total,
+                currentFile: currentFile,
+                currentFileCompleted: 0,
+                currentFileTotal: 0,
+                completedFiles: completedFiles,
+                totalFiles: totalFiles,
+                pauseMessage: nil
+            )
+        case .paused(let progress, let completed, let total, let currentFile, let completedFiles, let totalFiles):
+            return .init(
+                progress: progress,
+                isPaused: true,
+                kind: .standard,
+                completed: completed,
+                total: total,
+                currentFile: currentFile,
+                currentFileCompleted: 0,
+                currentFileTotal: 0,
+                completedFiles: completedFiles,
+                totalFiles: totalFiles,
+                pauseMessage: pauseMessage
+            )
+        default:
             return nil
         }
-
-        return .init(
-            progress: progress,
-            kind: .standard,
-            completed: completed,
-            total: total,
-            currentFile: currentFile,
-            currentFileCompleted: 0,
-            currentFileTotal: 0,
-            completedFiles: completedFiles,
-            totalFiles: totalFiles
-        )
     }
 
-    static func fromWhisperDownload(_ activeDownload: WhisperKitModelManager.ActiveDownload?) -> Self? {
+    static func fromWhisperDownload(
+        _ activeDownload: WhisperKitModelManager.ActiveDownload?,
+        pauseMessage: String? = nil
+    ) -> Self? {
         guard let activeDownload else { return nil }
 
         return .init(
             progress: activeDownload.progress,
+            isPaused: activeDownload.isPaused,
             kind: .standard,
             completed: activeDownload.completed,
             total: activeDownload.total,
@@ -71,26 +113,44 @@ struct ModelDownloadStatusSnapshot: Equatable {
             currentFileCompleted: activeDownload.currentFileCompleted,
             currentFileTotal: activeDownload.currentFileTotal,
             completedFiles: activeDownload.completedFiles,
-            totalFiles: activeDownload.totalFiles
+            totalFiles: activeDownload.totalFiles,
+            pauseMessage: activeDownload.isPaused ? pauseMessage : nil
         )
     }
 
-    static func fromCustomLLMState(_ state: CustomLLMModelManager.ModelState) -> Self? {
-        guard case .downloading(let progress, let completed, let total, let currentFile, let completedFiles, let totalFiles) = state else {
+    static func fromCustomLLMState(_ state: CustomLLMModelManager.ModelState, pauseMessage: String? = nil) -> Self? {
+        switch state {
+        case .downloading(let progress, let completed, let total, let currentFile, let completedFiles, let totalFiles):
+            return .init(
+                progress: progress,
+                isPaused: false,
+                kind: .customLLM,
+                completed: completed,
+                total: total,
+                currentFile: currentFile,
+                currentFileCompleted: 0,
+                currentFileTotal: 0,
+                completedFiles: completedFiles,
+                totalFiles: totalFiles,
+                pauseMessage: nil
+            )
+        case .paused(let progress, let completed, let total, let currentFile, let completedFiles, let totalFiles):
+            return .init(
+                progress: progress,
+                isPaused: true,
+                kind: .customLLM,
+                completed: completed,
+                total: total,
+                currentFile: currentFile,
+                currentFileCompleted: 0,
+                currentFileTotal: 0,
+                completedFiles: completedFiles,
+                totalFiles: totalFiles,
+                pauseMessage: pauseMessage
+            )
+        default:
             return nil
         }
-
-        return .init(
-            progress: progress,
-            kind: .customLLM,
-            completed: completed,
-            total: total,
-            currentFile: currentFile,
-            currentFileCompleted: 0,
-            currentFileTotal: 0,
-            completedFiles: completedFiles,
-            totalFiles: totalFiles
-        )
     }
 }
 
