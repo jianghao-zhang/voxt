@@ -6,6 +6,35 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-05-01
+
+### English
+
+#### Changed
+- Improved local model downloads so large files can resume from partial progress, recover better from stalled transfers, and support pause, continue, and cancel actions directly in the app.
+- Improved the software update flow so repeated clicks while the update window is opening are ignored and the update window stays in front more reliably once it appears.
+
+#### Fixed
+- Fixed the dictionary term editor so existing replacement aliases appear immediately when you open an entry for editing.
+
+### 简体中文
+
+#### 改进
+- 优化了本地模型下载，大文件现在可以基于已下载进度继续传输，更稳地从卡住的下载中恢复，并直接支持暂停、继续和取消操作。
+- 优化了应用更新流程，现在更新窗口打开过程中会忽略重复点击，更新窗口弹出后也能更稳定地保持在前台。
+
+#### 修复
+- 修复了词典词汇编辑弹窗，现在编辑已有词汇时，已存在的替换别名会在弹窗打开后立即显示。
+
+### 日本語
+
+#### 変更
+- ローカルモデルのダウンロードを改善し、大きなファイルでも途中から再開できるようになり、停止したダウンロードからの復旧が安定し、アプリ内で一時停止・再開・キャンセルを直接行えるようにしました。
+- アプリ更新フローを改善し、更新ウィンドウを開いている途中の連打を無視し、表示後も更新ウィンドウがより安定して前面に残るようにしました。
+
+#### 修正
+- 辞書用語の編集ダイアログを修正し、既存の置換エイリアスが編集画面を開いた直後に表示されるようにしました。
+
 ## [1.10.1] - 2026-04-29
 
 ### English
