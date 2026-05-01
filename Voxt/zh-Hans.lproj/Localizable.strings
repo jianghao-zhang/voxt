@@ -407,6 +407,12 @@
 "Enter group name" = "输入分组名称";
 "Prompt" = "提示词";
 "URL Patterns" = "URL 规则";
+"Pattern Test" = "匹配测试";
+"Paste a URL or any text to test the patterns above" = "输入一个链接或任意文本，测试是否匹配上方规则";
+"Enter a URL or text to verify whether it matches the patterns above." = "输入一个链接或文本，验证它是否匹配上方规则。";
+"Add at least one valid wildcard pattern above to test matching." = "请先在上方添加至少一个有效的通配规则，再进行匹配测试。";
+"Matched pattern: %@" = "已匹配规则：%@";
+"No pattern matched." = "未匹配任何规则。";
 "Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc" = "每行输入一条通配符规则。示例：google.com/*、*.google.com/*、x.*.google.com/*/doc";
 "Group name is required." = "分组名称不能为空。";
 "Enter at least one URL pattern." = "请至少输入一条 URL 规则。";
@@ -420,8 +426,12 @@
 "Grant browser automation permission so Voxt can read active-tab URLs for App Branch matching." = "请授予浏览器自动化权限，以便 Voxt 读取当前标签页 URL 并用于应用分组匹配。";
 "Allow Voxt to read the active URL in %@." = "允许 Voxt 读取 %@ 的当前活动 URL。";
 "Focused App" = "当前焦点应用";
+"Focused App Bundle ID" = "当前焦点应用 Bundle ID";
+"Matched Group" = "命中的分组";
 "App Group" = "应用分组";
 "URL Group" = "URL 分组";
+"Insert" = "插入";
+"Inserted" = "已插入";
 "Show the App Enhancement menu and enable app-based enhancement configuration." = "显示应用增强菜单，并启用按应用配置的增强规则。";
 "Let Sparkle periodically check for updates in the background." = "让 Sparkle 在后台定期检查更新。";
 "Use System Proxy" = "使用系统代理";
@@ -552,6 +562,7 @@
 "Template tip {{RAW_TRANSCRIPTION}}" = "增强前的原始转录文本。需要在提示词中引用原始识别结果时使用它。";
 "Template tip {{USER_MAIN_LANGUAGE}}" = "用户的主要口语语言。可用于指导标点、格式和语言相关的语气词清理。";
 "Template tip {{USER_OTHER_LANGUAGES}}" = "用户其他常用口语语言。适合用于提示模型处理单次发言中的混合语言内容。";
+"Template tip {{HISTORY_RECORDS}}" = "当前这批词典录入任务中序列化后的历史记录内容。";
 "Balanced" = "均衡";
 "Accuracy First" = "准确率优先";
 "Default recognition behavior with moderate fallback and minimal extra bias." = "默认识别策略，回退强度适中，额外偏置较少。";
@@ -1168,6 +1179,9 @@
 "Meeting Workflow" = "会议流程";
 "Meeting mode now owns its own ASR, summary model, prompt, and realtime translation settings." = "会议模式现在拥有独立的 ASR、摘要模型、提示词和实时翻译设置。";
 "Model Pipeline" = "模型流程";
+"Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement." = "选择标准转录使用的语音模型，并按需启用 LLM 清理和应用增强。";
+"Use different enhancement prompts for different apps or browser pages." = "为不同应用或浏览器页面使用不同的增强提示词。";
+"Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut." = "设置转写模式使用的 ASR 与文本模型组合，并调整转写专用提示词和连续追问快捷键。";
 "More" = "更多";
 "Move the shared translation language setting here so the behavior stays feature-local." = "把原来的全局翻译语言设置移到这里，让行为保持在功能内独立生效。";
 "Multilingual" = "多语言";

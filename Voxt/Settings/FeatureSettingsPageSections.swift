@@ -23,7 +23,7 @@ extension FeatureSettingsView {
     var transcriptionContent: some View {
         featurePage(
             title: featureSettingsLocalized("Transcription"),
-            subtitle: featureSettingsLocalized("Choose the speech model used for standard transcription, and optionally layer an LLM cleanup pass on top."),
+            subtitle: featureSettingsLocalized("Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement."),
             icon: "waveform.and.mic",
             pills: transcriptionPills
         ) {
@@ -40,6 +40,15 @@ extension FeatureSettingsView {
                     title: featureSettingsLocalized("Enable LLM Enhancement"),
                     detail: featureSettingsLocalized("Use a second language model pass to clean punctuation, structure, and readability."),
                     isOn: transcriptionLLMEnabledBinding
+                )
+
+                FeatureToggleRow(
+                    title: featureSettingsLocalized("Enable App Enhancement"),
+                    detail: featureSettingsLocalized("Use different enhancement prompts for different apps or browser pages."),
+                    isOn: binding(
+                        get: { featureSettings.rewrite.appEnhancementEnabled },
+                        set: { featureSettings.rewrite.appEnhancementEnabled = $0 }
+                    )
                 )
 
                 FeatureToggleRow(
@@ -243,7 +252,7 @@ extension FeatureSettingsView {
     var rewriteContent: some View {
         featurePage(
             title: featureSettingsLocalized("Rewrite"),
-            subtitle: featureSettingsLocalized("Set the ASR and text model pairing used for rewrite mode, then decide whether app-aware enhancement is enabled."),
+            subtitle: featureSettingsLocalized("Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut."),
             icon: "text.badge.star",
             pills: rewritePills
         ) {
@@ -276,15 +285,6 @@ extension FeatureSettingsView {
                         variables: ModelSettingsPromptVariables.rewrite
                     )
                 }
-
-                FeatureToggleRow(
-                    title: featureSettingsLocalized("Enable App Enhancement"),
-                    detail: featureSettingsLocalized("When enabled, the dedicated App Enhancement submenu becomes available in Feature mode."),
-                    isOn: binding(
-                        get: { featureSettings.rewrite.appEnhancementEnabled },
-                        set: { featureSettings.rewrite.appEnhancementEnabled = $0 }
-                    )
-                )
 
                 FeatureContinueShortcutRow(
                     title: featureSettingsLocalized("Continue Shortcut"),
@@ -393,6 +393,12 @@ extension FeatureSettingsView {
                     : featureSettingsLocalized("Off")
             )
         )
+        pills.append(
+            FeatureSummaryPill(
+                title: featureSettingsLocalized("App"),
+                value: featureSettings.rewrite.appEnhancementEnabled ? featureSettingsLocalized("Enabled") : featureSettingsLocalized("Disabled")
+            )
+        )
         return pills
     }
 
@@ -425,8 +431,7 @@ extension FeatureSettingsView {
     var rewritePills: [FeatureSummaryPill] {
         [
             FeatureSummaryPill(title: featureSettingsLocalized("ASR"), value: shortSummary(asrSelectionSummary(featureSettings.rewrite.asrSelectionID))),
-            FeatureSummaryPill(title: featureSettingsLocalized("LLM"), value: shortSummary(llmSelectionSummary(featureSettings.rewrite.llmSelectionID))),
-            FeatureSummaryPill(title: featureSettingsLocalized("App"), value: featureSettings.rewrite.appEnhancementEnabled ? featureSettingsLocalized("Enabled") : featureSettingsLocalized("Disabled"))
+            FeatureSummaryPill(title: featureSettingsLocalized("LLM"), value: shortSummary(llmSelectionSummary(featureSettings.rewrite.llmSelectionID)))
         ]
     }
 

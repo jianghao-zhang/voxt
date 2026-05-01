@@ -404,6 +404,12 @@
 "Enter group name" = "グループ名を入力";
 "Prompt" = "プロンプト";
 "URL Patterns" = "URL パターン";
+"Pattern Test" = "一致テスト";
+"Paste a URL or any text to test the patterns above" = "URL または任意のテキストを入力して、上のパターンに一致するか確認";
+"Enter a URL or text to verify whether it matches the patterns above." = "URL またはテキストを入力して、上のパターンに一致するか確認します。";
+"Add at least one valid wildcard pattern above to test matching." = "一致テストを行うには、先に有効なワイルドカードパターンを 1 つ以上追加してください。";
+"Matched pattern: %@" = "一致したパターン: %@";
+"No pattern matched." = "一致するパターンはありません。";
 "Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc" = "ワイルドカードパターンを 1 行に 1 つ入力してください。例: google.com/*, *.google.com/*, x.*.google.com/*/doc";
 "Group name is required." = "グループ名は必須です。";
 "Enter at least one URL pattern." = "URL パターンを 1 つ以上入力してください。";
@@ -417,8 +423,12 @@
 "Grant browser automation permission so Voxt can read active-tab URLs for App Branch matching." = "App Branch の照合でアクティブタブの URL を読めるように、ブラウザ自動化権限を許可してください。";
 "Allow Voxt to read the active URL in %@." = "Voxt が %@ のアクティブ URL を読み取れるようにします。";
 "Focused App" = "フォーカス中のアプリ";
+"Focused App Bundle ID" = "フォーカス中アプリの Bundle ID";
+"Matched Group" = "一致したグループ";
 "App Group" = "アプリグループ";
 "URL Group" = "URL グループ";
+"Insert" = "挿入";
+"Inserted" = "挿入済み";
 "Show the App Enhancement menu and enable app-based enhancement configuration." = "App Enhancement メニューを表示し、アプリ別の強化設定を有効にします。";
 "Let Sparkle periodically check for updates in the background." = "Sparkle がバックグラウンドで定期的に更新を確認します。";
 "Use System Proxy" = "システムプロキシを使用";
@@ -550,6 +560,7 @@
 "Template tip {{RAW_TRANSCRIPTION}}" = "強化前の生の文字起こしテキストです。元の認識結果をプロンプト内で参照したいときに使います。";
 "Template tip {{USER_MAIN_LANGUAGE}}" = "句読点、整形、言語固有の不要語除去を判断するときに使う、ユーザーの主要な話し言葉です。";
 "Template tip {{USER_OTHER_LANGUAGES}}" = "その他によく使う話し言葉です。1つの発話内で言語が混ざるケースをモデルに伝えるときに使えます。";
+"Template tip {{HISTORY_RECORDS}}" = "現在の辞書取り込みバッチに含まれる、シリアライズ済みの履歴レコードです。";
 "Balanced" = "バランス";
 "Accuracy First" = "精度優先";
 "Default recognition behavior with moderate fallback and minimal extra bias." = "適度なフォールバックと最小限の追加バイアスを使う、標準的な認識動作です。";
@@ -1075,6 +1086,9 @@
 "Meeting Workflow" = "会議ワークフロー";
 "Meeting mode now owns its own ASR, summary model, prompt, and realtime translation settings." = "会議モードは専用の ASR、要約モデル、プロンプト、リアルタイム翻訳設定を持つようになりました。";
 "Model Pipeline" = "モデルパイプライン";
+"Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement." = "通常の文字起こしで使う音声モデルを選び、必要に応じて LLM クリーンアップとアプリ強化を追加します。";
+"Use different enhancement prompts for different apps or browser pages." = "アプリやブラウザページごとに異なる強化プロンプトを使います。";
+"Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut." = "書き換えモードで使う ASR とテキストモデルの組み合わせを設定し、書き換え専用プロンプトと続き録音ショートカットを調整します。";
 "More" = "その他";
 "Move the shared translation language setting here so the behavior stays feature-local." = "共通の翻訳言語設定をここへ移し、機能ごとの設定として扱います。";
 "Multilingual" = "多言語";

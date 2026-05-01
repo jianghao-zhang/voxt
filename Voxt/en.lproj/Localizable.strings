@@ -407,6 +407,12 @@
 "Enter group name" = "Enter group name";
 "Prompt" = "Prompt";
 "URL Patterns" = "URL Patterns";
+"Pattern Test" = "Pattern Test";
+"Paste a URL or any text to test the patterns above" = "Paste a URL or any text to test the patterns above";
+"Enter a URL or text to verify whether it matches the patterns above." = "Enter a URL or text to verify whether it matches the patterns above.";
+"Add at least one valid wildcard pattern above to test matching." = "Add at least one valid wildcard pattern above to test matching.";
+"Matched pattern: %@" = "Matched pattern: %@";
+"No pattern matched." = "No pattern matched.";
 "Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc" = "Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc";
 "Group name is required." = "Group name is required.";
 "Enter at least one URL pattern." = "Enter at least one URL pattern.";
@@ -420,8 +426,12 @@
 "Grant browser automation permission so Voxt can read active-tab URLs for App Branch matching." = "Grant browser automation permission so Voxt can read active-tab URLs for App Branch matching.";
 "Allow Voxt to read the active URL in %@." = "Allow Voxt to read the active URL in %@.";
 "Focused App" = "Focused App";
+"Focused App Bundle ID" = "Focused App Bundle ID";
+"Matched Group" = "Matched Group";
 "App Group" = "App Group";
 "URL Group" = "URL Group";
+"Insert" = "Insert";
+"Inserted" = "Inserted";
 "Show the App Enhancement menu and enable app-based enhancement configuration." = "Show the App Enhancement menu and enable app-based enhancement configuration.";
 "Let Sparkle periodically check for updates in the background." = "Let Sparkle periodically check for updates in the background.";
 "Use System Proxy" = "Use System Proxy";
@@ -552,6 +562,7 @@
 "Template tip {{RAW_TRANSCRIPTION}}" = "The raw transcription text before enhancement. Use it when you want the prompt to reference the original recognized text.";
 "Template tip {{USER_MAIN_LANGUAGE}}" = "The user's primary spoken language used to guide punctuation, formatting, and language-specific cleanup decisions.";
 "Template tip {{USER_OTHER_LANGUAGES}}" = "Other frequently used spoken languages. Useful when the speaker often mixes languages in one utterance.";
+"Template tip {{HISTORY_RECORDS}}" = "The serialized history records included in the current dictionary ingestion batch.";
 "Balanced" = "Balanced";
 "Accuracy First" = "Accuracy First";
 "Default recognition behavior with moderate fallback and minimal extra bias." = "Default recognition behavior with moderate fallback and minimal extra bias.";
@@ -1168,6 +1179,9 @@
 "Meeting Workflow" = "Meeting Workflow";
 "Meeting mode now owns its own ASR, summary model, prompt, and realtime translation settings." = "Meeting mode now owns its own ASR, summary model, prompt, and realtime translation settings.";
 "Model Pipeline" = "Model Pipeline";
+"Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement." = "Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement.";
+"Use different enhancement prompts for different apps or browser pages." = "Use different enhancement prompts for different apps or browser pages.";
+"Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut." = "Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut.";
 "More" = "More";
 "Move the shared translation language setting here so the behavior stays feature-local." = "Move the shared translation language setting here so the behavior stays feature-local.";
 "Multilingual" = "Multilingual";
