@@ -803,6 +803,7 @@
 "Connection test succeeded (Meeting ASR reachable)." = "连接测试成功（会议 ASR 可达）。";
 "Meeting ASR endpoint reachable. %@" = "会议 ASR 接口可达。%@";
 "Current active Remote ASR provider is %@. Testing %@ here does not switch the active provider." = "当前正在使用的 Remote ASR 提供商是 %@。在这里测试 %@ 不会切换实际使用中的提供商。";
+"Current active Remote LLM provider is %@. Testing %@ here does not switch the active provider." = "当前正在使用的 Remote LLM 提供商是 %@。在这里测试 %@ 不会切换实际使用中的提供商。";
 "Using %@" = "当前使用：%@";
 "Realtime Translation" = "实时翻译";
 "Choose Translation Language" = "选择翻译语言";
@@ -1144,6 +1145,7 @@
 "Choose Transcription LLM" = "选择转录 LLM";
 "Ask about this saved result" = "围绕这条已保存结果继续提问";
 "Copy" = "复制";
+"Collapse All" = "折叠全部";
 "Generating answer…" = "正在生成回答…";
 "Using Apple Intelligence for follow-up." = "使用 Apple Intelligence 进行追问。";
 "Enable an enhancement model to ask follow-up questions." = "请先启用增强模型后再进行追问。";
@@ -1266,6 +1268,7 @@
 "Apply Preset" = "应用预设";
 "Volcengine models should use the Responses endpoint in the same region as the API key." = "火山云模型应使用与 API Key 所在地域一致的 Responses 端点。";
 "e.g. qwen3-asr-flash-filetrans" = "例如 qwen3-asr-flash-filetrans";
+"e.g. gpt-4o-transcribe-xxx" = "例如 gpt-4o-transcribe-xxx";
 "https://..." = "https://...";
 "Beijing" = "北京";
 "Singapore" = "新加坡";
@@ -1340,3 +1343,8 @@
 "Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title." = "在不中断录音的前提下，把一段实时转录连续切成多条笔记。笔记会保留在独立悬浮窗里，每条都会生成一个简短 AI 标题。";
 "Record Shortcut" = "录制快捷键";
 "Reset Shortcut" = "重置快捷键";
+"Use Anthropic hosted web search when the model needs current information. This may increase latency and usage." = "当模型需要当前信息时，使用 Anthropic 托管的网页搜索。这可能会增加延迟和用量。";
+"Ground responses with Google Search when Gemini needs fresher web context. This may increase latency and usage." = "当 Gemini 需要更新的网页上下文时，使用 Google 搜索提供支撑。这可能会增加延迟和用量。";
+"Allow GLM to call its hosted web search tool for fresher answers. This may increase latency and usage." = "允许 GLM 调用其托管的网页搜索工具，以获得更新的回答。这可能会增加延迟和用量。";
+"Allow Qwen to use built-in web search. Enabled by default for Aliyun because it is available directly in the official compatible API." = "允许 Qwen 使用内置网页搜索。阿里云默认开启，因为官方兼容 API 已直接支持该能力。";
+"Use provider-hosted web search when available. This may increase latency and usage." = "在可用时使用提供商托管的网页搜索。这可能会增加延迟和用量。";

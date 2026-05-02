@@ -88,6 +88,12 @@ extension AppEnhancementSettingsView {
         groups[index].isExpanded = expanded
     }
 
+    func setAllGroupsExpanded(_ expanded: Bool) {
+        for index in groups.indices {
+            groups[index].isExpanded = expanded
+        }
+    }
+
     func assignApp(bundleID: String, to groupID: UUID) {
         for index in groups.indices {
             groups[index].appBundleIDs.removeAll { $0 == bundleID }
@@ -134,6 +140,20 @@ extension AppEnhancementSettingsView {
         groups.removeAll { $0.id == groupID }
     }
 
+    func duplicateGroup(groupID: UUID) {
+        guard let sourceGroup = groups.first(where: { $0.id == groupID }) else { return }
+        let duplicatedGroup = AppBranchGroup(
+            id: UUID(),
+            name: uniqueDuplicateGroupName(for: sourceGroup.name),
+            prompt: sourceGroup.prompt,
+            appBundleIDs: sourceGroup.appBundleIDs,
+            appRefs: sourceGroup.appRefs,
+            urlPatternIDs: sourceGroup.urlPatternIDs,
+            isExpanded: true
+        )
+        groups.append(duplicatedGroup)
+    }
+
     func saveGroup(state: AppBranchModal) {
         let trimmedName = groupNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
@@ -163,6 +183,19 @@ extension AppEnhancementSettingsView {
         }
 
         modal = nil
+    }
+
+    func uniqueDuplicateGroupName(for baseName: String) -> String {
+        let existingNames = Set(groups.map(\.name))
+        var candidateIndex = 1
+        var candidate = "\(baseName)-\(String(format: "%02d", candidateIndex))"
+
+        while existingNames.contains(candidate) {
+            candidateIndex += 1
+            candidate = "\(baseName)-\(String(format: "%02d", candidateIndex))"
+        }
+
+        return candidate
     }
 
     func saveAddedURLs() {

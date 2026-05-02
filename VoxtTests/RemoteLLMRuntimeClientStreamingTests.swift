@@ -89,6 +89,27 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         XCTAssertEqual(endpoint, "https://api.openai.com/v1/chat/completions")
     }
 
+    func testResolvedLLMEndpointBuildsDeepSeekChatCompletionsFromOfficialBaseURL() {
+        let client = RemoteLLMRuntimeClient()
+
+        XCTAssertEqual(
+            client.resolvedLLMEndpoint(
+                provider: .deepseek,
+                endpoint: "",
+                model: "deepseek-v4-flash"
+            ),
+            "https://api.deepseek.com/v1/chat/completions"
+        )
+        XCTAssertEqual(
+            client.resolvedLLMEndpoint(
+                provider: .deepseek,
+                endpoint: "https://api.deepseek.com",
+                model: "deepseek-v4-flash"
+            ),
+            "https://api.deepseek.com/v1/chat/completions"
+        )
+    }
+
     func testExtractStreamingDeltaParsesAnthropicTextDelta() {
         let client = RemoteLLMRuntimeClient()
         let payload: [String: Any] = [
@@ -143,6 +164,62 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         XCTAssertEqual(client.extractPrimaryText(from: payload), "这是最终回复")
     }
 
+    func testExtractPrimaryTextParsesOpenAICompatibleMessageStringContent() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "choices": [
+                [
+                    "message": [
+                        "role": "assistant",
+                        "content": "这是 OpenAI 兼容返回"
+                    ]
+                ]
+            ]
+        ]
+
+        XCTAssertEqual(client.extractPrimaryText(from: payload), "这是 OpenAI 兼容返回")
+    }
+
+    func testExtractPrimaryTextParsesOpenAICompatibleMessageArrayContent() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "choices": [
+                [
+                    "message": [
+                        "role": "assistant",
+                        "content": [
+                            [
+                                "type": "text",
+                                "text": "这是数组 content 返回"
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+        XCTAssertEqual(client.extractPrimaryText(from: payload), "这是数组 content 返回")
+    }
+
+    func testExtractPrimaryTextParsesGeminiCandidatesParts() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "candidates": [
+                [
+                    "content": [
+                        "parts": [
+                            [
+                                "text": "这是 Gemini parts 返回"
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+        XCTAssertEqual(client.extractPrimaryText(from: payload), "这是 Gemini parts 返回")
+    }
+
     func testShouldFlushBufferedEventLinesRecognizesSingleChunkJSONWithoutBlankSeparator() {
         let client = RemoteLLMRuntimeClient()
         let bufferedEventLines = [
@@ -195,6 +272,64 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         ]
 
         XCTAssertEqual(client.extractPrimaryText(from: payload), "北纬 40.076，东经 113.300")
+    }
+
+    func testExtractPrimaryTextParsesResponsesOutputArrayWithStringContent() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "output": [
+                [
+                    "type": "message",
+                    "content": "这是百炼返回的字符串内容"
+                ]
+            ]
+        ]
+
+        XCTAssertEqual(client.extractPrimaryText(from: payload), "这是百炼返回的字符串内容")
+    }
+
+    func testExtractPrimaryTextParsesResponsesOutputArrayWithNestedTextValue() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "output": [
+                [
+                    "type": "message",
+                    "content": [
+                        [
+                            "type": "output_text",
+                            "text": [
+                                "value": "这是嵌套 text.value 返回"
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+        XCTAssertEqual(client.extractPrimaryText(from: payload), "这是嵌套 text.value 返回")
+    }
+
+    func testExtractPrimaryTextParsesResponsesOutputArrayWithMixedToolAndMessageItems() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "output": [
+                [
+                    "type": "web_search_call",
+                    "output": "{\"ok\":true}"
+                ],
+                [
+                    "type": "message",
+                    "content": [
+                        [
+                            "type": "output_text",
+                            "text": "这是最终增强文本"
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+        XCTAssertEqual(client.extractPrimaryText(from: payload), "这是最终增强文本")
     }
 
     func testResponsesInputMessagesBuildsConversationHistoryAndCurrentTurn() {
@@ -297,5 +432,36 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         XCTAssertEqual(object["input"] as? String, "继续")
         let tools = try XCTUnwrap(object["tools"] as? [[String: Any]])
         XCTAssertEqual(tools.first?["type"] as? String, "web_search")
+    }
+
+    func testOpenAICompatiblePayloadOmitsResponseFormatByDefault() {
+        let client = RemoteLLMRuntimeClient()
+
+        let payload = client.openAICompatiblePayload(
+            model: "deepseek-v4-flash",
+            systemPrompt: "你是助手",
+            userPrompt: "你好",
+            tuning: .init(maxTokens: 256, temperature: 0.2, topP: 0.9),
+            streamingEnabled: false
+        )
+
+        XCTAssertNil(payload["response_format"])
+    }
+
+    func testOpenAICompatiblePayloadAddsJSONModeWhenRequested() throws {
+        let client = RemoteLLMRuntimeClient()
+
+        let payload = client.openAICompatiblePayload(
+            model: "deepseek-v4-flash",
+            systemPrompt: "返回 JSON",
+            userPrompt: "生成结构化结果",
+            tuning: .init(maxTokens: 256, temperature: 0.2, topP: 0.9),
+            streamingEnabled: true,
+            responseFormat: .jsonObject
+        )
+
+        let responseFormat = try XCTUnwrap(payload["response_format"] as? [String: Any])
+        XCTAssertEqual(responseFormat["type"] as? String, "json_object")
+        XCTAssertEqual(payload["stream"] as? Bool, true)
     }
 }

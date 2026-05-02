@@ -89,6 +89,52 @@ struct OverlayCompactLeadingIconView: View {
     }
 }
 
+struct CompactModeIconView: View {
+    let sessionIconMode: OverlaySessionIconMode
+
+    var body: some View {
+        Group {
+            switch sessionIconMode {
+            case .transcription:
+                TranscriptionModeIconView()
+            case .translation:
+                TranslationModeIconView()
+            case .rewrite:
+                RewriteModeIconView()
+            }
+        }
+        .frame(width: 14, height: 14)
+        .opacity(0.92)
+    }
+}
+
+struct WaveformCompactLeadingStatusIconView: View {
+    let isCompleting: Bool
+    let showsInitializationIcon: Bool
+    let compactLeadingIconImage: NSImage?
+    let sessionIconMode: OverlaySessionIconMode
+    let displayMode: OverlayDisplayMode
+
+    var body: some View {
+        Group {
+            if isCompleting {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+            } else if showsInitializationIcon {
+                ModelInitializingIconView()
+            } else if let compactLeadingIconImage,
+                      sessionIconMode == .transcription,
+                      displayMode == .processing {
+                OverlayCompactLeadingIconView(image: compactLeadingIconImage)
+            } else {
+                CompactModeIconView(sessionIconMode: sessionIconMode)
+            }
+        }
+        .frame(width: 14, height: 14, alignment: .center)
+    }
+}
+
 struct LoadingSpinnerIconView: View {
     var isAnimating: Bool
 

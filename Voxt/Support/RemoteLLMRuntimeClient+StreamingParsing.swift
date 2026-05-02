@@ -3,25 +3,37 @@ import Foundation
 extension RemoteLLMRuntimeClient {
     func extractPrimaryText(from object: Any) -> String? {
         if let dict = object as? [String: Any] {
-            if let outputText = dict["output_text"] as? String,
-               !outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let outputText = extractTextValue(from: dict["output_text"]) {
                 return outputText
             }
             if let response = dict["response"] {
                 return extractPrimaryText(from: response)
             }
-            if let output = dict["output"] as? [[String: Any]] {
-                for item in output {
-                    if let content = item["content"] as? [[String: Any]] {
-                        for block in content {
-                            let type = (block["type"] as? String)?.lowercased()
-                            if (type == "output_text" || type == "text"),
-                               let text = block["text"] as? String,
-                               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                return text
-                            }
-                        }
-                    }
+            if let output = dict["output"] as? [Any],
+               let outputText = extractTextFromResponsesOutput(output) {
+                return outputText
+            }
+            if let contentText = extractTextFromMessageContent(dict["content"]) {
+                return contentText
+            }
+            if let text = extractTextValue(from: dict["text"]),
+               shouldTreatDirectTextFieldAsPrimary(in: dict) {
+                return text
+            }
+            if let result = dict["result"],
+               let text = extractPrimaryText(from: result) {
+                return text
+            }
+            if let data = dict["data"],
+               let text = extractPrimaryText(from: data) {
+                return text
+            }
+            if let message = dict["message"] as? [String: Any] {
+                if let value = extractMessageContent(from: message["content"]) {
+                    return value
+                }
+                if let text = extractPrimaryText(from: message) {
+                    return text
                 }
             }
             if let choices = dict["choices"] as? [[String: Any]],
@@ -35,35 +47,28 @@ extension RemoteLLMRuntimeClient {
                     return text
                 }
             }
-            if let contentArray = dict["content"] as? [[String: Any]] {
-                for item in contentArray {
-                    let type = (item["type"] as? String)?.lowercased()
-                    if (type == nil || type == "text" || type == "output_text"),
-                       let text = item["text"] as? String,
-                       !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        return text
-                    }
-                }
-            }
             if let candidates = dict["candidates"] as? [[String: Any]],
                let first = candidates.first,
                let content = first["content"] as? [String: Any],
                let parts = content["parts"] as? [[String: Any]] {
                 for part in parts {
-                    if let text = part["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if let text = extractTextValue(from: part["text"]) {
                         return text
                     }
                 }
-            }
-            if let message = dict["message"] as? [String: Any],
-               let value = extractMessageContent(from: message["content"]) {
-                return value
             }
             if let reply = dict["reply"] as? String, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return reply
             }
             if let response = dict["response"] as? String, !response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return response
+            }
+        }
+        if let array = object as? [Any] {
+            for item in array {
+                if let text = extractPrimaryText(from: item) {
+                    return text
+                }
             }
         }
         return nil
@@ -269,17 +274,12 @@ extension RemoteLLMRuntimeClient {
     }
 
     func extractMessageContent(from value: Any?) -> String? {
-        if let text = value as? String {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
+        if let text = extractTextValue(from: value) {
+            return text
         }
-        if let blocks = value as? [[String: Any]] {
-            let texts = blocks.compactMap { block -> String? in
-                if let text = block["text"] as? String { return text }
-                return nil
-            }
-            let merged = texts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            return merged.isEmpty ? nil : merged
+        if let blocks = value as? [Any],
+           let merged = mergeTextSegments(from: blocks.compactMap(extractPrimaryText(from:))) {
+            return merged
         }
         return nil
     }
@@ -290,10 +290,7 @@ extension RemoteLLMRuntimeClient {
         }
         if let blocks = value as? [[String: Any]] {
             let texts = blocks.compactMap { block -> String? in
-                if let text = block["text"] as? String {
-                    return text
-                }
-                return nil
+                extractTextValue(from: block["text"])
             }
             let merged = texts.joined(separator: "\n")
             return merged.isEmpty ? nil : merged
@@ -384,6 +381,88 @@ extension RemoteLLMRuntimeClient {
         }
 
         return nil
+    }
+
+    func extractTextValue(from value: Any?) -> String? {
+        if let text = value as? String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let dict = value as? [String: Any] {
+            if let text = dict["text"] as? String {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { return trimmed }
+            }
+            if let valueText = dict["value"] as? String {
+                let trimmed = valueText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { return trimmed }
+            }
+        }
+        return nil
+    }
+
+    func extractTextFromResponsesOutput(_ output: [Any]) -> String? {
+        for item in output {
+            guard let dict = item as? [String: Any] else { continue }
+            let type = (dict["type"] as? String)?.lowercased()
+
+            if let contentText = extractTextFromMessageContent(dict["content"]) {
+                return contentText
+            }
+            if type == "reasoning",
+               let summary = dict["summary"] as? [Any],
+               let summaryText = mergeTextSegments(from: summary.compactMap(extractPrimaryText(from:))) {
+                return summaryText
+            }
+            if shouldTreatDirectTextFieldAsPrimary(in: dict),
+               let text = extractTextValue(from: dict["text"]) {
+                return text
+            }
+        }
+        return nil
+    }
+
+    func extractTextFromMessageContent(_ value: Any?) -> String? {
+        if let text = extractTextValue(from: value) {
+            return text
+        }
+        if let blocks = value as? [Any] {
+            var texts: [String] = []
+            for blockValue in blocks {
+                if let block = blockValue as? [String: Any] {
+                    let type = (block["type"] as? String)?.lowercased()
+                    if type == nil || type == "text" || type == "output_text" || type == "summary_text" {
+                        if let text = extractTextValue(from: block["text"]) {
+                            texts.append(text)
+                            continue
+                        }
+                    }
+                    if let nestedText = extractPrimaryText(from: block) {
+                        texts.append(nestedText)
+                    }
+                } else if let text = extractTextValue(from: blockValue) {
+                    texts.append(text)
+                }
+            }
+            return mergeTextSegments(from: texts)
+        }
+        return nil
+    }
+
+    func mergeTextSegments(from segments: [String]) -> String? {
+        let merged = segments
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return merged.isEmpty ? nil : merged
+    }
+
+    func shouldTreatDirectTextFieldAsPrimary(in dict: [String: Any]) -> Bool {
+        if let type = (dict["type"] as? String)?.lowercased() {
+            return type == "text" || type == "output_text" || type == "message" || type == "summary_text"
+        }
+        return dict["content"] == nil && dict["choices"] == nil && dict["output"] == nil
     }
 
     func decodeStreamingJSONStringFragment(_ value: String) -> String {

@@ -173,7 +173,7 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
         case .ollama:
             return "qwen2.5"
         case .deepseek:
-            return "deepseek-chat"
+            return "deepseek-v4-flash"
         case .openrouter:
             return "openrouter/auto"
         case .grok:
@@ -238,7 +238,11 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "qwen3-coder:480b", title: "Qwen3 Coder 480B"),
                 RemoteModelOption(id: "deepseek-r1", title: "DeepSeek R1")
             ]
-        case .deepseek: return [RemoteModelOption(id: "deepseek-chat", title: "DeepSeek V3.2")]
+        case .deepseek:
+            return [
+                RemoteModelOption(id: "deepseek-v4-flash", title: "DeepSeek V4 Flash (Recommended)"),
+                RemoteModelOption(id: "deepseek-v4-pro", title: "DeepSeek V4 Pro")
+            ]
         case .openrouter:
             return [
                 RemoteModelOption(id: "openrouter/auto", title: "Auto (best for prompt)"),
@@ -332,7 +336,8 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "mistral", title: "Mistral 7B"),
                 RemoteModelOption(id: "gemma2", title: "Gemma 2 9B")
             ]
-        case .deepseek: return [RemoteModelOption(id: "deepseek-chat", title: "DeepSeek V3.2")]
+        case .deepseek:
+            return [RemoteModelOption(id: "deepseek-chat", title: "DeepSeek Chat (Compatibility Alias)")]
         case .openrouter:
             return [
                 RemoteModelOption(id: "google/gemini-2.5-flash", title: "Gemini 2.5 Flash"),
@@ -417,7 +422,7 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "mixtral:8x22b", title: "Mixtral 8x22B")
             ]
         case .deepseek:
-            return [RemoteModelOption(id: "deepseek-reasoner", title: "DeepSeek V3.2 Thinking")]
+            return [RemoteModelOption(id: "deepseek-reasoner", title: "DeepSeek Reasoner (Compatibility Alias)")]
         case .openrouter:
             return [
                 RemoteModelOption(id: "openai/gpt-4.1", title: "GPT-4.1"),

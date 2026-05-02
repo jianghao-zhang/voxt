@@ -101,6 +101,12 @@ extension AppEnhancementSettingsView {
                     Text(groupsTitle)
                         .font(.headline)
                     Spacer()
+                    Button(AppLocalization.localizedString("Collapse All")) {
+                        setAllGroupsExpanded(false)
+                    }
+                    .buttonStyle(SettingsPillButtonStyle())
+                    .disabled(groups.isEmpty || groups.allSatisfy { !$0.isExpanded })
+
                     Button(AppLocalization.localizedString("Create Group")) {
                         groupNameDraft = ""
                         groupPromptDraft = ""
@@ -297,6 +303,11 @@ extension AppEnhancementSettingsView {
                     .foregroundStyle(.secondary)
 
                 Spacer()
+
+                Button(AppLocalization.localizedString("Copy")) {
+                    duplicateGroup(groupID: group.id)
+                }
+                .buttonStyle(SettingsCompactActionButtonStyle())
 
                 Button(AppLocalization.localizedString("Edit")) {
                     groupNameDraft = group.name

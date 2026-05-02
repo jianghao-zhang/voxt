@@ -802,6 +802,7 @@
 "Connection test succeeded (Meeting ASR reachable)." = "接続テストに成功しました（会議 ASR 到達可能）。";
 "Meeting ASR endpoint reachable. %@" = "会議 ASR エンドポイントに到達できました。%@";
 "Current active Remote ASR provider is %@. Testing %@ here does not switch the active provider." = "現在有効な Remote ASR プロバイダは %@ です。ここで %@ をテストしても有効なプロバイダは切り替わりません。";
+"Current active Remote LLM provider is %@. Testing %@ here does not switch the active provider." = "現在有効な Remote LLM プロバイダは %@ です。ここで %@ をテストしても有効なプロバイダは切り替わりません。";
 "Using %@" = "使用中: %@";
 "Realtime Translation" = "リアルタイム翻訳";
 "Choose Translation Language" = "翻訳言語を選択";
@@ -1166,6 +1167,7 @@
 "Meeting is optional during onboarding. You can enable it later from Feature > Transcription." = "会議はオンボーディング中は任意です。後で 機能 > 文字起こし から有効にできます。";
 "Ask about this saved result" = "この保存済み結果について質問する";
 "Copy" = "コピー";
+"Collapse All" = "すべて折りたたむ";
 "Follow-up Input" = "追質問入力";
 "You" = "あなた";
 "Assistant" = "アシスタント";
@@ -1193,6 +1195,7 @@
 "Apply Preset" = "プリセットを適用";
 "Volcengine models should use the Responses endpoint in the same region as the API key." = "Volcengine モデルでは、API キーと同じリージョンの Responses エンドポイントを使用してください。";
 "e.g. qwen3-asr-flash-filetrans" = "例: qwen3-asr-flash-filetrans";
+"e.g. gpt-4o-transcribe-xxx" = "例: gpt-4o-transcribe-xxx";
 "https://..." = "https://...";
 "Beijing" = "北京";
 "Singapore" = "シンガポール";
@@ -1263,3 +1266,8 @@
 "Space by Default" = "デフォルトは Space";
 "The default note trigger is Space. Each trigger stores the current live transcript as one note, clears the transcription UI, and continues listening." = "デフォルトのメモトリガーは Space です。トリガーするたびに現在の文字起こしを 1 件のメモとして保存し、文字起こし UI をクリアして録音を続けます。";
 "Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title." = "録音セッションを止めずに、リアルタイム文字起こしを複数のメモに分割します。メモは独立したフローティングウィンドウに残り、それぞれに短い AI タイトルが付きます。";
+"Use Anthropic hosted web search when the model needs current information. This may increase latency and usage." = "モデルが最新情報を必要とする場合に Anthropic のホスト型 Web 検索を使います。遅延や利用量が増える場合があります。";
+"Ground responses with Google Search when Gemini needs fresher web context. This may increase latency and usage." = "Gemini がより新しい Web コンテキストを必要とする場合に Google 検索で応答を補強します。遅延や利用量が増える場合があります。";
+"Allow GLM to call its hosted web search tool for fresher answers. This may increase latency and usage." = "GLM がホスト型 Web 検索ツールを呼び出して、より新しい回答を返せるようにします。遅延や利用量が増える場合があります。";
+"Allow Qwen to use built-in web search. Enabled by default for Aliyun because it is available directly in the official compatible API." = "Qwen が組み込み Web 検索を使えるようにします。公式互換 API で直接利用できるため、Alibaba Cloud ではデフォルトで有効です。";
+"Use provider-hosted web search when available. This may increase latency and usage." = "利用可能な場合はプロバイダー提供の Web 検索を使います。遅延や利用量が増える場合があります。";

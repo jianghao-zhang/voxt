@@ -13,7 +13,7 @@ extension RemoteLLMRuntimeClient {
         case .ollama:
             return "http://127.0.0.1:11434/api/chat"
         case .deepseek:
-            return "https://api.deepseek.com/v1/models"
+            return "https://api.deepseek.com"
         case .openrouter:
             return "https://openrouter.ai/api/v1/models"
         case .grok:

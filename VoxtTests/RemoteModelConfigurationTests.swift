@@ -242,6 +242,18 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertFalse(RemoteLLMProvider.volcengine.defaultSearchEnabled)
     }
 
+    func testDeepSeekUsesCurrentSuggestedModelAndKeepsLegacyAliases() {
+        XCTAssertEqual(RemoteLLMProvider.deepseek.suggestedModel, "deepseek-v4-flash")
+
+        let latestIDs = RemoteLLMProvider.deepseek.latestModelOptions.map(\.id)
+        XCTAssertTrue(latestIDs.contains("deepseek-v4-flash"))
+        XCTAssertTrue(latestIDs.contains("deepseek-v4-pro"))
+
+        let allIDs = RemoteLLMProvider.deepseek.modelOptions.map(\.id)
+        XCTAssertTrue(allIDs.contains("deepseek-chat"))
+        XCTAssertTrue(allIDs.contains("deepseek-reasoner"))
+    }
+
     func testResolvedAliyunLLMConfigurationDefaultsSearchToEnabled() {
         let resolved = RemoteModelConfigurationStore.resolvedLLMConfiguration(
             provider: .aliyunBailian,

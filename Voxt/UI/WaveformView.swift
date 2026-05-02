@@ -463,23 +463,13 @@ struct WaveformView: View {
 
     @ViewBuilder
     private var leadingStatusIcon: some View {
-        if isCompleting {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.95))
-                .frame(width: 14, height: 14, alignment: .center)
-        } else if showsInitializationIcon {
-            ModelInitializingIconView()
-                .frame(width: 14, height: 14, alignment: .center)
-        } else if let compactLeadingIconImage,
-                  sessionIconMode == .transcription,
-                  displayMode == .processing {
-            OverlayCompactLeadingIconView(image: compactLeadingIconImage)
-                .frame(width: 14, height: 14, alignment: .center)
-        } else {
-            compactModeIcon
-                .frame(width: 14, height: 14, alignment: .center)
-        }
+        WaveformCompactLeadingStatusIconView(
+            isCompleting: isCompleting,
+            showsInitializationIcon: showsInitializationIcon,
+            compactLeadingIconImage: compactLeadingIconImage,
+            sessionIconMode: sessionIconMode,
+            displayMode: displayMode
+        )
     }
 
     private var cardBackground: some View {
@@ -597,24 +587,6 @@ struct WaveformView: View {
             color: .white
         )
         .frame(height: barAreaHeight)
-    }
-
-    @ViewBuilder
-    private var compactModeIcon: some View {
-        switch sessionIconMode {
-        case .transcription:
-            TranscriptionModeIconView()
-                .frame(width: 14, height: 14)
-                .opacity(0.92)
-        case .translation:
-            TranslationModeIconView()
-                .frame(width: 14, height: 14)
-                .opacity(0.92)
-        case .rewrite:
-            RewriteModeIconView()
-                .frame(width: 14, height: 14)
-                .opacity(0.92)
-        }
     }
 
     private func barHeight(for index: Int) -> CGFloat {

@@ -4,6 +4,7 @@ import Foundation
 struct RemoteProviderConfigurationSheet: View {
     @Environment(\.dismiss) var dismiss
     @AppStorage(AppPreferenceKey.remoteASRSelectedProvider) var selectedRemoteASRProviderRaw = RemoteASRProvider.openAIWhisper.rawValue
+    @AppStorage(AppPreferenceKey.remoteLLMSelectedProvider) var selectedRemoteLLMProviderRaw = RemoteLLMProvider.openAI.rawValue
 
     let providerTitle: String
     let credentialHint: String?

@@ -4,6 +4,10 @@ import CFNetwork
 struct RemoteLLMRuntimeClient {
     nonisolated init() {}
 
+    enum OpenAICompatibleResponseFormat: Equatable {
+        case jsonObject
+    }
+
     struct StreamingFailure: Error {
         let underlying: Error
         let partialText: String
@@ -203,6 +207,7 @@ struct RemoteLLMRuntimeClient {
         configuration: RemoteProviderConfiguration,
         conversationHistory: [RewriteConversationPromptTurn] = [],
         previousResponseID: String? = nil,
+        openAICompatibleResponseFormat: OpenAICompatibleResponseFormat? = nil,
         onPartialText: (@Sendable (String) -> Void)? = nil,
         onResponseID: ((String) -> Void)? = nil
     ) async throws -> String {
@@ -288,6 +293,7 @@ struct RemoteLLMRuntimeClient {
                     conversationHistory: conversationHistory
                 )
                 : nil,
+            openAICompatibleResponseFormat: openAICompatibleResponseFormat,
             onPartialText: onPartialText
         )
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -412,6 +418,10 @@ struct RemoteLLMRuntimeClient {
         }
 
         guard let content = extractPrimaryText(from: object), !content.isEmpty else {
+            let payloadPreview = String(data: data.prefix(1200), encoding: .utf8) ?? "<non-utf8>"
+            VoxtLog.warning(
+                "Remote LLM Responses response has no usable text. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode), bytes=\(data.count), payload=\(VoxtLog.llmPreview(payloadPreview))"
+            )
             throw NSError(domain: "Voxt.RemoteLLM", code: -306, userInfo: [NSLocalizedDescriptionKey: "Remote LLM returned no text content."])
         }
 
@@ -576,6 +586,7 @@ struct RemoteLLMRuntimeClient {
         provider: RemoteLLMProvider,
         configuration: RemoteProviderConfiguration,
         messagesOverride: [[String: String]]? = nil,
+        openAICompatibleResponseFormat: OpenAICompatibleResponseFormat? = nil,
         onPartialText: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
         let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -606,6 +617,7 @@ struct RemoteLLMRuntimeClient {
                             systemPrompt: systemPrompt,
                             userPrompt: userPrompt,
                             messagesOverride: messagesOverride,
+                            openAICompatibleResponseFormat: openAICompatibleResponseFormat,
                             tuning: tuning,
                             streamingEnabled: true
                         )
@@ -652,6 +664,7 @@ struct RemoteLLMRuntimeClient {
                     systemPrompt: systemPrompt,
                     userPrompt: userPrompt,
                     messagesOverride: messagesOverride,
+                    openAICompatibleResponseFormat: openAICompatibleResponseFormat,
                     tuning: tuning,
                     streamingEnabled: false
                 )
@@ -701,7 +714,7 @@ struct RemoteLLMRuntimeClient {
                 }
 
                 VoxtLog.warning(
-                    "Remote LLM response has no usable text. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode), attempt=\(attempt)/\(endpoints.count), bytes=\(data.count), networkMs=\(responseElapsedMs), decodeMs=\(decodeElapsedMs), totalMs=\(totalElapsedMs)"
+                    "Remote LLM response has no usable text. provider=\(provider.rawValue), endpoint=\(endpointValue), status=\(http.statusCode), attempt=\(attempt)/\(endpoints.count), bytes=\(data.count), networkMs=\(responseElapsedMs), decodeMs=\(decodeElapsedMs), totalMs=\(totalElapsedMs), payload=\(VoxtLog.llmPreview(String(data: data.prefix(1200), encoding: .utf8) ?? "<non-utf8>"))"
                 )
                 throw NSError(domain: "Voxt.RemoteLLM", code: -306, userInfo: [NSLocalizedDescriptionKey: "Remote LLM returned no text content."])
             } catch {
@@ -747,6 +760,7 @@ struct RemoteLLMRuntimeClient {
         systemPrompt: String,
         userPrompt: String,
         messagesOverride: [[String: String]]? = nil,
+        openAICompatibleResponseFormat: OpenAICompatibleResponseFormat? = nil,
         tuning: GenerationTuning,
         streamingEnabled: Bool
     ) throws -> URLRequest {
@@ -863,14 +877,15 @@ struct RemoteLLMRuntimeClient {
             if !apiKey.isEmpty {
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             }
-            var payload: [String: Any] = [
-                "model": model,
-                "messages": messagesOverride ?? openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt),
-                "stream": streamingEnabled,
-                "max_tokens": tuning.maxTokens,
-                "temperature": tuning.temperature,
-                "top_p": tuning.topP
-            ]
+            var payload = openAICompatiblePayload(
+                model: model,
+                systemPrompt: systemPrompt,
+                userPrompt: userPrompt,
+                messagesOverride: messagesOverride,
+                tuning: tuning,
+                streamingEnabled: streamingEnabled,
+                responseFormat: openAICompatibleResponseFormat
+            )
             applyOpenAICompatibleSearchConfiguration(
                 to: &payload,
                 provider: provider,
@@ -880,6 +895,34 @@ struct RemoteLLMRuntimeClient {
         }
 
         return request
+    }
+
+    func openAICompatiblePayload(
+        model: String,
+        systemPrompt: String,
+        userPrompt: String,
+        messagesOverride: [[String: String]]? = nil,
+        tuning: GenerationTuning,
+        streamingEnabled: Bool,
+        responseFormat: OpenAICompatibleResponseFormat? = nil
+    ) -> [String: Any] {
+        var payload: [String: Any] = [
+            "model": model,
+            "messages": messagesOverride ?? openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt),
+            "stream": streamingEnabled,
+            "max_tokens": tuning.maxTokens,
+            "temperature": tuning.temperature,
+            "top_p": tuning.topP
+        ]
+
+        switch responseFormat {
+        case .jsonObject:
+            payload["response_format"] = ["type": "json_object"]
+        case nil:
+            break
+        }
+
+        return payload
     }
 
     private func logRequest(

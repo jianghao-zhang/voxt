@@ -189,6 +189,7 @@ extension AppDelegate {
                 configuration: context.configuration,
                 conversationHistory: (shouldUseProviderManagedConversation || shouldUseChatMessageConversation) ? conversationHistory : [],
                 previousResponseID: shouldUseProviderManagedConversation ? previousConversationResponseID : nil,
+                openAICompatibleResponseFormat: (structuredAnswerOutput && context.provider == .deepseek) ? .jsonObject : nil,
                 onPartialText: onProgress,
                 onResponseID: onResponseID
             )

@@ -803,6 +803,7 @@
 "Connection test succeeded (Meeting ASR reachable)." = "Connection test succeeded (Meeting ASR reachable).";
 "Meeting ASR endpoint reachable. %@" = "Meeting ASR endpoint reachable. %@";
 "Current active Remote ASR provider is %@. Testing %@ here does not switch the active provider." = "Current active Remote ASR provider is %@. Testing %@ here does not switch the active provider.";
+"Current active Remote LLM provider is %@. Testing %@ here does not switch the active provider." = "Current active Remote LLM provider is %@. Testing %@ here does not switch the active provider.";
 "Using %@" = "Using %@";
 "Realtime Translation" = "Realtime Translation";
 "Choose Translation Language" = "Choose Translation Language";
@@ -1144,6 +1145,7 @@
 "Choose Transcription LLM" = "Choose Transcription LLM";
 "Ask about this saved result" = "Ask about this saved result";
 "Copy" = "Copy";
+"Collapse All" = "Collapse All";
 "Generating answer…" = "Generating answer…";
 "Using Apple Intelligence for follow-up." = "Using Apple Intelligence for follow-up.";
 "Enable an enhancement model to ask follow-up questions." = "Enable an enhancement model to ask follow-up questions.";
@@ -1266,6 +1268,7 @@
 "Apply Preset" = "Apply Preset";
 "Volcengine models should use the Responses endpoint in the same region as the API key." = "Volcengine models should use the Responses endpoint in the same region as the API key.";
 "e.g. qwen3-asr-flash-filetrans" = "e.g. qwen3-asr-flash-filetrans";
+"e.g. gpt-4o-transcribe-xxx" = "e.g. gpt-4o-transcribe-xxx";
 "https://..." = "https://...";
 "Beijing" = "Beijing";
 "Singapore" = "Singapore";
@@ -1338,3 +1341,8 @@
 "Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title." = "Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title.";
 "Record Shortcut" = "Record Shortcut";
 "Reset Shortcut" = "Reset Shortcut";
+"Use Anthropic hosted web search when the model needs current information. This may increase latency and usage." = "Use Anthropic hosted web search when the model needs current information. This may increase latency and usage.";
+"Ground responses with Google Search when Gemini needs fresher web context. This may increase latency and usage." = "Ground responses with Google Search when Gemini needs fresher web context. This may increase latency and usage.";
+"Allow GLM to call its hosted web search tool for fresher answers. This may increase latency and usage." = "Allow GLM to call its hosted web search tool for fresher answers. This may increase latency and usage.";
+"Allow Qwen to use built-in web search. Enabled by default for Aliyun because it is available directly in the official compatible API." = "Allow Qwen to use built-in web search. Enabled by default for Aliyun because it is available directly in the official compatible API.";
+"Use provider-hosted web search when available. This may increase latency and usage." = "Use provider-hosted web search when available. This may increase latency and usage.";

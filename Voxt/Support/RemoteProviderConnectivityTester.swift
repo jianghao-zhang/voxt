@@ -579,11 +579,23 @@ struct RemoteProviderConnectivityTester {
         headers: [String: String],
         model: String
     ) async throws -> String {
-        let body: [String: Any]
+        let body = openAICompatibleReachabilityBody(
+            provider: provider,
+            endpoint: endpoint,
+            model: model
+        )
+        return try await testJSONPOSTReachability(endpoint: endpoint, headers: headers, body: body)
+    }
+
+    func openAICompatibleReachabilityBody(
+        provider: RemoteLLMProvider,
+        endpoint: String,
+        model: String
+    ) -> [String: Any] {
         if provider == .ollama,
            let url = URL(string: endpoint),
            usesNativeOllamaChatEndpoint(url) {
-            body = [
+            return [
                 "model": model,
                 "messages": [
                     ["role": "user", "content": "ping"]
@@ -595,16 +607,29 @@ struct RemoteProviderConnectivityTester {
                     "num_predict": 32
                 ]
             ]
-        } else {
-            body = [
+        }
+
+        if provider == .deepseek {
+            return [
                 "model": model,
                 "messages": [
                     ["role": "user", "content": "ping"]
                 ],
+                "thinking": [
+                    "type": "disabled"
+                ],
+                "max_tokens": 1,
                 "stream": false
             ]
         }
-        return try await testJSONPOSTReachability(endpoint: endpoint, headers: headers, body: body)
+
+        return [
+            "model": model,
+            "messages": [
+                ["role": "user", "content": "ping"]
+            ],
+            "stream": false
+        ]
     }
 
     private func testResponsesReachability(

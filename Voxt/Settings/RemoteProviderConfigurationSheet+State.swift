@@ -91,14 +91,24 @@ extension RemoteProviderConfigurationSheet {
     }
 
     var activeProviderNotice: String? {
-        guard let provider = asrProviderForSheet else { return nil }
-        let active = RemoteASRProvider(rawValue: selectedRemoteASRProviderRaw) ?? .openAIWhisper
-        guard active != provider else { return nil }
-        return AppLocalization.format(
-            "Current active Remote ASR provider is %@. Testing %@ here does not switch the active provider.",
-            active.title,
-            provider.title
-        )
+        switch testTarget {
+        case .asr(let provider), .meetingASR(let provider):
+            let active = RemoteASRProvider(rawValue: selectedRemoteASRProviderRaw) ?? .openAIWhisper
+            guard active != provider else { return nil }
+            return AppLocalization.format(
+                "Current active Remote ASR provider is %@. Testing %@ here does not switch the active provider.",
+                active.title,
+                provider.title
+            )
+        case .llm(let provider):
+            let active = RemoteLLMProvider(rawValue: selectedRemoteLLMProviderRaw) ?? .openAI
+            guard active != provider else { return nil }
+            return AppLocalization.format(
+                "Current active Remote LLM provider is %@. Testing %@ here does not switch the active provider.",
+                active.title,
+                provider.title
+            )
+        }
     }
 
     var showsMeetingASRSection: Bool {
