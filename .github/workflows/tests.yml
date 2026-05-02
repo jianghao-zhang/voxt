@@ -10,21 +10,22 @@ on:
 jobs:
   macos-tests:
     runs-on: macos-26
-    env:
-      SPM_CACHE_PATH: ${{ runner.temp }}/spm-cache
-      SPM_CLONE_PATH: ${{ runner.temp }}/spm-source-packages
 
     steps:
       - uses: actions/checkout@v5
 
       - name: Reset SwiftPM binary artifact cache
         run: |
+          SPM_CACHE_PATH="$RUNNER_TEMP/spm-cache"
+          SPM_CLONE_PATH="$RUNNER_TEMP/spm-source-packages"
           rm -rf ~/Library/Caches/org.swift.swiftpm
           rm -rf "$SPM_CACHE_PATH" "$SPM_CLONE_PATH"
           mkdir -p "$SPM_CACHE_PATH" "$SPM_CLONE_PATH"
 
       - name: Resolve Swift packages
         run: |
+          SPM_CACHE_PATH="$RUNNER_TEMP/spm-cache"
+          SPM_CLONE_PATH="$RUNNER_TEMP/spm-source-packages"
           xcodebuild -resolvePackageDependencies \
             -project Voxt.xcodeproj \
             -clonedSourcePackagesDirPath "$SPM_CLONE_PATH" \
@@ -33,6 +34,8 @@ jobs:
 
       - name: Run tests
         run: |
+          SPM_CACHE_PATH="$RUNNER_TEMP/spm-cache"
+          SPM_CLONE_PATH="$RUNNER_TEMP/spm-source-packages"
           xcodebuild test \
             -project Voxt.xcodeproj \
             -scheme Voxt \

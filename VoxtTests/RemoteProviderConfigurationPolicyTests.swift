@@ -154,7 +154,10 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
 
         XCTAssertTrue(sheet.supportsCustomProviderModelSelection)
         XCTAssertTrue(sheet.shouldShowCustomProviderModelField)
-        XCTAssertEqual(sheet.customProviderModelPlaceholder, "e.g. gpt-4o-transcribe-xxx")
+        XCTAssertEqual(
+            sheet.customProviderModelPlaceholder,
+            AppLocalization.localizedString("e.g. gpt-4o-transcribe-xxx")
+        )
     }
 
     func testNonOpenAIASRSheetDoesNotShowCustomField() {
