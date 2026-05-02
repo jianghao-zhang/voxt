@@ -6,6 +6,47 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.10.3] - 2026-05-02
+
+### English
+
+#### Added
+- Added app-aware enhancement icons to the transcription overlay, so matched enhancement groups can show the active app or site icon while enhancement is running.
+
+#### Changed
+- Refined the recording overlay visuals with a calmer loading indicator, tighter waveform motion, and more stable card layout during processing.
+- Updated onboarding and model management flows so local model downloads, pause and continue actions, and related status handling stay more consistent across the app.
+
+#### Fixed
+- Fixed remote model configuration copy so provider-specific search descriptions, active-provider notices, and custom model placeholders are localized more consistently.
+- Fixed remote provider connectivity checks and DeepSeek defaults so newer DeepSeek models and structured-output requests behave more reliably in settings and enhancement flows.
+
+### 简体中文
+
+#### 新增
+- 为转录悬浮卡片新增了应用增强图标提示，命中增强分组时，增强处理中会显示当前应用或站点图标。
+
+#### 改进
+- 优化了录音悬浮层的视觉表现，新的加载指示器更克制，声波动态更紧凑，处理中卡片布局也更稳定。
+- 优化了引导与模型管理流程，让本地模型下载、暂停与继续操作，以及相关状态反馈在应用内保持更一致的体验。
+
+#### 修复
+- 修复了远端模型配置弹窗中的多语言文案问题，现在不同提供商的搜索说明、当前使用提示和自定义模型占位文案都会更一致地本地化。
+- 修复了远端模型连通性检查和 DeepSeek 默认配置，使较新的 DeepSeek 模型与结构化输出请求在设置页和增强链路中表现更稳定。
+
+### 日本語
+
+#### 追加
+- 文字起こしオーバーレイにアプリ強化アイコン表示を追加し、強化グループに一致した場合は処理中に現在のアプリやサイトのアイコンが表示されるようにしました。
+
+#### 変更
+- 録音オーバーレイの見た目を改善し、より落ち着いたローディング表示、引き締まった波形アニメーション、処理中でも安定したカードレイアウトに整えました。
+- オンボーディングとモデル管理フローを見直し、ローカルモデルのダウンロード、一時停止・再開操作、関連する状態表示がアプリ全体でより一貫するようにしました。
+
+#### 修正
+- リモートモデル設定ダイアログの多言語文言を修正し、プロバイダーごとの検索説明、現在利用中の案内、カスタムモデルのプレースホルダーがより一貫してローカライズされるようにしました。
+- リモートプロバイダーの接続チェックと DeepSeek の既定設定を修正し、新しい DeepSeek モデルと構造化出力リクエストが設定画面と強化フローでより安定して動作するようにしました。
+
 ## [1.10.2] - 2026-05-01
 
 ### English
