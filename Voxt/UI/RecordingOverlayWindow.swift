@@ -56,6 +56,7 @@ class OverlayState: ObservableObject {
     @Published var isSessionTranslationTargetPickerPresented = false
     @Published var isSessionTranslationLanguageHovering = false
     @Published var allowsSessionTranslationLanguageSwitching = false
+    @Published var compactLeadingIconImage: NSImage?
     var answerTranslationSourceText = ""
 
     private var cancellables = Set<AnyCancellable>()
@@ -154,6 +155,7 @@ class OverlayState: ObservableObject {
         isSessionTranslationTargetPickerPresented = false
         isSessionTranslationLanguageHovering = false
         allowsSessionTranslationLanguageSwitching = false
+        compactLeadingIconImage = nil
         answerTranslationSourceText = ""
         latestSourceTranscribedText = ""
         transcribedTextTransformer = nil
@@ -178,6 +180,7 @@ class OverlayState: ObservableObject {
         if let iconMode {
             sessionIconMode = iconMode
         }
+        compactLeadingIconImage = nil
         answerTitle = ""
         answerContent = ""
         isFinalizingTranscription = false
@@ -187,6 +190,7 @@ class OverlayState: ObservableObject {
     func presentProcessing(iconMode: OverlaySessionIconMode? = nil) {
         guard displayMode != .answer else { return }
         displayMode = .processing
+        compactLeadingIconImage = nil
         dismissSessionTranslationTargetPicker()
         if let iconMode {
             sessionIconMode = iconMode
@@ -211,6 +215,7 @@ class OverlayState: ObservableObject {
         isFinalizingTranscription = false
         isCompleting = false
         statusMessage = ""
+        compactLeadingIconImage = nil
         dismissSessionTranslationTargetPicker()
 
         if isRewriteConversationActive {
@@ -242,6 +247,7 @@ class OverlayState: ObservableObject {
         isFinalizingTranscription = false
         isCompleting = false
         statusMessage = ""
+        compactLeadingIconImage = nil
         dismissSessionTranslationTargetPicker()
 
         if !isRewriteConversationActive {
@@ -270,6 +276,7 @@ class OverlayState: ObservableObject {
         isFinalizingTranscription = false
         isCompleting = false
         statusMessage = ""
+        compactLeadingIconImage = nil
         dismissSessionTranslationTargetPicker()
 
         if isRewriteConversationActive {
@@ -296,6 +303,7 @@ class OverlayState: ObservableObject {
         isFinalizingTranscription = false
         isCompleting = false
         statusMessage = ""
+        compactLeadingIconImage = nil
         dismissSessionTranslationTargetPicker()
     }
 
@@ -449,6 +457,7 @@ class OverlayState: ObservableObject {
         isEnhancing = false
         isRequesting = false
         isFinalizingTranscription = false
+        compactLeadingIconImage = nil
     }
 
     private func appendConversationResult(_ payload: RewriteAnswerPayload) {
@@ -881,6 +890,7 @@ private struct OverlayContent: View {
             canCopyAnswer: state.canCopyLatestAnswer,
             canContinueAnswer: state.showsRewriteContinueButton,
             canShowHistoryDetail: state.canShowLatestHistoryDetail,
+            compactLeadingIconImage: state.compactLeadingIconImage,
             sessionTranslationTargetLanguage: state.sessionTranslationTargetLanguage,
             sessionTranslationDraftLanguage: state.sessionTranslationDraftLanguage,
             isSessionTranslationTargetPickerPresented: state.isSessionTranslationTargetPickerPresented,

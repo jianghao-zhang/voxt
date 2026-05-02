@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct AnswerIconView: View {
     var body: some View {
@@ -72,6 +73,19 @@ struct RewriteModeIconView: View {
             )
             .fill(.white)
         }
+    }
+}
+
+struct OverlayCompactLeadingIconView: View {
+    let image: NSImage
+
+    var body: some View {
+        Image(nsImage: image)
+            .resizable()
+            .interpolation(.high)
+            .antialiased(true)
+            .scaledToFit()
+            .clipShape(RoundedRectangle(cornerRadius: 3.5, style: .continuous))
     }
 }
 

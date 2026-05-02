@@ -16,6 +16,7 @@
 		D1E2F3A4B5C60718293A4B5C /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = D1E2F3A4B5C60718293A4B5D /* WhisperKit */; };
 		E2A1C3B4D5F60718293A4B6C /* PermissionFlow in Frameworks */ = {isa = PBXBuildFile; productRef = E2A1C3B4D5F60718293A4B6D /* PermissionFlow */; };
 		E2A1C3B4D5F60718293A4B6E /* SystemSettingsKit in Frameworks */ = {isa = PBXBuildFile; productRef = E2A1C3B4D5F60718293A4B6F /* SystemSettingsKit */; };
+		F1A2B3C4D5E6F708090A0B0C /* FaviconFinder in Frameworks */ = {isa = PBXBuildFile; productRef = F1A2B3C4D5E6F708090A0B0D /* FaviconFinder */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -77,6 +78,7 @@
 				D1E2F3A4B5C60718293A4B5C /* WhisperKit in Frameworks */,
 				E2A1C3B4D5F60718293A4B6C /* PermissionFlow in Frameworks */,
 				E2A1C3B4D5F60718293A4B6E /* SystemSettingsKit in Frameworks */,
+				F1A2B3C4D5E6F708090A0B0C /* FaviconFinder in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -173,6 +175,7 @@
 				D1E2F3A4B5C60718293A4B5D /* WhisperKit */,
 				E2A1C3B4D5F60718293A4B6D /* PermissionFlow */,
 				E2A1C3B4D5F60718293A4B6F /* SystemSettingsKit */,
+				F1A2B3C4D5E6F708090A0B0D /* FaviconFinder */,
 			);
 			productName = Voxt;
 			productReference = 31F19CCD2F4D76D200E96913 /* Voxt Dev.app */;
@@ -234,6 +237,7 @@
 				C1D2E3F4A5060708090A0B03 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				D1E2F3A4B5C60718293A4B5E /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				E2A1C3B4D5F60718293A4B70 /* XCRemoteSwiftPackageReference "PermissionFlow" */,
+				F1A2B3C4D5E6F708090A0B0E /* XCRemoteSwiftPackageReference "FaviconFinder" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 31F19CCE2F4D76D200E96913 /* Products */;
@@ -910,6 +914,14 @@
 				version = 2.1.0;
 			};
 		};
+		F1A2B3C4D5E6F708090A0B0E /* XCRemoteSwiftPackageReference "FaviconFinder" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/will-lumley/FaviconFinder.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.1.5;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -947,6 +959,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E2A1C3B4D5F60718293A4B70 /* XCRemoteSwiftPackageReference "PermissionFlow" */;
 			productName = SystemSettingsKit;
+		};
+		F1A2B3C4D5E6F708090A0B0D /* FaviconFinder */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F1A2B3C4D5E6F708090A0B0E /* XCRemoteSwiftPackageReference "FaviconFinder" */;
+			productName = FaviconFinder;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

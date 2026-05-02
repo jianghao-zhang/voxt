@@ -58,6 +58,7 @@ struct WaveformView: View {
     var canCopyAnswer: Bool = false
     var canContinueAnswer: Bool = false
     var canShowHistoryDetail: Bool = false
+    var compactLeadingIconImage: NSImage? = nil
     var sessionTranslationTargetLanguage: TranslationTargetLanguage? = nil
     var sessionTranslationDraftLanguage: TranslationTargetLanguage? = nil
     var isSessionTranslationTargetPickerPresented: Bool = false
@@ -469,6 +470,11 @@ struct WaveformView: View {
                 .frame(width: 14, height: 14, alignment: .center)
         } else if showsInitializationIcon {
             ModelInitializingIconView()
+                .frame(width: 14, height: 14, alignment: .center)
+        } else if let compactLeadingIconImage,
+                  sessionIconMode == .transcription,
+                  displayMode == .processing {
+            OverlayCompactLeadingIconView(image: compactLeadingIconImage)
                 .frame(width: 14, height: 14, alignment: .center)
         } else {
             compactModeIcon

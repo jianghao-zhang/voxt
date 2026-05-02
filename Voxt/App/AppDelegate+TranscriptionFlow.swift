@@ -84,11 +84,12 @@ extension AppDelegate {
     }
 
     private func runStandardTranscriptionPipeline(text: String) async throws -> String {
+        let sessionID = activeRecordingSessionID
         let runner = SessionPipelineRunner(
             stages: [
                 TranscriptionEnhanceStage(transform: { [weak self] value in
                     guard let self else { return value }
-                    return try await self.enhanceTextForCurrentMode(value)
+                    return try await self.enhanceTextForCurrentMode(value, sessionID: sessionID)
                 })
             ]
         )
@@ -96,10 +97,13 @@ extension AppDelegate {
         return result.workingText
     }
 
-    func enhanceTextForCurrentMode(_ text: String) async throws -> String {
+    func enhanceTextForCurrentMode(_ text: String, sessionID: UUID? = nil) async throws -> String {
         let promptResolution = resolvedEnhancementPrompt(rawTranscription: text)
         if promptResolution.delivery == .skipEnhancement {
             return text
+        }
+        if let sessionID {
+            applyEnhancementOverlayIconIfNeeded(match: promptResolution.overlayIconMatch, sessionID: sessionID)
         }
 
         switch enhancementMode {

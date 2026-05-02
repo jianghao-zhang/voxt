@@ -234,4 +234,26 @@ final class EnhancementPromptResolverTests: XCTestCase {
         XCTAssertContains(output.content, "Other frequently used user languages: None.")
         XCTAssertContains(output.content, "It is not a target output language and must not trigger translation.")
     }
+
+    func testFaviconOriginKeepsSchemeAndHostOnly() {
+        XCTAssertEqual(
+            EnhancementOverlayIconResolver.faviconOrigin(
+                fromPageURL: "https://www.xiaohongshu.com/explore/abc?x=1#frag"
+            ),
+            "https://www.xiaohongshu.com"
+        )
+        XCTAssertEqual(
+            EnhancementOverlayIconResolver.faviconOrigin(
+                fromPageURL: "http://localhost:3000/path/test"
+            ),
+            "http://localhost:3000"
+        )
+    }
+
+    func testFaviconLookupURLUsesOriginDirectly() throws {
+        let url = try XCTUnwrap(
+            EnhancementOverlayIconResolver.faviconLookupURL(forOrigin: "https://www.xiaohongshu.com")
+        )
+        XCTAssertEqual(url.absoluteString, "https://www.xiaohongshu.com")
+    }
 }

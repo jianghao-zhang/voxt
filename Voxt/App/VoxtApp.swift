@@ -58,6 +58,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let capturedAt: Date
     }
 
+    struct OverlayEnhancementIconMatch: Equatable {
+        enum Kind: Equatable {
+            case app
+            case url
+        }
+
+        let kind: Kind
+        let bundleID: String
+        let urlOrigin: String?
+    }
+
     struct EnhancementPromptContext {
         let focusedAppName: String?
         let focusedAppBundleID: String?
@@ -65,6 +76,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let matchedGroupName: String?
         let matchedAppGroupName: String?
         let matchedURLGroupName: String?
+        let overlayIconMatch: OverlayEnhancementIconMatch?
     }
 
     enum MeetingSessionCompletionDisposition {
