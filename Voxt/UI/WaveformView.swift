@@ -89,6 +89,16 @@ struct WaveformView: View {
     @State private var textScrollID = UUID()
     @State private var didCopyAnswer = false
     @State private var copyFeedbackToken = UUID()
+    @StateObject private var waveformState = RecentAudioWaveformState(
+        barCount: 16,
+        historyDuration: 0.9,
+        framesPerSecond: 20,
+        silenceFloor: 0.01,
+        peakHoldFrames: 1,
+        peakDecayFactor: 0.74,
+        riseSmoothing: 0.82,
+        fallSmoothing: 0.24
+    )
 
     private var displayText: String {
         let message = statusMessage.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -180,22 +190,36 @@ struct WaveformView: View {
         }
         .onAppear {
             updateAnimationState()
+            updateWaveformStateActivity()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
                 appeared = true
             }
         }
         .onDisappear {
             stopAnimating()
+            waveformState.setActive(false)
             appeared = false
         }
         .onChange(of: shouldAnimate) {
             updateAnimationState()
+            updateWaveformStateActivity()
         }
         .onChange(of: displayMode) {
             updateAnimationState()
+            updateWaveformStateActivity()
         }
         .onChange(of: isRecording) {
             updateAnimationState()
+            updateWaveformStateActivity()
+        }
+        .onChange(of: isModelInitializing) {
+            updateWaveformStateActivity()
+        }
+        .onChange(of: showsLoadingSpinner) {
+            updateWaveformStateActivity()
+        }
+        .onChange(of: audioLevel) {
+            waveformState.ingest(level: emphasizedWaveformInputLevel(audioLevel))
         }
     }
 
@@ -283,6 +307,7 @@ struct WaveformView: View {
     private var waveformSlot: some View {
         if showsLoadingSpinner {
             processingBars
+                .frame(width: waveformVisualWidth, height: barAreaHeight, alignment: .center)
                 .frame(width: waveformSlotWidth, height: barAreaHeight, alignment: .center)
                 .transition(.opacity)
         } else if showsSessionTranslationLanguagePill {
@@ -296,6 +321,7 @@ struct WaveformView: View {
         } else {
             waveformBars
                 .frame(width: waveformVisualWidth, height: barAreaHeight, alignment: .center)
+                .frame(width: waveformSlotWidth, height: barAreaHeight, alignment: .center)
                 .transition(.opacity)
         }
     }
@@ -549,53 +575,44 @@ struct WaveformView: View {
                             endPoint: .bottom
                         )
                     )
-                    .frame(width: waveformBarWidth, height: barHeight(for: index))
-                    .shadow(color: .white.opacity(glowOpacity(for: index)), radius: 3, x: 0, y: 0)
+                    .frame(width: waveformBarWidth, height: waveformBarHeight(for: index))
+                    .shadow(color: .white.opacity(waveformGlowOpacity(for: index)), radius: 3, x: 0, y: 0)
             }
         }
         .frame(height: barAreaHeight)
     }
 
     private var processingBars: some View {
-        HStack(alignment: .center, spacing: waveformBarSpacing) {
-            ForEach(0..<barCount, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(.white.opacity(processingBarOpacity(for: index)))
-                    .frame(width: 2.5, height: processingBarHeight(for: index))
-            }
-        }
+        WaveformProcessingLoaderView(
+            isAnimating: shouldAnimate,
+            itemCount: 5,
+            itemSize: CGSize(width: 5, height: 5),
+            spacing: 4,
+            color: .white
+        )
         .frame(height: barAreaHeight)
     }
 
     @ViewBuilder
     private var compactModeIcon: some View {
-        if showsLoadingSpinner {
-            LoadingSpinnerIconView(isAnimating: shouldAnimate)
+        switch sessionIconMode {
+        case .transcription:
+            TranscriptionModeIconView()
                 .frame(width: 14, height: 14)
-        } else if showsInitializationIcon {
-            ModelInitializingIconView()
+                .opacity(0.92)
+        case .translation:
+            TranslationModeIconView()
                 .frame(width: 14, height: 14)
-        } else {
-            switch sessionIconMode {
-            case .transcription:
-                TranscriptionModeIconView()
-                    .frame(width: 14, height: 14)
-                    .opacity(0.92)
-            case .translation:
-                TranslationModeIconView()
-                    .frame(width: 14, height: 14)
-                    .opacity(0.92)
-            case .rewrite:
-                RewriteModeIconView()
-                    .frame(width: 14, height: 14)
-                    .opacity(0.92)
-            }
+                .opacity(0.92)
+        case .rewrite:
+            RewriteModeIconView()
+                .frame(width: 14, height: 14)
+                .opacity(0.92)
         }
     }
 
     private func barHeight(for index: Int) -> CGFloat {
         let minH: CGFloat = 4
-        let maxH: CGFloat = 23
         let phase = phases[index]
         let sine = (sin(phase) + 1) / 2
 
@@ -605,16 +622,8 @@ struct WaveformView: View {
         }
 
         if isRecording {
-            let level = normalizedAudioLevel(audioLevel)
-            let audioEnvelope = pow(level, 0.84)
-            let travelEnvelope = recordingTravelEnvelope(for: index)
-            let ambientEnvelope = CGFloat(sine * 0.65 + 0.35)
-            let baseFloor = 0.012 + min(0.025, level * 0.03)
-            let travelStrength = 0.005 + audioEnvelope * 0.95
-            let ambientStrength = 0.004 + audioEnvelope * 0.05
-            let mixedEnvelope = min(1.0, baseFloor + travelEnvelope * travelStrength + ambientEnvelope * ambientStrength)
-            let driven = minH + (maxH - minH) * mixedEnvelope
-            return max(minH, driven)
+            let level = waveformState.barLevels.indices.contains(index) ? waveformState.barLevels[index] : audioLevel
+            return WaveformBarVisuals.barHeight(level: level, minHeight: 3.2, maxHeight: 22)
         }
 
         if displayMode == .processing {
@@ -629,11 +638,8 @@ struct WaveformView: View {
             return 0.03
         }
         guard isRecording else { return 0.08 }
-        let level = Double(normalizedAudioLevel(audioLevel))
-        let travelEnvelope = Double(recordingTravelEnvelope(for: index))
-        let ambientPulse = (sin(phases[index] * 1.15) + 1) / 2
-        let glow = 0.02 + ambientPulse * 0.01 + travelEnvelope * 0.05 + level * (0.025 + travelEnvelope * 0.07)
-        return min(0.2, glow)
+        let level = waveformState.barLevels.indices.contains(index) ? waveformState.barLevels[index] : audioLevel
+        return WaveformBarVisuals.glowOpacity(level: level, base: 0.04, gain: 0.26, cap: 0.24)
     }
 
     private func normalizedAudioLevel(_ raw: Float) -> CGFloat {
@@ -642,23 +648,31 @@ struct WaveformView: View {
         return CGFloat(gained)
     }
 
+    private func waveformBarHeight(for index: Int) -> CGFloat {
+        barHeight(for: index)
+    }
+
+    private func waveformGlowOpacity(for index: Int) -> Double {
+        glowOpacity(for: index)
+    }
+
+    private var shouldDriveWaveformHistory: Bool {
+        shouldAnimate && isRecording && !showsLoadingSpinner && !isModelInitializing
+    }
+
+    private func updateWaveformStateActivity() {
+        waveformState.setActive(shouldDriveWaveformHistory)
+    }
+
+    private func emphasizedWaveformInputLevel(_ level: Float) -> Float {
+        let clamped = max(0, min(level, 1))
+        let expanded = min(1.0, pow(Double(clamped), 0.72) * 1.24)
+        return Float(expanded)
+    }
+
     private func staticBarHeight(for index: Int) -> CGFloat {
         let pattern: [CGFloat] = [5, 7, 10, 12, 9, 6, 8, 11]
         return pattern[index % pattern.count]
-    }
-
-    private func processingBarHeight(for index: Int) -> CGFloat {
-        let phase = phases[index]
-        let sine = (sin(phase) + 1) / 2
-        let minH: CGFloat = 6
-        let maxH: CGFloat = 10
-        return minH + (maxH - minH) * CGFloat(sine)
-    }
-
-    private func processingBarOpacity(for index: Int) -> Double {
-        let phase = phases[index]
-        let sine = (sin(phase * 1.2) + 1) / 2
-        return 0.35 + 0.4 * sine
     }
 
     private func recordingTravelEnvelope(for index: Int) -> CGFloat {

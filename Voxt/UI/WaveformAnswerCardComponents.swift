@@ -152,8 +152,13 @@ struct AnswerConversationWaveView: View {
 
     @StateObject private var waveformState = RecentAudioWaveformState(
         barCount: 16,
-        historyDuration: 1.6,
-        framesPerSecond: 18
+        historyDuration: 0.9,
+        framesPerSecond: 20,
+        silenceFloor: 0.01,
+        peakHoldFrames: 1,
+        peakDecayFactor: 0.74,
+        riseSmoothing: 0.82,
+        fallSmoothing: 0.24
     )
 
     var body: some View {
@@ -161,7 +166,7 @@ struct AnswerConversationWaveView: View {
             waveformState: waveformState,
             isSubdued: !isRecording || isProcessing
         )
-        .scaleEffect(x: 0.82, y: 0.72, anchor: .leading)
+        .scaleEffect(x: 0.84, y: 0.82, anchor: .leading)
         .onAppear {
             waveformState.setActive(shouldAnimate && isRecording && !isProcessing)
         }
@@ -175,10 +180,16 @@ struct AnswerConversationWaveView: View {
             waveformState.setActive(shouldAnimate && isRecording && !isProcessing)
         }
         .onChange(of: audioLevel) {
-            waveformState.ingest(level: audioLevel)
+            waveformState.ingest(level: emphasizedWaveformInputLevel(audioLevel))
         }
         .onDisappear {
             waveformState.setActive(false)
         }
+    }
+
+    private func emphasizedWaveformInputLevel(_ level: Float) -> Float {
+        let clamped = max(0, min(level, 1))
+        let expanded = min(1.0, pow(Double(clamped), 0.72) * 1.24)
+        return Float(expanded)
     }
 }

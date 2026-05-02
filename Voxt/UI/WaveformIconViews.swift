@@ -113,6 +113,66 @@ struct LoadingSpinnerIconView: View {
     }
 }
 
+struct WaveformProcessingLoaderView: View {
+    var isAnimating = true
+    var itemCount = 5
+    var itemSize = CGSize(width: 6, height: 6)
+    var spacing: CGFloat = 4
+    var color: Color = .white
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            HStack(alignment: .center, spacing: spacing) {
+                ForEach(0..<itemCount, id: \.self) { index in
+                    let progress = phaseProgress(for: index, at: context.date)
+                    Circle()
+                        .fill(color)
+                        .frame(width: itemSize.width, height: itemSize.height)
+                    .scaleEffect(loaderScale(for: progress))
+                    .opacity(loaderOpacity(for: progress))
+                }
+            }
+        }
+        .frame(height: max(itemSize.height * 2.1, itemSize.height))
+    }
+
+    private func phaseProgress(for index: Int, at date: Date) -> Double {
+        guard isAnimating else { return 1 }
+
+        let cycleDuration = 1.2
+        let staggerDelay = 0.12
+        let rawProgress = date.timeIntervalSinceReferenceDate - (Double(index) * staggerDelay)
+        let wrapped = rawProgress.truncatingRemainder(dividingBy: cycleDuration)
+        return wrapped >= 0 ? (wrapped / cycleDuration) : ((wrapped + cycleDuration) / cycleDuration)
+    }
+
+    private func loaderScale(for progress: Double) -> CGFloat {
+        switch progress {
+        case 0..<0.3:
+            let t = progress / 0.3
+            return 0.6 + (0.7 * t)
+        case 0.3..<0.6:
+            let t = (progress - 0.3) / 0.3
+            return 1.3 - (0.7 * t)
+        default:
+            return 0.6
+        }
+    }
+
+    private func loaderOpacity(for progress: Double) -> Double {
+        switch progress {
+        case 0..<0.3:
+            let t = progress / 0.3
+            return 0.15 + (0.85 * t)
+        case 0.3..<0.6:
+            let t = (progress - 0.3) / 0.3
+            return 1.0 - (0.85 * t)
+        default:
+            return 0.15
+        }
+    }
+}
+
 struct ModelInitializingIconView: View {
     private let viewport = CGSize(width: 24, height: 24)
 

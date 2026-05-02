@@ -186,14 +186,30 @@ private struct MeetingTranscriptRow: View {
 struct MeetingMiniWaveform: View {
     @ObservedObject var waveformState: RecentAudioWaveformState
     var isSubdued = false
+    var showsProcessingLoader = false
+    var isAnimatingLoader = true
 
     var body: some View {
-        HStack(alignment: .center, spacing: 2.5) {
-            ForEach(0..<waveformState.barCount, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(WaveformBarVisuals.barGradient)
-                    .frame(width: 4, height: barHeight(for: index))
-                    .shadow(color: .white.opacity(glowOpacity(for: index)), radius: 2.5, x: 0, y: 0)
+        Group {
+            if showsProcessingLoader {
+                WaveformProcessingLoaderView(
+                    isAnimating: isAnimatingLoader,
+                    itemCount: 5,
+                    itemSize: CGSize(width: 5, height: 5),
+                    spacing: 4,
+                    color: .white
+                )
+                .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                HStack(alignment: .center, spacing: 2.5) {
+                    ForEach(0..<waveformState.barCount, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(WaveformBarVisuals.barGradient)
+                            .frame(width: 4, height: barHeight(for: index))
+                            .shadow(color: .white.opacity(glowOpacity(for: index)), radius: 2.5, x: 0, y: 0)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .frame(height: 28)

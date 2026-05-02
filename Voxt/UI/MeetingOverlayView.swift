@@ -111,7 +111,9 @@ private struct MeetingOverlayCard: View {
 
                     MeetingMiniWaveform(
                         waveformState: state.waveformState,
-                        isSubdued: state.isModelInitializing
+                        isSubdued: state.isModelInitializing,
+                        showsProcessingLoader: showsHeaderWaveformLoader,
+                        isAnimatingLoader: state.isPresented
                     )
                         .frame(width: state.isCollapsed ? 96 : 116, height: 28)
                 }
@@ -385,6 +387,10 @@ private struct MeetingOverlayCard: View {
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(.black.opacity(cardOpacity))
+    }
+
+    private var showsHeaderWaveformLoader: Bool {
+        state.isPresented && !state.isModelInitializing && !state.isRecording && !state.isPaused
     }
 }
 
