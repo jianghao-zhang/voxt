@@ -510,6 +510,7 @@ struct FeaturePromptSection: View {
     @Binding var text: String
     let defaultText: String
     let variables: [PromptTemplateVariableDescriptor]
+    var onSave: (() -> Void)?
 
     var body: some View {
         ResettablePromptSection(
@@ -517,7 +518,8 @@ struct FeaturePromptSection: View {
             text: $text,
             defaultText: defaultText,
             variables: variables,
-            promptHeight: 196
+            promptHeight: 196,
+            onSave: onSave
         )
     }
 }

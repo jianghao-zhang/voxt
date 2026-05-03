@@ -15,7 +15,8 @@ extension FeatureSettingsView {
                 AppPromptDefaults.resolvedStoredText(get(), kind: kind)
             },
             set: { newValue in
-                set(AppPromptDefaults.canonicalStoredText(newValue, kind: kind))
+                let storedPrompt = AppPromptDefaults.canonicalStoredText(newValue, kind: kind)
+                set(storedPrompt)
             }
         )
     }
