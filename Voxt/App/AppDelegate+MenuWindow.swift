@@ -7,6 +7,10 @@ extension AppDelegate {
         NSSize(width: 760, height: 560)
     }
 
+    private var mainWindowMinimumContentSize: NSSize {
+        NSSize(width: 600, height: 420)
+    }
+
     private func setMainWindowVisibility(_ isVisible: Bool) {
         synchronizeAppActivationPolicy(mainWindowVisible: isVisible)
         guard mainWindowVisibilityState.isVisible != isVisible else { return }
@@ -477,13 +481,20 @@ extension AppDelegate {
             initialNavigationTarget: navigationRequest.target,
             initialDisplayMode: resolvedInitialDisplayMode(for: navigationRequest.target)
         )
-        .frame(width: mainWindowContentSize.width, height: mainWindowContentSize.height)
+        .frame(
+            minWidth: mainWindowMinimumContentSize.width,
+            idealWidth: mainWindowContentSize.width,
+            maxWidth: .infinity,
+            minHeight: mainWindowMinimumContentSize.height,
+            idealHeight: mainWindowContentSize.height,
+            maxHeight: .infinity
+        )
 
         let hostingController = NSHostingController(rootView: contentView)
 
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: mainWindowContentSize),
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -495,11 +506,13 @@ extension AppDelegate {
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = false
         window.contentViewController = hostingController
+        window.contentMinSize = mainWindowMinimumContentSize
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.level = .normal
         window.delegate = self
         positionWindowTrafficLightButtons(window)
+        observeTrafficLightContainerFrameChanges(for: window)
 
         let controller = NSWindowController(window: window)
         controller.shouldCascadeWindows = false
@@ -590,6 +603,22 @@ extension AppDelegate {
             guard let self, let window else { return }
             self.positionWindowTrafficLightButtons(window)
         }
+    }
+
+    private func observeTrafficLightContainerFrameChanges(for window: NSWindow) {
+        guard let container = window.standardWindowButton(.closeButton)?.superview else { return }
+        container.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(trafficLightContainerFrameDidChange(_:)),
+            name: NSView.frameDidChangeNotification,
+            object: container
+        )
+    }
+
+    @objc private func trafficLightContainerFrameDidChange(_ notification: Notification) {
+        guard let window = mainWindowController?.window else { return }
+        positionWindowTrafficLightButtons(window)
     }
 
     @objc private func quit() {
