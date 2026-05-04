@@ -237,9 +237,14 @@ struct DictionarySettingsView: View {
                     }
                 } else if let errorMessage = historyScanProgress.errorMessage,
                           !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        Text("Review the ingest prompt in Dictionary Advanced Settings, then run One-Click Ingest again.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 } else if let lastRunAt = historyScanProgress.lastRunAt {
                     Text(historyScanSummaryText(lastRunAt: lastRunAt))
                         .font(.caption)

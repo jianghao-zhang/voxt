@@ -700,6 +700,7 @@
 "Apple Intelligence requires macOS 26 or later." = "Apple Intelligence requires macOS 26 or later.";
 "No usable LLM is available for dictionary ingestion. Configure Apple Intelligence, a local custom LLM, or a remote LLM first." = "No usable LLM is available for dictionary ingestion. Configure Apple Intelligence, a local custom LLM, or a remote LLM first.";
 "Dictionary ingestion returned invalid text." = "Dictionary ingestion returned invalid text.";
+"Review the ingest prompt in Dictionary Advanced Settings, then run One-Click Ingest again." = "Review the ingest prompt in Dictionary Advanced Settings, then run One-Click Ingest again.";
 "Dictionary ingestion canceled." = "Dictionary ingestion canceled.";
 "Dictionary %d" = "Dictionary %d";
 "Corrected %d" = "Corrected %d";

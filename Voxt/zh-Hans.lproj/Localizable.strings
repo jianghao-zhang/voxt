@@ -710,6 +710,7 @@
 "Apple Intelligence requires macOS 26 or later." = "Apple Intelligence 需要 macOS 26 或更高版本。";
 "No usable LLM is available for dictionary ingestion. Configure Apple Intelligence, a local custom LLM, or a remote LLM first." = "当前没有可用于词典录入的 LLM。请先配置 Apple Intelligence、本地自定义 LLM 或远程 LLM。";
 "Dictionary ingestion returned invalid text." = "词典录入返回了无效文本。";
+"Review the ingest prompt in Dictionary Advanced Settings, then run One-Click Ingest again." = "请检查词典高级设置中的录入提示词，然后再次运行一键录入。";
 "Dictionary ingestion canceled." = "词典录入已取消。";
 "Done" = "完成";
 "Dictionary…" = "词典…";

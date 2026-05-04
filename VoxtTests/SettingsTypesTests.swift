@@ -148,7 +148,10 @@ final class SettingsTypesTests: XCTestCase {
         [{"term":"OpenAI","reason":"common company name"}]
         """
 
-        XCTAssertThrowsError(try DictionaryHistoryScanResponseParser.parseTerms(from: response))
+        XCTAssertEqual(
+            try DictionaryHistoryScanResponseParser.parseTerms(from: response),
+            ["OpenAI"]
+        )
     }
 
     func testDictionaryHistoryScanResponseParserRejectsPlainTextResponse() {
@@ -162,7 +165,25 @@ final class SettingsTypesTests: XCTestCase {
         {"terms":[{"term":"OpenAI"},{"term":"Claude"}]}
         """
 
-        XCTAssertNoThrow(try DictionaryHistoryScanResponseParser.parseTerms(from: response))
+        XCTAssertEqual(
+            try DictionaryHistoryScanResponseParser.parseTerms(from: response),
+            ["OpenAI", "Claude"]
+        )
+    }
+
+    func testDictionaryHistoryScanResponseParserAcceptsWrappedStringArrayPayload() throws {
+        let response = """
+        Sure, here are the extracted terms:
+        ```json
+        {"terms":["OpenAI","MCP","OpenAI"]}
+        ```
+        These should be enough.
+        """
+
+        XCTAssertEqual(
+            try DictionaryHistoryScanResponseParser.parseTerms(from: response),
+            ["OpenAI", "MCP"]
+        )
     }
 
     func testDictionaryHistoryScanResponseParserFiltersRejectedJSONArrayItems() throws {

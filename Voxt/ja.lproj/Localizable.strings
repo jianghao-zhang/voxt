@@ -726,6 +726,7 @@
 "Apple Intelligence requires macOS 26 or later." = "Apple Intelligence には macOS 26 以降が必要です。";
 "No usable LLM is available for dictionary ingestion. Configure Apple Intelligence, a local custom LLM, or a remote LLM first." = "辞書取り込みに使用できる LLM がありません。先に Apple Intelligence、ローカルのカスタム LLM、またはリモート LLM を設定してください。";
 "Dictionary ingestion returned invalid text." = "辞書取り込みで無効なテキストが返されました。";
+"Review the ingest prompt in Dictionary Advanced Settings, then run One-Click Ingest again." = "辞書の詳細設定で取り込み用プロンプトを確認してから、もう一度ワンクリック取り込みを実行してください。";
 "Dictionary ingestion canceled." = "辞書取り込みを中止しました。";
 "Done" = "完了";
 "Dictionary…" = "辞書…";

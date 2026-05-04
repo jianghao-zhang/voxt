@@ -38,17 +38,22 @@ enum DictionaryHistoryScanResponseParser {
             throw DictionaryHistoryScanParseError.invalidText(code: -11)
         }
 
-        if let terms = try parseExactJSONArrayTerms(from: normalizedResponse) {
+        if let terms = try parseTermPayload(from: normalizedResponse) {
             return normalizeAcceptedTerms(from: terms)
         }
 
         if let extractedJSONArray = extractJSONArrayString(from: normalizedResponse),
-           let terms = try parseExactJSONArrayTerms(from: extractedJSONArray) {
+           let terms = try parseTermPayload(from: extractedJSONArray) {
+            return normalizeAcceptedTerms(from: terms)
+        }
+
+        if let extractedJSONObject = extractJSONObjectString(from: normalizedResponse),
+           let terms = try parseTermPayload(from: extractedJSONObject) {
             return normalizeAcceptedTerms(from: terms)
         }
 
         VoxtLog.warning(
-            "Dictionary history scan returned invalid JSON array. preview=\(responsePreview(normalizedResponse))"
+            "Dictionary history scan returned invalid JSON payload. preview=\(responsePreview(normalizedResponse))"
         )
         throw DictionaryHistoryScanParseError.invalidText(code: -13)
     }
@@ -92,9 +97,21 @@ enum DictionaryHistoryScanResponseParser {
     }
 
     static func extractJSONArrayString(from text: String) -> String? {
+        extractBalancedJSONContainerString(from: text, opening: "[", closing: "]")
+    }
+
+    static func extractJSONObjectString(from text: String) -> String? {
+        extractBalancedJSONContainerString(from: text, opening: "{", closing: "}")
+    }
+
+    private static func extractBalancedJSONContainerString(
+        from text: String,
+        opening: Character,
+        closing: Character
+    ) -> String? {
         let characters = Array(text)
         var startIndex: Int?
-        var bracketDepth = 0
+        var depth = 0
         var isInsideString = false
         var isEscaping = false
 
@@ -117,17 +134,17 @@ enum DictionaryHistoryScanResponseParser {
                 continue
             }
 
-            if character == "[" {
-                if bracketDepth == 0 {
+            if character == opening {
+                if depth == 0 {
                     startIndex = index
                 }
-                bracketDepth += 1
+                depth += 1
                 continue
             }
 
-            if character == "]", bracketDepth > 0 {
-                bracketDepth -= 1
-                if bracketDepth == 0, let startIndex {
+            if character == closing, depth > 0 {
+                depth -= 1
+                if depth == 0, let startIndex {
                     return String(characters[startIndex...index])
                 }
             }
@@ -136,33 +153,70 @@ enum DictionaryHistoryScanResponseParser {
         return nil
     }
 
-    private static func parseExactJSONArrayTerms(from text: String) throws -> [String]? {
+    private static func parseTermPayload(from text: String) throws -> [String]? {
         guard let data = text.data(using: .utf8) else {
             throw DictionaryHistoryScanParseError.invalidText(code: -12)
         }
         do {
-            guard let rawItems = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-                return nil
-            }
-
-            var parsedTerms: [String] = []
-            parsedTerms.reserveCapacity(rawItems.count)
-
-            for item in rawItems {
-                guard item.count == 1, let rawTerm = item["term"] as? String else {
-                    return nil
-                }
-                let trimmed = rawTerm.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else {
-                    throw DictionaryHistoryScanParseError.invalidText(code: -10)
-                }
-                parsedTerms.append(trimmed)
-            }
-
-            return parsedTerms
+            let jsonObject = try JSONSerialization.jsonObject(with: data)
+            return try parseTerms(fromJSONObject: jsonObject)
         } catch {
             return nil
         }
+    }
+
+    private static func parseTerms(fromJSONObject jsonObject: Any) throws -> [String]? {
+        if let terms = try parseTermsArray(jsonObject) {
+            return terms
+        }
+
+        guard let dictionary = jsonObject as? [String: Any] else {
+            return nil
+        }
+
+        for key in ["terms", "items", "results", "candidates", "data"] {
+            guard let nestedValue = dictionary[key] else { continue }
+            if let terms = try parseTermsArray(nestedValue) {
+                return terms
+            }
+        }
+
+        if dictionary.count == 1, let nestedValue = dictionary.values.first {
+            return try parseTermsArray(nestedValue)
+        }
+
+        return nil
+    }
+
+    private static func parseTermsArray(_ rawValue: Any) throws -> [String]? {
+        if let rawTerms = rawValue as? [String] {
+            return try parseRawTerms(rawTerms)
+        }
+
+        guard let rawItems = rawValue as? [[String: Any]] else {
+            return nil
+        }
+
+        let rawTerms = rawItems.compactMap { $0["term"] as? String }
+        guard rawTerms.count == rawItems.count else {
+            return nil
+        }
+        return try parseRawTerms(rawTerms)
+    }
+
+    private static func parseRawTerms(_ rawTerms: [String]) throws -> [String] {
+        var parsedTerms: [String] = []
+        parsedTerms.reserveCapacity(rawTerms.count)
+
+        for rawTerm in rawTerms {
+            let trimmed = rawTerm.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                throw DictionaryHistoryScanParseError.invalidText(code: -10)
+            }
+            parsedTerms.append(trimmed)
+        }
+
+        return parsedTerms
     }
 
     private static func responsePreview(_ text: String) -> String {
