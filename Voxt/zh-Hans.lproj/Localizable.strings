@@ -562,6 +562,7 @@
 "Template tip {{RAW_TRANSCRIPTION}}" = "增强前的原始转录文本。需要在提示词中引用原始识别结果时使用它。";
 "Template tip {{USER_MAIN_LANGUAGE}}" = "用户的主要口语语言。可用于指导标点、格式和语言相关的语气词清理。";
 "Template tip {{USER_OTHER_LANGUAGES}}" = "用户其他常用口语语言。适合用于提示模型处理单次发言中的混合语言内容。";
+"Template tip {{DICTIONARY_TERMS}}" = "当前作用域里没有别名的活跃词典词。适合直接注入到 Qwen3-ASR 的识别上下文中，提供精简术语提示。";
 "Template tip {{HISTORY_RECORDS}}" = "当前这批词典录入任务中序列化后的历史记录内容。";
 "Balanced" = "均衡";
 "Accuracy First" = "准确率优先";

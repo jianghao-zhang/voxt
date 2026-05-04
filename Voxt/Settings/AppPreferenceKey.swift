@@ -194,6 +194,7 @@ enum AppPreferenceKey {
 
     static let asrUserMainLanguageTemplateVariable = "{{USER_MAIN_LANGUAGE}}"
     static let asrUserOtherLanguagesTemplateVariable = "{{USER_OTHER_LANGUAGES}}"
+    static let asrDictionaryTermsTemplateVariable = "{{DICTIONARY_TERMS}}"
 
     static let defaultOpenAIASRHintPrompt = """
         The speaker's primary language is {{USER_MAIN_LANGUAGE}}. Prioritize accurate transcription in that language while preserving mixed-language words, names, product terms, URLs, and code-like text exactly as spoken.

@@ -160,6 +160,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
 
     var onTranscriptionFinished: ((String) -> Void)?
     var onPartialTranscription: ((String) -> Void)?
+    var dictionaryEntryProvider: (() -> [DictionaryEntry])?
 
     private let audioEngine = AVAudioEngine()
     private let sampleStore = AudioSampleStore()
@@ -733,7 +734,11 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             ),
             languageHint: languageHint,
             qwenContextBias: mergedBiasText(
-                resolvedBiasTemplate(tuningSettings.qwenContextBias, userLanguageCodes: userLanguageCodes),
+                resolvedBiasTemplate(
+                    tuningSettings.qwenContextBias,
+                    userLanguageCodes: userLanguageCodes,
+                    dictionaryTerms: resolvedDictionaryTermsTemplateValue()
+                ),
                 autoBias: automaticBiases.qwenContextBias
             ),
             granitePromptBias: mergedOptionalBiasText(
@@ -803,6 +808,34 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             userLanguageCodes: userLanguageCodes
         )
         .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func resolvedBiasTemplate(
+        _ template: String,
+        userLanguageCodes: [String],
+        dictionaryTerms: String
+    ) -> String {
+        ASRHintResolver.resolveTemplateVariables(
+            in: template,
+            userLanguageCodes: userLanguageCodes,
+            dictionaryTerms: dictionaryTerms
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func resolvedDictionaryTermsTemplateValue() -> String {
+        let entries = dictionaryEntryProvider?() ?? []
+        var seen = Set<String>()
+        let terms = entries.compactMap { entry -> String? in
+            guard entry.groupID == nil else { return nil }
+            guard entry.replacementTerms.isEmpty else { return nil }
+            let trimmed = entry.term.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            let normalized = DictionaryStore.normalizeTerm(trimmed)
+            guard seen.insert(normalized).inserted else { return nil }
+            return trimmed
+        }
+        return terms.joined(separator: "\n")
     }
 
     private func prepareInputSamples(_ samples: [Float], sampleRate: Double) throws -> [Float] {

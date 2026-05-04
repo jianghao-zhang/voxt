@@ -562,6 +562,7 @@
 "Template tip {{RAW_TRANSCRIPTION}}" = "The raw transcription text before enhancement. Use it when you want the prompt to reference the original recognized text.";
 "Template tip {{USER_MAIN_LANGUAGE}}" = "The user's primary spoken language used to guide punctuation, formatting, and language-specific cleanup decisions.";
 "Template tip {{USER_OTHER_LANGUAGES}}" = "Other frequently used spoken languages. Useful when the speaker often mixes languages in one utterance.";
+"Template tip {{DICTIONARY_TERMS}}" = "Active dictionary terms without aliases in the current scope. Useful for injecting concise domain vocabulary into Qwen3-ASR recognition context.";
 "Template tip {{HISTORY_RECORDS}}" = "The serialized history records included in the current dictionary ingestion batch.";
 "Balanced" = "Balanced";
 "Accuracy First" = "Accuracy First";

@@ -461,6 +461,12 @@ extension AppDelegate {
     private func startMLXRecordingSession() {
         let mlx = mlxTranscriber ?? MLXTranscriber(modelManager: mlxModelManager)
         mlxTranscriber = mlx
+        mlx.dictionaryEntryProvider = { [weak self] in
+            guard let self else { return [] }
+            return self.dictionaryStore.activeEntriesForRemoteRequest(
+                activeGroupID: self.activeDictionaryGroupID()
+            )
+        }
         let sessionID = activeRecordingSessionID
         overlayState.statusMessage = ""
         mlx.transcribedText = ""

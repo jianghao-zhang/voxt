@@ -161,6 +161,12 @@ final class MeetingMLXSegmentTranscriber: MeetingSegmentTranscribing {
 
     init(modelManager: MLXModelManager) {
         self.mlxTranscriber = MLXTranscriber(modelManager: modelManager)
+        self.mlxTranscriber.dictionaryEntryProvider = {
+            guard let appDelegate = AppDelegate.shared else { return [] }
+            return appDelegate.dictionaryStore.activeEntriesForRemoteRequest(
+                activeGroupID: appDelegate.activeDictionaryGroupID()
+            )
+        }
     }
 
     func transcribe(chunk: BufferedMeetingChunk) async -> MeetingTranscriptSegment? {
