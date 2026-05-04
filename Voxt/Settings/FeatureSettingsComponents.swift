@@ -510,6 +510,9 @@ struct FeaturePromptSection: View {
     @Binding var text: String
     let defaultText: String
     let variables: [PromptTemplateVariableDescriptor]
+    let persistChanges: () -> Void
+    @State private var pendingSaveTask: Task<Void, Never>?
+    @State private var lastSavedText = ""
 
     var body: some View {
         ResettablePromptSection(
@@ -517,8 +520,46 @@ struct FeaturePromptSection: View {
             text: $text,
             defaultText: defaultText,
             variables: variables,
-            promptHeight: 196
+            promptHeight: 196,
+            onTextChange: schedulePersist,
+            onFocusChange: handleFocusChange
         )
+        .onAppear {
+            lastSavedText = text
+        }
+        .onDisappear {
+            flushPendingChanges()
+        }
+    }
+
+    private func schedulePersist(_ newValue: String) {
+        pendingSaveTask?.cancel()
+        pendingSaveTask = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                flushPendingChanges(expectedText: newValue)
+            }
+        }
+    }
+
+    private func handleFocusChange(_ isFocused: Bool) {
+        guard !isFocused else { return }
+        flushPendingChanges()
+    }
+
+    private func flushPendingChanges(expectedText: String? = nil) {
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
+
+        let currentText = text
+        guard currentText != lastSavedText else { return }
+        if let expectedText, currentText != expectedText {
+            return
+        }
+
+        lastSavedText = currentText
+        persistChanges()
     }
 }
 

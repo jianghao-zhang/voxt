@@ -77,7 +77,8 @@ extension FeatureSettingsView {
                         defaultText: AppPromptDefaults.text(for: .meetingSummary),
                         variables: MeetingSummarySupport.promptTemplateVariables.map {
                             PromptTemplateVariableDescriptor(token: $0, tipKey: "Template tip \($0)")
-                        }
+                        },
+                        persistChanges: saveFeatureSettings
                     )
                 }
             }

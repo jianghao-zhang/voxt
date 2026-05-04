@@ -65,7 +65,8 @@ extension FeatureSettingsView {
                                 kind: .enhancement
                             ),
                             defaultText: AppPromptDefaults.text(for: .enhancement),
-                            variables: ModelSettingsPromptVariables.enhancement
+                            variables: ModelSettingsPromptVariables.enhancement,
+                            persistChanges: saveFeatureSettings
                         )
                     }
                 }

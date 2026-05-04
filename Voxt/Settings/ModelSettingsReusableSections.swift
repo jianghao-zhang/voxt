@@ -50,6 +50,8 @@ struct ResettablePromptSection: View {
     let defaultText: String
     let variables: [PromptTemplateVariableDescriptor]
     var promptHeight: CGFloat = 124
+    var onTextChange: ((String) -> Void)?
+    var onFocusChange: ((Bool) -> Void)?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -63,7 +65,13 @@ struct ResettablePromptSection: View {
             .disabled(text == defaultText)
         }
 
-        PromptEditorView(text: $text, height: promptHeight, variables: variables)
+        PromptEditorView(
+            text: $text,
+            height: promptHeight,
+            variables: variables,
+            onTextChange: onTextChange,
+            onFocusChange: onFocusChange
+        )
     }
 }
 

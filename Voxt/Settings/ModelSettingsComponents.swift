@@ -7,11 +7,21 @@ struct PromptEditorView: View {
     var contentPadding: CGFloat = 6
     var variables: [PromptTemplateVariableDescriptor] = []
     var variablesLayout: PromptTemplateVariablesLayout = .adaptive
+    var onTextChange: ((String) -> Void)?
+    var onFocusChange: ((Bool) -> Void)?
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextEditor(text: $text)
                 .settingsPromptEditor(height: height, contentPadding: contentPadding)
+                .focused($isFocused)
+                .onChange(of: text) { _, newValue in
+                    onTextChange?(newValue)
+                }
+                .onChange(of: isFocused) { _, newValue in
+                    onFocusChange?(newValue)
+                }
 
             if !variables.isEmpty {
                 PromptTemplateVariablesView(variables: variables, layout: variablesLayout)
