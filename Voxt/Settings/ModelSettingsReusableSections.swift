@@ -50,7 +50,8 @@ struct ResettablePromptSection: View {
     let defaultText: String
     let variables: [PromptTemplateVariableDescriptor]
     var promptHeight: CGFloat = 124
-    var onSave: (() -> Void)?
+    var onTextChange: ((String) -> Void)?
+    var onFocusChange: ((Bool) -> Void)?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -62,13 +63,15 @@ struct ResettablePromptSection: View {
             }
             .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10))
             .disabled(text == defaultText)
-            if let onSave {
-                Button(AppLocalization.localizedString("Save"), action: onSave)
-                    .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10))
-            }
         }
 
-        PromptEditorView(text: $text, height: promptHeight, variables: variables)
+        PromptEditorView(
+            text: $text,
+            height: promptHeight,
+            variables: variables,
+            onTextChange: onTextChange,
+            onFocusChange: onFocusChange
+        )
     }
 }
 

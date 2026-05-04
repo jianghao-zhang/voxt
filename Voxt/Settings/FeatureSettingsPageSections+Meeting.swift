@@ -78,7 +78,7 @@ extension FeatureSettingsView {
                         variables: MeetingSummarySupport.promptTemplateVariables.map {
                             PromptTemplateVariableDescriptor(token: $0, tipKey: "Template tip \($0)")
                         },
-                        onSave: saveFeatureSettings
+                        persistChanges: saveFeatureSettings
                     )
                 }
             }
