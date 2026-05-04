@@ -115,4 +115,49 @@ final class SessionTextIOTests: XCTestCase {
             )
         )
     }
+
+    func testPreparedDeliveryContextAppliesDictionaryCorrectionsBeforeDelivery() {
+        let matcher = DictionaryMatcher(
+            entries: [TestFactories.makeEntry(term: "Anthropic", observedVariants: ["anthropic ai"])],
+            blockedGlobalMatchKeys: []
+        )
+
+        let context = AppDelegate.preparedDeliveryContext(
+            originalText: """
+            {"title":"AI Answer","content":"anthropic ai"}
+            """,
+            llmDurationSeconds: 0.5,
+            sessionOutputMode: .rewrite,
+            userMainLanguage: .fallbackOption(),
+            matcher: matcher,
+            usesConservativeEvidence: false,
+            automaticReplacementEnabled: true
+        )
+
+        XCTAssertEqual(context.outputText, "Anthropic")
+        XCTAssertEqual(context.dictionaryCorrectedTerms, ["Anthropic"])
+        XCTAssertEqual(context.rewriteAnswerPayload?.title, "AI Answer")
+        XCTAssertEqual(context.rewriteAnswerPayload?.content, "Anthropic")
+    }
+
+    func testPreparedDeliveryContextKeepsOriginalTextForConservativeDictionaryEvidence() {
+        let matcher = DictionaryMatcher(
+            entries: [TestFactories.makeEntry(term: "Anthropic", observedVariants: ["anthropic ai"])],
+            blockedGlobalMatchKeys: []
+        )
+
+        let context = AppDelegate.preparedDeliveryContext(
+            originalText: "anthropic ai",
+            llmDurationSeconds: nil,
+            sessionOutputMode: .transcription,
+            userMainLanguage: .fallbackOption(),
+            matcher: matcher,
+            usesConservativeEvidence: true,
+            automaticReplacementEnabled: true
+        )
+
+        XCTAssertEqual(context.outputText, "anthropic ai")
+        XCTAssertEqual(context.dictionaryCorrectedTerms, [])
+        XCTAssertEqual(context.dictionaryMatches.map(\.term), ["Anthropic"])
+    }
 }

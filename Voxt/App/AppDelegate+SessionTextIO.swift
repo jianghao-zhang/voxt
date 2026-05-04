@@ -9,28 +9,6 @@ extension AppDelegate {
         case selectedTextTranslationResultWindow
     }
 
-    private struct DictionaryResolutionPlan {
-        let matcher: DictionaryMatcher?
-        let usesConservativeEvidence: Bool
-        let automaticReplacementEnabled: Bool
-
-        func resolve(text: String) -> DictionaryCorrectionResult {
-            guard let matcher else {
-                return DictionaryCorrectionResult(text: text, candidates: [], correctedTerms: [])
-            }
-
-            if usesConservativeEvidence {
-                let candidates = matcher.recallCandidates(in: text)
-                return DictionaryCorrectionResult(text: text, candidates: candidates, correctedTerms: [])
-            }
-
-            return matcher.applyCorrections(
-                to: text,
-                automaticReplacementEnabled: automaticReplacementEnabled
-            )
-        }
-    }
-
     private struct NormalizeOutputStage: SessionFinalizeStage {
         let normalize: (String) -> String
 
@@ -145,45 +123,90 @@ extension AppDelegate {
 
         VoxtLog.info("Commit transcription entered. characters=\(text.count)")
 
-        let normalized = Self.normalizedOutputText(
-            text,
+        let context = Self.preparedDeliveryContext(
+            originalText: text,
+            llmDurationSeconds: llmDurationSeconds,
             sessionOutputMode: sessionOutputMode,
-            userMainLanguage: userMainLanguage
+            userMainLanguage: userMainLanguage,
+            matcher: dictionaryStore.makeMatcherIfEnabled(activeGroupID: activeDictionaryGroupID()),
+            usesConservativeEvidence: shouldUseConservativeDictionaryEvidenceForCurrentSession(),
+            automaticReplacementEnabled: UserDefaults.standard.bool(
+                forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled
+            )
         )
-
-        var outputText = normalized
-        let rewriteAnswerPayload = extractRewriteAnswerPayload(from: outputText)
-        if let rewriteAnswerPayload {
-            outputText = rewriteAnswerPayload.content
-        }
-
-        cacheLatestInjectableOutputText(outputText)
+        cacheLatestInjectableOutputText(context.outputText)
 
         VoxtLog.info(
-            "Commit transcription prepared payload. inputChars=\(text.count), outputChars=\(outputText.count), hasRewritePayload=\(rewriteAnswerPayload != nil)"
-        )
-
-        let context = SessionFinalizeContext(
-            outputText: outputText,
-            llmDurationSeconds: llmDurationSeconds,
-            dictionaryMatches: [],
-            dictionaryCorrectedTerms: [],
-            dictionarySuggestions: [],
-            historyEntryID: nil,
-            rewriteAnswerPayload: rewriteAnswerPayload
+            "Commit transcription prepared payload. inputChars=\(text.count), outputChars=\(context.outputText.count), hasRewritePayload=\(context.rewriteAnswerPayload != nil), dictionaryMatches=\(context.dictionaryMatches.count), dictionaryCorrections=\(context.dictionaryCorrectedTerms.count)"
         )
 
         deliverCommittedOutput(context) { [weak self] in
             guard let self else { return }
             self.finalizeCommittedOutputPostDeliveryAsync(
-                originalText: text,
                 deliveredContext: context,
-                llmDurationSeconds: llmDurationSeconds,
-                sessionOutputMode: sessionOutputMode,
-                userMainLanguage: userMainLanguage
+                outputMode: sessionOutputMode
             )
             onDeliveryCompleted?()
         }
+    }
+
+    nonisolated static func resolveDictionaryOutput(
+        text: String,
+        matcher: DictionaryMatcher?,
+        usesConservativeEvidence: Bool,
+        automaticReplacementEnabled: Bool
+    ) -> DictionaryCorrectionResult {
+        guard let matcher else {
+            return DictionaryCorrectionResult(text: text, candidates: [], correctedTerms: [])
+        }
+
+        if usesConservativeEvidence {
+            let candidates = matcher.recallCandidates(in: text)
+            return DictionaryCorrectionResult(text: text, candidates: candidates, correctedTerms: [])
+        }
+
+        return matcher.applyCorrections(
+            to: text,
+            automaticReplacementEnabled: automaticReplacementEnabled
+        )
+    }
+
+    nonisolated static func preparedDeliveryContext(
+        originalText: String,
+        llmDurationSeconds: TimeInterval?,
+        sessionOutputMode: SessionOutputMode,
+        userMainLanguage: UserMainLanguageOption,
+        matcher: DictionaryMatcher?,
+        usesConservativeEvidence: Bool,
+        automaticReplacementEnabled: Bool
+    ) -> SessionFinalizeContext {
+        let normalized = normalizedOutputText(
+            originalText,
+            sessionOutputMode: sessionOutputMode,
+            userMainLanguage: userMainLanguage
+        )
+
+        let extractedRewriteAnswerPayload = RewriteAnswerPayloadParser.extract(from: normalized)
+        let rewriteContent = extractedRewriteAnswerPayload?.content ?? normalized
+        let dictionaryCorrection = resolveDictionaryOutput(
+            text: rewriteContent,
+            matcher: matcher,
+            usesConservativeEvidence: usesConservativeEvidence,
+            automaticReplacementEnabled: automaticReplacementEnabled
+        )
+        let rewriteAnswerPayload = extractedRewriteAnswerPayload.map {
+            RewriteAnswerPayload(title: $0.title, content: dictionaryCorrection.text)
+        }
+
+        return SessionFinalizeContext(
+            outputText: dictionaryCorrection.text,
+            llmDurationSeconds: llmDurationSeconds,
+            dictionaryMatches: dictionaryCorrection.candidates,
+            dictionaryCorrectedTerms: dictionaryCorrection.correctedTerms,
+            dictionarySuggestions: [],
+            historyEntryID: nil,
+            rewriteAnswerPayload: rewriteAnswerPayload
+        )
     }
 
     nonisolated private static func orderedUniqueDictionaryTerms(from values: [String]) -> [String] {
@@ -310,49 +333,23 @@ extension AppDelegate {
     }
 
     private func finalizeCommittedOutputPostDeliveryAsync(
-        originalText: String,
         deliveredContext: SessionFinalizeContext,
-        llmDurationSeconds: TimeInterval?,
-        sessionOutputMode: SessionOutputMode,
-        userMainLanguage: UserMainLanguageOption
+        outputMode: SessionOutputMode
     ) {
         let deliveredText = deliveredContext.outputText
         let displayTitle = deliveredContext.rewriteAnswerPayload?.trimmedTitle
+        let dictionaryMatches = deliveredContext.dictionaryMatches
+        let dictionaryCorrectedTerms = deliveredContext.dictionaryCorrectedTerms
+        let llmDurationSeconds = deliveredContext.llmDurationSeconds
 
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
 
-            let dictionaryPlan = await MainActor.run {
-                DictionaryResolutionPlan(
-                    matcher: self.dictionaryStore.makeMatcherIfEnabled(activeGroupID: self.activeDictionaryGroupID()),
-                    usesConservativeEvidence: self.shouldUseConservativeDictionaryEvidenceForCurrentSession(),
-                    automaticReplacementEnabled: UserDefaults.standard.bool(
-                        forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled
-                    )
-                )
-            }
-
-            let normalized = Self.normalizedOutputText(
-                originalText,
-                sessionOutputMode: sessionOutputMode,
-                userMainLanguage: userMainLanguage
-            )
-
-            let postProcessedSource: String
-            if let payload = RewriteAnswerPayloadParser.extract(from: normalized) {
-                postProcessedSource = payload.content
-            } else {
-                postProcessedSource = deliveredText
-            }
-
-            let dictionaryCorrection = await MainActor.run {
-                dictionaryPlan.resolve(text: postProcessedSource)
-            }
             let dictionarySuggestions = await MainActor.run {
                 self.previewDictionarySuggestions(
-                    for: dictionaryCorrection.text,
-                    candidates: dictionaryCorrection.candidates,
-                    correctedTerms: dictionaryCorrection.correctedTerms
+                    for: deliveredText,
+                    candidates: dictionaryMatches,
+                    correctedTerms: dictionaryCorrectedTerms
                 )
             }
 
@@ -360,16 +357,16 @@ extension AppDelegate {
                 guard let self else { return }
                 let historyEntryID = self.appendHistoryIfNeeded(
                     text: deliveredText,
-                    outputMode: sessionOutputMode,
+                    outputMode: outputMode,
                     displayTitle: displayTitle,
                     llmDurationSeconds: llmDurationSeconds,
-                    dictionaryHitTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryCorrection.candidates.map(\.term)),
-                    dictionaryCorrectedTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryCorrection.correctedTerms),
+                    dictionaryHitTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryMatches.map(\.term)),
+                    dictionaryCorrectedTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryCorrectedTerms),
                     dictionarySuggestedTerms: dictionarySuggestions.map(\.snapshot)
                 )
                 self.overlayState.latestHistoryEntryID = historyEntryID
                 self.persistDictionaryEvidence(
-                    candidates: dictionaryCorrection.candidates,
+                    candidates: dictionaryMatches,
                     suggestions: dictionarySuggestions,
                     historyEntryID: historyEntryID
                 )
