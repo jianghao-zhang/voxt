@@ -560,6 +560,7 @@
 "Template tip {{RAW_TRANSCRIPTION}}" = "強化前の生の文字起こしテキストです。元の認識結果をプロンプト内で参照したいときに使います。";
 "Template tip {{USER_MAIN_LANGUAGE}}" = "句読点、整形、言語固有の不要語除去を判断するときに使う、ユーザーの主要な話し言葉です。";
 "Template tip {{USER_OTHER_LANGUAGES}}" = "その他によく使う話し言葉です。1つの発話内で言語が混ざるケースをモデルに伝えるときに使えます。";
+"Template tip {{DICTIONARY_TERMS}}" = "現在のスコープでエイリアスを持たない有効な辞書用語です。Qwen3-ASR の認識コンテキストに簡潔な用語集として差し込むのに使えます。";
 "Template tip {{HISTORY_RECORDS}}" = "現在の辞書取り込みバッチに含まれる、シリアライズ済みの履歴レコードです。";
 "Balanced" = "バランス";
 "Accuracy First" = "精度優先";

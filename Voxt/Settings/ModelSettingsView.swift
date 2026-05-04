@@ -193,6 +193,9 @@ struct ModelSettingsView: View {
             downloadModel: downloadModel,
             deleteModel: deleteModel,
             openMLXModelDirectory: openMLXModelDirectory,
+            presentMLXSettings: { repo in
+                activeLocalASRConfigurationTarget = .mlx(repo: repo)
+            },
             downloadWhisperModel: downloadWhisperModel,
             deleteWhisperModel: deleteWhisperModel,
             openWhisperModelDirectory: openWhisperModelDirectory,

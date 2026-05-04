@@ -142,6 +142,7 @@ enum ASRHintResolver {
     static func resolveTemplateVariables(
         in template: String,
         userLanguageCodes: [String],
+        dictionaryTerms: String = "",
         appendOtherLanguagesWhenMissing: Bool = false
     ) -> String {
         let selectedOptions = selectedLanguageOptions(userLanguageCodes)
@@ -151,6 +152,7 @@ enum ASRHintResolver {
             in: template,
             mainLanguage: mainLanguage,
             otherLanguages: otherLanguages,
+            dictionaryTerms: dictionaryTerms,
             appendOtherLanguagesWhenMissing: appendOtherLanguagesWhenMissing
         )
     }
@@ -176,6 +178,7 @@ enum ASRHintResolver {
             in: trimmed,
             mainLanguage: mainLanguage,
             otherLanguages: otherLanguages,
+            dictionaryTerms: "",
             appendOtherLanguagesWhenMissing: true
         )
         let compact = resolved.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -186,6 +189,7 @@ enum ASRHintResolver {
         in template: String,
         mainLanguage: UserMainLanguageOption,
         otherLanguages: [UserMainLanguageOption],
+        dictionaryTerms: String,
         appendOtherLanguagesWhenMissing: Bool
     ) -> String {
         let trimmed = template.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -201,6 +205,10 @@ enum ASRHintResolver {
             .replacingOccurrences(
                 of: AppPreferenceKey.asrUserOtherLanguagesTemplateVariable,
                 with: otherLanguagesSummary
+            )
+            .replacingOccurrences(
+                of: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
+                with: dictionaryTerms.trimmingCharacters(in: .whitespacesAndNewlines)
             )
 
         if appendOtherLanguagesWhenMissing,

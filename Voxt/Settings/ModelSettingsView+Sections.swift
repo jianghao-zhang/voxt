@@ -278,6 +278,7 @@ extension ModelSettingsView {
 }
 
 private struct MLXASRConfigurationSheetView: View {
+    private static let contentMaxHeight: CGFloat = 520
     private static let asrLanguageVariables = [
         PromptTemplateVariableDescriptor(
             token: AppPreferenceKey.asrUserMainLanguageTemplateVariable,
@@ -286,6 +287,12 @@ private struct MLXASRConfigurationSheetView: View {
         PromptTemplateVariableDescriptor(
             token: AppPreferenceKey.asrUserOtherLanguagesTemplateVariable,
             tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
+        )
+    ]
+    private static let qwenContextVariables = asrLanguageVariables + [
+        PromptTemplateVariableDescriptor(
+            token: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
+            tipKey: "Template tip {{DICTIONARY_TERMS}}"
         )
     ]
 
@@ -318,80 +325,88 @@ private struct MLXASRConfigurationSheetView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("MLX ASR Configuration")
-                .font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("MLX ASR Configuration")
+                        .font(.title3.weight(.semibold))
 
-            Text(modelTitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                    Text(modelTitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Preset")
-                    .font(.subheadline.weight(.medium))
-                SettingsMenuPicker(
-                    selection: Binding(
-                        get: { tuningSettings.preset.rawValue },
-                        set: { rawValue in
-                            guard let preset = LocalASRRecognitionPreset(rawValue: rawValue) else { return }
-                            tuningSettings.preset = preset
-                        }
-                    ),
-                    options: LocalASRRecognitionPreset.allCases.map {
-                        SettingsMenuOption(value: $0.rawValue, title: $0.title)
-                    },
-                    selectedTitle: tuningSettings.preset.title,
-                    width: 220
-                )
-                Text(tuningSettings.preset.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Preset")
+                            .font(.subheadline.weight(.medium))
+                        SettingsMenuPicker(
+                            selection: Binding(
+                                get: { tuningSettings.preset.rawValue },
+                                set: { rawValue in
+                                    guard let preset = LocalASRRecognitionPreset(rawValue: rawValue) else { return }
+                                    tuningSettings.preset = preset
+                                }
+                            ),
+                            options: LocalASRRecognitionPreset.allCases.map {
+                                SettingsMenuOption(value: $0.rawValue, title: $0.title)
+                            },
+                            selectedTitle: tuningSettings.preset.title,
+                            width: 220
+                        )
+                        Text(tuningSettings.preset.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Toggle("Follow User Main Language", isOn: $hintSettings.followsUserMainLanguage)
+                        .toggleStyle(.switch)
+
+                    HStack(alignment: .top, spacing: 16) {
+                        localInfoRow(label: "Primary language", value: mainLanguageSummary)
+                        localInfoRow(label: "Resolved language", value: resolvedLanguage)
+                    }
+
+                    localInfoRow(label: "Other languages", value: secondaryLanguageSummary)
+
+                    if family.supportsContextBias {
+                        Text("Recognition Context")
+                            .font(.subheadline.weight(.medium))
+                        PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110, variables: Self.qwenContextVariables)
+                        Text("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if family.supportsPromptBias {
+                        Text("Recognition Prompt")
+                            .font(.subheadline.weight(.medium))
+                        PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110, variables: Self.asrLanguageVariables)
+                        Text("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if family.supportsITN {
+                        Toggle("Enable ITN", isOn: $tuningSettings.senseVoiceUseITN)
+                            .toggleStyle(.switch)
+                        Text("ITN lets SenseVoice normalize spoken numbers, dates, and similar expressions into written form.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if !family.supportsContextBias
+                        && !family.supportsPromptBias
+                        && !family.supportsITN
+                    {
+                        Text("This MLX model family currently uses preset-based chunking and language strategy only. Model-native prompt or context controls are not exposed by this family in Voxt yet.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(20)
             }
+            .frame(maxHeight: Self.contentMaxHeight)
 
-            Toggle("Follow User Main Language", isOn: $hintSettings.followsUserMainLanguage)
-                .toggleStyle(.switch)
-
-            HStack(alignment: .top, spacing: 16) {
-                localInfoRow(label: "Primary language", value: mainLanguageSummary)
-                localInfoRow(label: "Resolved language", value: resolvedLanguage)
-            }
-
-            localInfoRow(label: "Other languages", value: secondaryLanguageSummary)
-
-            if family.supportsContextBias {
-                Text("Recognition Context")
-                    .font(.subheadline.weight(.medium))
-                PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110, variables: Self.asrLanguageVariables)
-                Text("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if family.supportsPromptBias {
-                Text("Recognition Prompt")
-                    .font(.subheadline.weight(.medium))
-                PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110, variables: Self.asrLanguageVariables)
-                Text("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if family.supportsITN {
-                Toggle("Enable ITN", isOn: $tuningSettings.senseVoiceUseITN)
-                    .toggleStyle(.switch)
-                Text("ITN lets SenseVoice normalize spoken numbers, dates, and similar expressions into written form.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if !family.supportsContextBias
-                && !family.supportsPromptBias
-                && !family.supportsITN
-            {
-                Text("This MLX model family currently uses preset-based chunking and language strategy only. Model-native prompt or context controls are not exposed by this family in Voxt yet.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Divider()
 
             SettingsDialogActionRow {
                 Button("Reset to Default") {
@@ -406,8 +421,8 @@ private struct MLXASRConfigurationSheetView: View {
                 .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
+            .padding(20)
         }
-        .padding(20)
         .frame(width: 520)
     }
 

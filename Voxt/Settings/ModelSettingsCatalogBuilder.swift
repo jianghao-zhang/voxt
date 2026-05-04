@@ -29,6 +29,7 @@ struct ModelCatalogBuilder {
     let downloadModel: (String) -> Void
     let deleteModel: (String) -> Void
     let openMLXModelDirectory: (String) -> Void
+    let presentMLXSettings: (String) -> Void
     let downloadWhisperModel: (String) -> Void
     let deleteWhisperModel: (String) -> Void
     let openWhisperModelDirectory: (String) -> Void
@@ -81,40 +82,44 @@ struct ModelCatalogBuilder {
             let status = modelStatusText(repo)
 
             let primaryAction: ModelTableAction?
-            let secondaryActions: [ModelTableAction]
+            var secondaryActions = [ModelTableAction]()
             if isDownloadingModel(repo) {
                 primaryAction = ModelTableAction(title: localized("Pause")) {
                     mlxModelManager.pauseDownload()
                 }
-                secondaryActions = [
+                secondaryActions.append(
                     ModelTableAction(title: localized("Cancel"), role: .destructive) {
                         mlxModelManager.cancelDownload()
                     }
-                ]
+                )
             } else if mlxModelManager.currentModelRepo == repo, case .paused = mlxModelManager.state {
                 primaryAction = ModelTableAction(title: localized("Continue")) {
                     downloadModel(repo)
                 }
-                secondaryActions = [
+                secondaryActions.append(
                     ModelTableAction(title: localized("Cancel"), role: .destructive) {
                         mlxModelManager.cancelDownload()
                     }
-                ]
+                )
             } else if isInstalled {
                 primaryAction = ModelTableAction(title: localized("Uninstall"), role: .destructive) {
                     deleteModel(repo)
                 }
-                secondaryActions = [
+                secondaryActions.append(
                     ModelTableAction(title: localized("Open Location")) {
                         openMLXModelDirectory(repo)
                     }
-                ]
+                )
             } else {
                 primaryAction = ModelTableAction(title: localized("Install"), isEnabled: !isAnotherModelDownloading(repo)) {
                     downloadModel(repo)
                 }
-                secondaryActions = []
             }
+            secondaryActions.append(
+                ModelTableAction(title: localized("Settings")) {
+                    presentMLXSettings(repo)
+                }
+            )
 
             return ModelCatalogEntry(
                 id: "mlx:\(repo)",
