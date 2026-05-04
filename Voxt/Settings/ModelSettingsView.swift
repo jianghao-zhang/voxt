@@ -315,8 +315,7 @@ struct ModelSettingsView: View {
             }
             .padding(.vertical, 2)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 430)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
