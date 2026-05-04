@@ -8,7 +8,7 @@ extension AppDelegate {
     }
 
     private var mainWindowMinimumContentSize: NSSize {
-        NSSize(width: 600, height: 420)
+        NSSize(width: 760, height: 560)
     }
 
     private func setMainWindowVisibility(_ isVisible: Bool) {
@@ -34,11 +34,18 @@ extension AppDelegate {
         return NSRect(origin: window.frame.origin, size: frameSize)
     }
 
+    private func minimumMainWindowFrame(for window: NSWindow) -> NSRect {
+        let contentRect = NSRect(origin: .zero, size: mainWindowMinimumContentSize)
+        let frameSize = window.frameRect(forContentRect: contentRect).size
+        return NSRect(origin: window.frame.origin, size: frameSize)
+    }
+
     private func repairMainWindowFrameIfNeeded(_ window: NSWindow) {
         let repairedFrame = repairedMainWindowFrame(for: window)
+        let minimumFrame = minimumMainWindowFrame(for: window)
         let needsRepair =
-            window.frame.width < repairedFrame.width * 0.5 ||
-            window.frame.height < repairedFrame.height * 0.5
+            window.frame.width < minimumFrame.width ||
+            window.frame.height < minimumFrame.height
 
         guard needsRepair else { return }
         window.setFrame(repairedFrame, display: false)
@@ -506,13 +513,12 @@ extension AppDelegate {
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = false
         window.contentViewController = hostingController
+        window.setContentSize(mainWindowContentSize)
         window.contentMinSize = mainWindowMinimumContentSize
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.level = .normal
         window.delegate = self
-        positionWindowTrafficLightButtons(window)
-        observeTrafficLightContainerFrameChanges(for: window)
 
         let controller = NSWindowController(window: window)
         controller.shouldCascadeWindows = false
@@ -543,8 +549,6 @@ extension AppDelegate {
         }
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
-        positionWindowTrafficLightButtons(window)
-        scheduleTrafficLightButtonPositionUpdate(for: window)
     }
 
     private func centerMainWindow(_ window: NSWindow, on screen: NSScreen?) {
@@ -598,27 +602,17 @@ extension AppDelegate {
         zoomButton.setFrameOrigin(CGPoint(x: zoomX, y: y))
     }
 
+    private func setTrafficLightButtonsHidden(_ isHidden: Bool, for window: NSWindow) {
+        window.standardWindowButton(.closeButton)?.isHidden = isHidden
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = isHidden
+        window.standardWindowButton(.zoomButton)?.isHidden = isHidden
+    }
+
     private func scheduleTrafficLightButtonPositionUpdate(for window: NSWindow) {
         DispatchQueue.main.async { [weak self, weak window] in
             guard let self, let window else { return }
             self.positionWindowTrafficLightButtons(window)
         }
-    }
-
-    private func observeTrafficLightContainerFrameChanges(for window: NSWindow) {
-        guard let container = window.standardWindowButton(.closeButton)?.superview else { return }
-        container.postsFrameChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(trafficLightContainerFrameDidChange(_:)),
-            name: NSView.frameDidChangeNotification,
-            object: container
-        )
-    }
-
-    @objc private func trafficLightContainerFrameDidChange(_ notification: Notification) {
-        guard let window = mainWindowController?.window else { return }
-        positionWindowTrafficLightButtons(window)
     }
 
     @objc private func quit() {
@@ -658,6 +652,25 @@ extension AppDelegate: NSWindowDelegate {
         setMainWindowVisibility(false)
         sender.orderOut(nil)
         return false
+    }
+
+    func windowWillStartLiveResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window == mainWindowController?.window
+        else {
+            return
+        }
+        setTrafficLightButtonsHidden(true, for: window)
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window == mainWindowController?.window
+        else {
+            return
+        }
+        setTrafficLightButtonsHidden(false, for: window)
+        scheduleTrafficLightButtonPositionUpdate(for: window)
     }
 
     func windowDidMiniaturize(_ notification: Notification) {
