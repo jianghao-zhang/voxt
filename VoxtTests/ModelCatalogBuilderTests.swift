@@ -146,6 +146,7 @@ final class ModelCatalogBuilderTests: XCTestCase {
             downloadModel: { _ in },
             deleteModel: { _ in },
             openMLXModelDirectory: { _ in },
+            presentMLXSettings: { _ in },
             downloadWhisperModel: { _ in },
             deleteWhisperModel: { _ in },
             openWhisperModelDirectory: { _ in },
