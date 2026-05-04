@@ -160,4 +160,28 @@ final class SessionTextIOTests: XCTestCase {
         XCTAssertEqual(context.dictionaryCorrectedTerms, [])
         XCTAssertEqual(context.dictionaryMatches.map(\.term), ["Anthropic"])
     }
+
+    func testPreparedDeliveryContextPreservesTextWhenAutomaticReplacementIsDisabled() {
+        let matcher = DictionaryMatcher(
+            entries: [TestFactories.makeEntry(term: "Anthropic", observedVariants: ["anthropic ai"])],
+            blockedGlobalMatchKeys: []
+        )
+
+        let context = AppDelegate.preparedDeliveryContext(
+            originalText: """
+            {"title":"AI Answer","content":"anthropic ai"}
+            """,
+            llmDurationSeconds: nil,
+            sessionOutputMode: .rewrite,
+            userMainLanguage: .fallbackOption(),
+            matcher: matcher,
+            usesConservativeEvidence: false,
+            automaticReplacementEnabled: false
+        )
+
+        XCTAssertEqual(context.outputText, "anthropic ai")
+        XCTAssertEqual(context.dictionaryCorrectedTerms, [])
+        XCTAssertEqual(context.dictionaryMatches.map(\.term), ["Anthropic"])
+        XCTAssertEqual(context.rewriteAnswerPayload?.content, "anthropic ai")
+    }
 }

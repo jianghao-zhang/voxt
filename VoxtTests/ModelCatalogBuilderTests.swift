@@ -115,12 +115,52 @@ final class ModelCatalogBuilderTests: XCTestCase {
         XCTAssertFalse(entry.displayTags.contains(AppLocalization.localizedString("Multilingual")))
     }
 
+    func testMLXCatalogShowsPauseForDownloadingNonSelectedModel() throws {
+        let selectedRepo = "mlx-community/parakeet-tdt-0.6b-v3"
+        let downloadingRepo = "mlx-community/Qwen3-ASR-0.6B-4bit"
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(transcriptionASR: .mlx(selectedRepo)),
+            isDownloadingModel: { repo in
+                MLXModelManager.canonicalModelRepo(repo) == MLXModelManager.canonicalModelRepo(downloadingRepo)
+            }
+        )
+
+        let entry = try XCTUnwrap(
+            builder.asrEntries().first(where: { $0.id == "mlx:\(downloadingRepo)" })
+        )
+
+        XCTAssertEqual(entry.primaryAction?.title, AppLocalization.localizedString("Pause"))
+    }
+
+    func testCustomLLMCatalogShowsPauseForDownloadingNonSelectedModel() throws {
+        let selectedRepo = "mlx-community/Qwen3-8B-4bit"
+        let downloadingRepo = "mlx-community/Qwen3-4B-4bit"
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(translationModel: .localLLM(selectedRepo)),
+            isDownloadingCustomLLM: { repo in
+                repo == downloadingRepo
+            }
+        )
+
+        let entry = try XCTUnwrap(
+            builder.llmEntries().first(where: { $0.id == "local-llm:\(downloadingRepo)" })
+        )
+
+        XCTAssertEqual(entry.primaryAction?.title, AppLocalization.localizedString("Pause"))
+    }
+
     private func makeBuilder(
         featureSettings: FeatureSettings,
         remoteASRConfigurations: [String: RemoteProviderConfiguration] = [:],
         remoteLLMConfigurations: [String: RemoteProviderConfiguration] = [:],
         primaryUserLanguageCode: String? = "en",
-        hasIssue: @escaping (ConfigurationTransferManager.MissingConfigurationIssue.Scope) -> Bool = { _ in false }
+        hasIssue: @escaping (ConfigurationTransferManager.MissingConfigurationIssue.Scope) -> Bool = { _ in false },
+        isDownloadingModel: @escaping (String) -> Bool = { _ in false },
+        isAnotherModelDownloading: @escaping (String) -> Bool = { _ in false },
+        isDownloadingWhisperModel: @escaping (String) -> Bool = { _ in false },
+        isAnotherWhisperModelDownloading: @escaping (String) -> Bool = { _ in false },
+        isDownloadingCustomLLM: @escaping (String) -> Bool = { _ in false },
+        isAnotherCustomLLMDownloading: @escaping (String) -> Bool = { _ in false }
     ) -> ModelCatalogBuilder {
         ModelCatalogBuilder(
             mlxModelManager: TestModelManagers.mlx,
@@ -137,12 +177,12 @@ final class ModelCatalogBuilderTests: XCTestCase {
             remoteASRStatusText: { _, _ in "" },
             remoteLLMBadgeText: { _ in nil },
             primaryUserLanguageCode: primaryUserLanguageCode,
-            isDownloadingModel: { _ in false },
-            isAnotherModelDownloading: { _ in false },
-            isDownloadingWhisperModel: { _ in false },
-            isAnotherWhisperModelDownloading: { _ in false },
-            isDownloadingCustomLLM: { _ in false },
-            isAnotherCustomLLMDownloading: { _ in false },
+            isDownloadingModel: isDownloadingModel,
+            isAnotherModelDownloading: isAnotherModelDownloading,
+            isDownloadingWhisperModel: isDownloadingWhisperModel,
+            isAnotherWhisperModelDownloading: isAnotherWhisperModelDownloading,
+            isDownloadingCustomLLM: isDownloadingCustomLLM,
+            isAnotherCustomLLMDownloading: isAnotherCustomLLMDownloading,
             downloadModel: { _ in },
             deleteModel: { _ in },
             openMLXModelDirectory: { _ in },

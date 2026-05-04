@@ -186,6 +186,39 @@ final class SettingsTypesTests: XCTestCase {
         )
     }
 
+    func testDictionaryHistoryScanResponseParserAcceptsTopLevelStringArray() throws {
+        let response = """
+        ["OpenAI", "MCP", "OpenAI"]
+        """
+
+        XCTAssertEqual(
+            try DictionaryHistoryScanResponseParser.parseTerms(from: response),
+            ["OpenAI", "MCP"]
+        )
+    }
+
+    func testDictionaryHistoryScanResponseParserAcceptsCommonWrapperKeys() throws {
+        for key in ["items", "results", "candidates", "data"] {
+            let response = """
+            {"\(key)":[{"term":"OpenAI"},{"term":"MCP"}]}
+            """
+
+            XCTAssertEqual(
+                try DictionaryHistoryScanResponseParser.parseTerms(from: response),
+                ["OpenAI", "MCP"],
+                "Failed for wrapper key \(key)"
+            )
+        }
+    }
+
+    func testDictionaryHistoryScanResponseParserRejectsBlankTermsInsideStringArray() {
+        let response = """
+        {"terms":["OpenAI","   "]}
+        """
+
+        XCTAssertThrowsError(try DictionaryHistoryScanResponseParser.parseTerms(from: response))
+    }
+
     func testDictionaryHistoryScanResponseParserFiltersRejectedJSONArrayItems() throws {
         let response = """
         [
