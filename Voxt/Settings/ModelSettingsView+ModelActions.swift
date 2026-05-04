@@ -263,7 +263,6 @@ extension ModelSettingsView {
     func downloadModel(_ repo: String) {
         Task {
             await mlxModelManager.downloadModel(repo: repo)
-            modelRepo = MLXModelManager.canonicalModelRepo(repo)
         }
     }
 
@@ -296,19 +295,19 @@ extension ModelSettingsView {
     }
 
     func isDownloadingModel(_ repo: String) -> Bool {
-        guard isCurrentModel(repo) else { return false }
-        if case .downloading = mlxModelManager.state {
-            return true
-        }
-        return false
+        ModelDownloadStateRouting.isMLXDownloading(
+            repo: repo,
+            managerRepo: mlxModelManager.currentModelRepo,
+            state: mlxModelManager.state
+        )
     }
 
     func isPausedModel(_ repo: String) -> Bool {
-        guard isCurrentModel(repo) else { return false }
-        if case .paused = mlxModelManager.state {
-            return true
-        }
-        return false
+        ModelDownloadStateRouting.isMLXPaused(
+            repo: repo,
+            managerRepo: mlxModelManager.currentModelRepo,
+            state: mlxModelManager.state
+        )
     }
 
     func isDownloadingWhisperModel(_ modelID: String) -> Bool {
@@ -322,8 +321,11 @@ extension ModelSettingsView {
     }
 
     func isAnotherModelDownloading(_ repo: String) -> Bool {
-        guard case .downloading = mlxModelManager.state else { return false }
-        return !isCurrentModel(repo)
+        ModelDownloadStateRouting.isAnotherMLXDownloadActive(
+            repo: repo,
+            managerRepo: mlxModelManager.currentModelRepo,
+            state: mlxModelManager.state
+        )
     }
 
     func isAnotherWhisperModelDownloading(_ modelID: String) -> Bool {
@@ -350,7 +352,10 @@ extension ModelSettingsView {
             )
         }
 
-        if isCurrentModel(repo), case .error(let message) = mlxModelManager.state {
+        if ModelDownloadStateRouting.isMLXOperationTarget(
+            repo: repo,
+            managerRepo: mlxModelManager.currentModelRepo
+        ), case .error(let message) = mlxModelManager.state {
             return ModelDownloadPresentationSupport.statusText(
                 downloadState: .idle,
                 errorMessage: message
@@ -388,7 +393,6 @@ extension ModelSettingsView {
     func downloadCustomLLM(_ repo: String) {
         Task {
             await customLLMManager.downloadModel(repo: repo)
-            customLLMRepo = repo
         }
     }
 
@@ -404,24 +408,27 @@ extension ModelSettingsView {
     }
 
     func isDownloadingCustomLLM(_ repo: String) -> Bool {
-        guard isCurrentCustomLLM(repo) else { return false }
-        if case .downloading = customLLMManager.state {
-            return true
-        }
-        return false
+        ModelDownloadStateRouting.isCustomLLMDownloading(
+            repo: repo,
+            managerRepo: customLLMManager.currentModelRepo,
+            state: customLLMManager.state
+        )
     }
 
     func isPausedCustomLLM(_ repo: String) -> Bool {
-        guard isCurrentCustomLLM(repo) else { return false }
-        if case .paused = customLLMManager.state {
-            return true
-        }
-        return false
+        ModelDownloadStateRouting.isCustomLLMPaused(
+            repo: repo,
+            managerRepo: customLLMManager.currentModelRepo,
+            state: customLLMManager.state
+        )
     }
 
     func isAnotherCustomLLMDownloading(_ repo: String) -> Bool {
-        guard case .downloading = customLLMManager.state else { return false }
-        return !isCurrentCustomLLM(repo)
+        ModelDownloadStateRouting.isAnotherCustomLLMDownloadActive(
+            repo: repo,
+            managerRepo: customLLMManager.currentModelRepo,
+            state: customLLMManager.state
+        )
     }
 
     func customLLMStatusText(for repo: String) -> String {
@@ -443,7 +450,10 @@ extension ModelSettingsView {
             )
         }
 
-        if isCurrentCustomLLM(repo), case .error(let message) = customLLMManager.state {
+        if ModelDownloadStateRouting.isCustomLLMOperationTarget(
+            repo: repo,
+            managerRepo: customLLMManager.currentModelRepo
+        ), case .error(let message) = customLLMManager.state {
             return ModelDownloadPresentationSupport.statusText(
                 downloadState: .idle,
                 errorMessage: message

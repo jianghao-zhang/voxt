@@ -92,7 +92,11 @@ struct ModelCatalogBuilder {
                         mlxModelManager.cancelDownload()
                     }
                 )
-            } else if mlxModelManager.currentModelRepo == repo, case .paused = mlxModelManager.state {
+            } else if ModelDownloadStateRouting.isMLXPaused(
+                repo: repo,
+                managerRepo: mlxModelManager.currentModelRepo,
+                state: mlxModelManager.state
+            ) {
                 primaryAction = ModelTableAction(title: localized("Continue")) {
                     downloadModel(repo)
                 }
@@ -293,7 +297,11 @@ struct ModelCatalogBuilder {
                         customLLMManager.cancelDownload()
                     }
                 ]
-            } else if customLLMManager.currentModelRepo == repo, case .paused = customLLMManager.state {
+            } else if ModelDownloadStateRouting.isCustomLLMPaused(
+                repo: repo,
+                managerRepo: customLLMManager.currentModelRepo,
+                state: customLLMManager.state
+            ) {
                 primaryAction = ModelTableAction(title: localized("Continue")) {
                     downloadCustomLLM(repo)
                 }
