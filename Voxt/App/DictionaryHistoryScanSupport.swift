@@ -52,6 +52,14 @@ enum DictionaryHistoryScanResponseParser {
             return normalizeAcceptedTerms(from: terms)
         }
 
+        if let truncatedJSONArrayTerms = try parseTruncatedJSONArrayTerms(from: normalizedResponse) {
+            return normalizeAcceptedTerms(from: truncatedJSONArrayTerms)
+        }
+
+        if let legacyTerms = parseLegacyTermList(from: normalizedResponse) {
+            return normalizeAcceptedTerms(from: legacyTerms)
+        }
+
         VoxtLog.warning(
             "Dictionary history scan returned invalid JSON payload. preview=\(responsePreview(normalizedResponse))"
         )
@@ -102,6 +110,52 @@ enum DictionaryHistoryScanResponseParser {
 
     static func extractJSONObjectString(from text: String) -> String? {
         extractBalancedJSONContainerString(from: text, opening: "{", closing: "}")
+    }
+
+    static func extractBalancedJSONObjectStrings(from text: String) -> [String] {
+        let characters = Array(text)
+        var objects: [String] = []
+        var startIndex: Int?
+        var depth = 0
+        var isInsideString = false
+        var isEscaping = false
+
+        for (index, character) in characters.enumerated() {
+            if isInsideString {
+                if isEscaping {
+                    isEscaping = false
+                    continue
+                }
+                if character == "\\" {
+                    isEscaping = true
+                } else if character == "\"" {
+                    isInsideString = false
+                }
+                continue
+            }
+
+            if character == "\"" {
+                isInsideString = true
+                continue
+            }
+
+            if character == "{" {
+                if depth == 0 {
+                    startIndex = index
+                }
+                depth += 1
+                continue
+            }
+
+            if character == "}", depth > 0 {
+                depth -= 1
+                if depth == 0, let startIndex {
+                    objects.append(String(characters[startIndex...index]))
+                }
+            }
+        }
+
+        return objects
     }
 
     private static func extractBalancedJSONContainerString(
@@ -204,6 +258,28 @@ enum DictionaryHistoryScanResponseParser {
         return try parseRawTerms(rawTerms)
     }
 
+    private static func parseTruncatedJSONArrayTerms(from text: String) throws -> [String]? {
+        guard text.contains("\"term\"") else { return nil }
+        let completeObjects = extractBalancedJSONObjectStrings(from: text)
+        guard !completeObjects.isEmpty else { return nil }
+
+        var recoveredTerms: [String] = []
+        recoveredTerms.reserveCapacity(completeObjects.count)
+
+        for objectText in completeObjects {
+            guard let data = objectText.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let term = object["term"] as? String
+            else {
+                continue
+            }
+            recoveredTerms.append(term)
+        }
+
+        guard !recoveredTerms.isEmpty else { return nil }
+        return recoveredTerms
+    }
+
     private static func parseRawTerms(_ rawTerms: [String]) throws -> [String] {
         var parsedTerms: [String] = []
         parsedTerms.reserveCapacity(rawTerms.count)
@@ -217,6 +293,84 @@ enum DictionaryHistoryScanResponseParser {
         }
 
         return parsedTerms
+    }
+
+    private static func parseLegacyTermList(from text: String) -> [String]? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if trimmed.caseInsensitiveCompare("null") == .orderedSame {
+            return []
+        }
+
+        let lines = trimmed
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return nil }
+
+        var parsedTerms: [String] = []
+        var headerCount = 0
+        var explicitListMarkerCount = 0
+        var rejectedLineCount = 0
+
+        for line in lines {
+            let parsedLine = legacyListLine(from: line)
+            if parsedLine.isHeader {
+                headerCount += 1
+                continue
+            }
+            if parsedLine.hasExplicitListMarker {
+                explicitListMarkerCount += 1
+            }
+            if let term = parsedLine.term {
+                parsedTerms.append(term)
+            } else {
+                rejectedLineCount += 1
+            }
+        }
+
+        guard !parsedTerms.isEmpty else { return nil }
+        guard rejectedLineCount == 0 else { return nil }
+
+        let looksLikeLegacyList =
+            explicitListMarkerCount > 0 ||
+            headerCount > 0 ||
+            parsedTerms.count >= 2 ||
+            (parsedTerms.count == 1 && lines.count == 1)
+
+        return looksLikeLegacyList ? parsedTerms : nil
+    }
+
+    private static func legacyListLine(from line: String) -> (term: String?, isHeader: Bool, hasExplicitListMarker: Bool) {
+        let lowercased = line.lowercased()
+        if lowercased == "null" {
+            return (nil, false, false)
+        }
+
+        // Skip common list headers emitted by legacy prompts before numbered terms.
+        if line.hasSuffix(":") {
+            return (nil, true, false)
+        }
+
+        var cleaned = line
+        var hasExplicitListMarker = false
+        if let regex = try? NSRegularExpression(pattern: #"^\s*(?:[-*•]\s+|\d+[.)]\s+)"#) {
+            let range = NSRange(location: 0, length: (cleaned as NSString).length)
+            hasExplicitListMarker = regex.firstMatch(in: cleaned, options: [], range: range) != nil
+            cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
+        }
+
+        cleaned = cleaned
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`").union(.whitespacesAndNewlines))
+            .trimmingCharacters(in: CharacterSet(charactersIn: ",;"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleaned.isEmpty else { return (nil, false, hasExplicitListMarker) }
+        guard DictionaryHistoryScanCandidateValidator.shouldAccept(term: cleaned) else {
+            return (nil, false, hasExplicitListMarker)
+        }
+        return (cleaned, false, hasExplicitListMarker)
     }
 
     private static func responsePreview(_ text: String) -> String {
@@ -268,7 +422,8 @@ enum DictionaryHistoryScanSupport {
             template: settings.prompt,
             userMainLanguage: userMainLanguage,
             userOtherLanguages: userOtherLanguages,
-            historyRecordsXML: recordsXML
+            historyRecordsXML: recordsXML,
+            maxCandidatesPerBatch: settings.maxCandidatesPerBatch
         )
     }
 
@@ -344,7 +499,8 @@ enum DictionaryHistoryScanSupport {
         template: String,
         userMainLanguage: String,
         userOtherLanguages: String,
-        historyRecordsXML: String
+        historyRecordsXML: String,
+        maxCandidatesPerBatch: Int
     ) -> String {
         var prompt = template.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -364,6 +520,23 @@ enum DictionaryHistoryScanSupport {
             prompt = prompt.replacingOccurrences(of: "{{HISTORY_RECORDS}}", with: historyRecordsXML)
         } else {
             prompt += "\n\nHistory records:\n\(historyRecordsXML)"
+        }
+
+        if prompt.contains("{{MAX_CANDIDATES_PER_BATCH}}") {
+            prompt = prompt.replacingOccurrences(
+                of: "{{MAX_CANDIDATES_PER_BATCH}}",
+                with: String(maxCandidatesPerBatch)
+            )
+        } else {
+            prompt += """
+
+            <outputConstraints>
+              <maxCandidateCount>\(maxCandidatesPerBatch)</maxCandidateCount>
+              <format>json_array_of_term_objects</format>
+            </outputConstraints>
+
+            Return at most \(maxCandidatesPerBatch) accepted terms.
+            """
         }
 
         return prompt

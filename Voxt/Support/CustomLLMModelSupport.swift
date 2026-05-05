@@ -25,12 +25,14 @@ enum CustomLLMTaskKind: Equatable {
     case enhancement
     case translation
     case rewrite
+    case dictionaryHistoryScan
 
     var logLabel: String {
         switch self {
         case .enhancement: return "enhance"
         case .translation: return "translate"
         case .rewrite: return "rewrite"
+        case .dictionaryHistoryScan: return "dictionaryHistoryScan"
         }
     }
 
@@ -40,6 +42,8 @@ enum CustomLLMTaskKind: Equatable {
             return 1.10
         case .translation, .rewrite:
             return 1.35
+        case .dictionaryHistoryScan:
+            return 2.20
         }
     }
 }
@@ -238,7 +242,7 @@ enum CustomLLMRequestPlanBuilder {
     ) -> CustomLLMRequestPlan {
         let requestPrompt = structuredOutputPrompt(prompt)
         return CustomLLMRequestPlan(
-            kind: .enhancement,
+            kind: .dictionaryHistoryScan,
             repo: repo,
             instructions: "",
             prompt: requestPrompt,

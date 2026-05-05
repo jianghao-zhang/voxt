@@ -60,5 +60,16 @@ final class DictionaryHistoryScanSupportTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Chinese"))
         XCTAssertTrue(prompt.contains("<historyRecords>"))
         XCTAssertTrue(prompt.contains("Discuss OpenAI roadmap"))
+        XCTAssertTrue(prompt.contains("<maxCandidateCount>12</maxCandidateCount>"))
+        XCTAssertTrue(prompt.contains("Return at most 12 accepted terms."))
+    }
+
+    func testResponseParserRecoversTermsFromTruncatedJSONArray() throws {
+        let response = """
+        [{"term":"OpenAI"},{"term":"button"},{"term":"MCP"},{"term":"station"
+        """
+
+        let terms = try DictionaryHistoryScanResponseParser.parseTerms(from: response)
+        XCTAssertEqual(terms, ["OpenAI", "MCP"])
     }
 }

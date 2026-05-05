@@ -225,9 +225,10 @@ extension AppDelegate {
                     userOtherLanguages: userOtherMainLanguagesPromptValue
                 )
                 let scannedTerms = try await runDictionaryHistoryScanPrompt(prompt, model: model)
+                let boundedTerms = Array(scannedTerms.prefix(filterSettings.maxCandidatesPerBatch))
                 try Task.checkCancellation()
                 let parsedCandidates = try DictionaryHistoryScanSupport.parseCandidates(
-                    terms: scannedTerms,
+                    terms: boundedTerms,
                     batch: batch,
                     groupsByID: groupsByID,
                     groupsByLowercasedName: groupsByLowercasedName

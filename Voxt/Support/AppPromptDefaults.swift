@@ -5,6 +5,7 @@ enum AppPromptKind: CaseIterable {
     case translation
     case rewrite
     case meetingSummary
+    case dictionaryIngest
     case openAIASRHint
     case glmASRHint
     case whisperASRHint
@@ -91,6 +92,79 @@ enum AppPromptDefaults {
             return AppPreferenceKey.defaultRewritePrompt
         case .meetingSummary:
             return AppPreferenceKey.defaultMeetingSummaryPrompt
+        case .dictionaryIngest:
+            return """
+            You are building a personal dictionary for a speech-to-text app. Be conservative. Only output high-confidence terms that are genuinely worth storing in a custom dictionary.
+
+            ### Keep Only These Kinds of Terms
+            1. Person names
+            2. Place names, venue names, region names, or landmarks that are specific and uncommon
+            3. Company, brand, product, app, project, team, or feature names
+            4. Acronyms or abbreviations with clear domain meaning
+            5. Distinctive industry terminology or stable user-specific spellings
+
+            ### Hard Exclusions
+            1. Common everyday words in the user's primary spoken language or any other frequently used language
+            2. Generic nouns, verbs, adjectives, adverbs, fillers, or discourse words
+            3. ASR mistakes, malformed fragments, partial words, repeated fragments, or words that are obviously mis-transcribed in context
+            4. Long phrases, clauses, commands, sentence fragments, or anything that looks like a chunk of the transcript instead of a dictionary term
+            5. Common words from a secondary language that appear inside mixed-language speech unless they are clearly a proper noun, acronym, or technical term
+            6. Terms already listed in `dictionaryHitTerms` or `dictionaryCorrectedTerms`, unless the history clearly shows a new exact spelling that should replace the previous form
+            7. Pure numbers, dates, times, IDs, email addresses, URLs, file paths, or punctuation-heavy strings
+            8. High-frequency function words or general-purpose vocabulary in any declared user language, even if they appear repeatedly
+            9. Generic travel, logistics, office, and UI vocabulary such as flight, train service, subway, high-speed rail, hotel, meeting, email, file, token, prompt, model, button, setting, unless the transcript clearly indicates a specific proper noun, product name, or stable domain phrase that is uncommon for general users
+            10. Generic reference phrases such as our rule, this issue, that feature, this problem, that function
+
+            ### Length Rules
+            - Prefer single words or very short noun phrases
+            - English or Latin-script terms should usually be 1 to 4 words, and must not exceed 6 words
+            - English or Latin-script terms should not exceed 32 letters total unless they are a well-known acronym or product name
+            - Chinese, Japanese, or Korean terms should usually be short and must not exceed 6 characters unless they are a clearly established proper noun
+
+            ### Decision Rules
+            - Prioritize terms that appear at least 2 times
+            - Single-occurrence terms are allowed only when they are unmistakably a person name, place name, organization name, product name, acronym, or domain term
+            - Analyze using the user's main language and the surrounding transcript context
+            - Treat the primary spoken language and the other frequently used languages as ordinary daily vocabulary for this user
+            - Repetition alone is not enough. A repeated common word must still be excluded
+            - In mixed-language speech, do not extract a term just because it is from a secondary language; keep it only when it is clearly a proper noun, acronym, brand, product name, or technical term
+            - If a word would be familiar to most ordinary speakers of that language, exclude it
+            - If a candidate is a broad category label instead of a unique named entity or distinctive term, exclude it
+            - Well-known cities, countries, and everyday location names should usually be excluded unless the transcript shows they are genuinely user-specific dictionary targets
+            - If you are unsure whether a term is common, generic, or an ASR error, exclude it
+            - Preserve the exact casing and spelling for accepted names and acronyms
+
+            ### Three Filtering Principles
+            1. Common vocabulary never belongs in the dictionary, even if it appears often
+            2. Context-only items do not belong in the dictionary, such as route endpoints, transport numbers, UI labels, or one-off workflow words that are only needed for the current sentence
+            3. Keep only stable correction targets: names, brands, acronyms, product names, technical terms, or durable user-specific terminology
+
+            ### Cross-Language Guidance
+            - Apply the same exclusion standard to every language listed for the user, including Chinese, English, Japanese, Korean, Thai, and any other declared language
+            - Do not rely on a fixed Chinese-only or English-only stopword list; generalize the same "exclude high-frequency common vocabulary" rule to all declared languages
+            - A secondary-language word inside mixed-language speech is usually not dictionary-worthy if it is still a common word in that language
+
+            ### Quick Examples
+            - Exclude: flight, train, station, schedule, subway, hotel, meeting, email, file, token, prompt, model, button, setting, company
+            - Exclude when they are only route endpoints or transport identifiers in a travel query: origin city, destination city, train number, flight number such as K130, MU5735, G1234
+            - Keep: OpenAI, Claude, Bangkok Bank, TensorRT, Kubernetes, Chiang Mai University
+            - Keep only when clearly specific and uncommon in context: product names, acronyms, person names, place names, brand names, technical terms, stable internal project names
+
+            ### Output Rules
+            - User's primary spoken language: {{USER_MAIN_LANGUAGE}}
+            - Other frequently used languages: {{USER_OTHER_LANGUAGES}}
+            - Input: {{HISTORY_RECORDS}}
+            - Output must be a JSON array
+            - Each array item must be an object with exactly one field: {"term": "accepted term"}
+            - Return [] if there are no worthy terms
+            - Do not return prose, markdown, code fences, explanations, or any extra fields
+
+            Example:
+            [
+              { "term": "OpenAI" },
+              { "term": "MCP" }
+            ]
+            """
         case .openAIASRHint:
             return AppPreferenceKey.defaultOpenAIASRHintPrompt
         case .glmASRHint:
@@ -218,6 +292,80 @@ enum AppPromptDefaults {
 
             注意：如果没有待办事项，"todo_list" 必须返回空数组。请确保 JSON 格式正确、没有多余逗号，并使用符合用户主要语言表达习惯的自然流畅语言，准确反映会议纪要内容。
             """
+        case .dictionaryIngest:
+            return """
+            你正在为一款语音转文字应用构建个人词典。请保持保守，只输出那些高置信、确实值得存入自定义词典的词汇。
+
+            ### 只保留以下类型的词汇
+            1. 人名
+            2. 具体且不常见的地名、场馆名、区域名或地标
+            3. 公司、品牌、产品、应用、项目、团队或功能名称
+            4. 具有明确领域含义的缩写或首字母词
+            5. 具有辨识度的行业术语，或稳定的用户特定写法
+
+            ### 必须排除
+            1. 用户主要口语语言或其他常用语言中的常见日常词汇
+            2. 泛化的名词、动词、形容词、副词、语气词或话语填充词
+            3. ASR 错词、畸形片段、残缺词、重复碎片，或在上下文中明显是误识别的词
+            4. 长短语、从句、指令、句子残片，或任何看起来更像转写片段而不是词典词条的内容
+            5. 混合语言语音中的次要语言常见词，除非它明显是专有名词、缩写或技术术语
+            6. 已经出现在 `dictionaryHitTerms` 或 `dictionaryCorrectedTerms` 里的词，除非历史记录清楚表明应以新的准确写法替换旧形式
+            7. 纯数字、日期、时间、编号、邮箱地址、URL、文件路径，或标点过重的字符串
+            8. 任一已声明用户语言中的高频虚词或通用词汇，即使它们重复出现
+            9. 泛化的出行、物流、办公和 UI 词汇，例如 航班、车次、地铁、高铁、酒店、会议、邮件、文件、token、prompt、model、button、setting，除非上下文清楚表明它是具体的专有名词、产品名或对普通用户并不常见的稳定领域短语
+            10. 泛化的指代性短语，例如 我们的规则、这个问题、那个功能、our rule、this issue、that feature
+
+            ### 长度规则
+            - 优先保留单词或很短的名词短语
+            - 英文或拉丁字母词通常应为 1 到 4 个词，且不得超过 6 个词
+            - 英文或拉丁字母词总字母数通常不应超过 32，除非它是知名缩写或产品名
+            - 中文、日文、韩文词通常应较短，除非它是明确成立的专有名词，否则不应超过 6 个字
+
+            ### 判定规则
+            - 优先考虑出现至少 2 次的词
+            - 只出现 1 次的词，只有在它显然是人名、地名、组织名、产品名、缩写或领域术语时才可保留
+            - 必须结合用户主要语言和周围转写上下文进行判断
+            - 对这个用户来说，主要口语语言和其他常用语言都应视为日常词汇环境
+            - 仅仅重复出现并不构成保留理由，重复的常见词仍然必须排除
+            - 在混合语言语音中，不要仅因为某个词来自次要语言就保留；只有当它明显是专有名词、缩写、品牌名、产品名或技术术语时才保留
+            - 如果一个词对该语言的大多数普通使用者来说都很常见，就应排除
+            - 如果候选词只是一个宽泛类别标签，而不是独特命名实体或有辨识度的术语，就应排除
+            - 知名城市、国家和常见地点名通常也应排除，除非上下文表明它们确实是用户特定的词典目标
+            - 只要你不确定该词是否常见、泛化或属于 ASR 错误，就排除它
+            - 对被接受的人名和缩写，保留原始大小写和拼写
+
+            ### 三条过滤原则
+            1. 常见词汇永远不应进入词典，即使它出现很多次
+            2. 只在当前上下文有意义的临时项不应进入词典，例如路线起终点、交通编号、UI 标签或一次性工作流词汇
+            3. 只保留稳定的纠错目标：人名、品牌、缩写、产品名、技术术语或长期存在的用户特定术语
+
+            ### 多语言处理
+            - 对用户声明的每一种语言都应用同样的排除标准，包括中文、英文、日文、韩文、泰文以及其他语言
+            - 不要依赖固定的中文或英文停用词表，而应把“排除高频常见词汇”的原则推广到所有声明语言
+            - 混合语言中的次要语言词，如果在该语言里仍然只是常见词，通常不应进入词典
+
+            ### 快速示例
+            - 排除：航班、车次、地铁、酒店、会议、邮件、文件
+            - 排除：flight、train、station、schedule、email、file、token、prompt、model、button、setting、company
+            - 如果它们只是出行问句中的路线端点或交通编号，也要排除：出发城市、到达城市、车次号、航班号，例如 K130、MU5735、G1234
+            - 保留：OpenAI、Claude、Bangkok Bank、TensorRT、Kubernetes、清迈大学
+            - 只有在上下文中明确具体且不常见时才保留：产品名、缩写、人名、地名、品牌名、技术术语、稳定的内部项目名
+
+            ### 输出规则
+            - 用户主要口语语言：{{USER_MAIN_LANGUAGE}}
+            - 其他常用语言：{{USER_OTHER_LANGUAGES}}
+            - 输入：{{HISTORY_RECORDS}}
+            - 输出必须是 JSON 数组
+            - 数组中的每一项必须是只包含一个字段的对象：{"term": "accepted term"}
+            - 如果没有值得保留的词，返回 []
+            - 不要返回说明文字、Markdown、代码块、解释或任何额外字段
+
+            示例：
+            [
+              { "term": "OpenAI" },
+              { "term": "MCP" }
+            ]
+            """
         case .openAIASRHint:
             return "说话者的主要语言是 {{USER_MAIN_LANGUAGE}}。请优先保证该语言的识别准确性，同时按原样保留混合语言词汇、人名、产品术语、URL 和类似代码的文本。"
         case .glmASRHint:
@@ -342,6 +490,80 @@ enum AppPromptDefaults {
             }
 
             "todo_list" に入れる項目がない場合は空配列を返してください。JSON を正しく整形し、自然な表現で会議内容を正確に反映してください。
+            """
+        case .dictionaryIngest:
+            return """
+            あなたは音声文字起こしアプリ向けの個人辞書を作成しています。慎重に判断し、カスタム辞書へ保存する価値が本当にある高信頼な語だけを出力してください。
+
+            ### 残してよい語の種類
+            1. 人名
+            2. 具体的で一般的ではない地名、施設名、地域名、ランドマーク名
+            3. 会社名、ブランド名、製品名、アプリ名、プロジェクト名、チーム名、機能名
+            4. 明確な分野的意味を持つ略語や頭字語
+            5. 識別性の高い業界用語、または安定したユーザー固有の表記
+
+            ### 必ず除外するもの
+            1. ユーザーの主要な話し言葉、または他の頻出言語における日常的な一般語
+            2. 汎用的な名詞、動詞、形容詞、副詞、フィラー、談話語
+            3. ASR の誤認識、壊れた断片、不完全語、重複断片、文脈上明らかに誤転写された語
+            4. 長いフレーズ、節、命令文、文の切れ端など、辞書語ではなく文字起こし断片に見えるもの
+            5. 混在言語の発話に含まれる副次言語の一般語。ただし明確な固有名詞、略語、技術用語である場合は除く
+            6. `dictionaryHitTerms` や `dictionaryCorrectedTerms` に既に含まれる語。ただし履歴から新しい正確な表記に置き換えるべきと明確に判断できる場合は除く
+            7. 純粋な数値、日付、時刻、ID、メールアドレス、URL、ファイルパス、記号過多の文字列
+            8. ユーザーが使うどの言語においても高頻度の機能語や一般語彙
+            9. 航班、车次、地铁、高铁、酒店、会议、邮件、文件、token、prompt、model、button、setting のような汎用的な移動・事務・UI 語彙。ただし文脈上、それが具体的な固有名詞、製品名、または一般ユーザーには珍しい安定した専門句であると明確な場合を除く
+            10. 我们的规则、这个问题、那个功能、our rule、this issue、that feature のような汎用的な参照表現
+
+            ### 長さのルール
+            - 単語、または非常に短い名詞句を優先する
+            - 英語やラテン文字の語は通常 1 から 4 語とし、最大でも 6 語を超えない
+            - 英語やラテン文字の語の総文字数は、著名な略語や製品名でない限り通常 32 文字を超えない
+            - 中国語、日本語、韓国語の語は通常短く、明確に確立した固有名詞でない限り 6 文字を超えない
+
+            ### 判定ルール
+            - まず 2 回以上出現した語を優先する
+            - 1 回しか出現しない語は、人名、地名、組織名、製品名、略語、分野用語であることが明白な場合に限って許可する
+            - ユーザーの主要言語と周辺の文字起こし文脈を使って判断する
+            - 主要言語も他の頻出言語も、そのユーザーにとっては日常語彙環境として扱う
+            - 繰り返し出現しただけでは不十分であり、一般語は繰り返されても除外する
+            - 混在言語の発話では、副次言語の語であるという理由だけで残してはいけない。明確な固有名詞、略語、ブランド名、製品名、技術用語の場合のみ残す
+            - その言語の大多数の一般話者にとって馴染みがある語なら除外する
+            - 候補が広いカテゴリ名にすぎず、固有の命名実体や識別性の高い用語でないなら除外する
+            - 著名な都市名、国名、日常的な地名も、文脈上ユーザー固有の辞書対象であると示されない限り通常は除外する
+            - その語が一般的か、汎用的か、ASR エラーか判断に迷うなら除外する
+            - 採用した名前や略語の大文字小文字と綴りはそのまま保持する
+
+            ### 3 つの基本原則
+            1. 一般語彙は、何度出現しても辞書に入れてはいけない
+            2. 経路の出発地・到着地、交通番号、UI ラベル、一時的な作業語のような文脈依存の項目は辞書に入れてはいけない
+            3. 安定した訂正対象だけを残すこと。人名、ブランド名、略語、製品名、技術用語、長期的に使うユーザー固有用語に限る
+
+            ### 多言語の扱い
+            - 中国語、英語、日本語、韓国語、タイ語を含む、ユーザーが宣言したすべての言語に同じ除外基準を適用する
+            - 固定の中国語・英語ストップワード表に頼らず、「高頻度の一般語を除外する」という原則をすべての宣言言語に一般化する
+            - 混在言語中の副次言語の語が、その言語でもなお一般語であるなら、通常は辞書に入れない
+
+            ### 例
+            - 除外：航班、车次、地铁、酒店、会议、邮件、文件
+            - 除外：flight、train、station、schedule、email、file、token、prompt、model、button、setting、company
+            - 旅行の質問で経路端点や交通番号としてしか使われていない場合は除外：出発都市、到着都市、列車番号、便名。例：K130、MU5735、G1234
+            - 残す：OpenAI、Claude、Bangkok Bank、TensorRT、Kubernetes、清迈大学
+            - 文脈上明確に具体的で一般的でない場合のみ残す：製品名、略語、人名、地名、ブランド名、技術用語、安定した社内プロジェクト名
+
+            ### 出力ルール
+            - ユーザーの主要な話し言葉：{{USER_MAIN_LANGUAGE}}
+            - 他の頻出言語：{{USER_OTHER_LANGUAGES}}
+            - 入力：{{HISTORY_RECORDS}}
+            - 出力は JSON 配列でなければならない
+            - 配列の各要素は、{"term": "accepted term"} という 1 フィールドだけを持つオブジェクトにする
+            - 値する語がない場合は [] を返す
+            - 説明文、Markdown、コードフェンス、解説、追加フィールドを返してはいけない
+
+            例：
+            [
+              { "term": "OpenAI" },
+              { "term": "MCP" }
+            ]
             """
         case .openAIASRHint:
             return "話者の主要言語は {{USER_MAIN_LANGUAGE}} です。その言語での認識精度を優先しつつ、混在言語の語句、人名、製品用語、URL、コード風テキストは発話どおりに保持してください。"

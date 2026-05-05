@@ -23,6 +23,7 @@ struct RemoteLLMRuntimeClient {
         case enhancement
         case translation
         case rewrite
+        case dictionaryHistoryScan
     }
 
     struct GenerationTuning {
@@ -142,7 +143,7 @@ struct RemoteLLMRuntimeClient {
                 requestContentForLog: input,
                 inputPayload: input,
                 inputTextLength: input.count,
-                intent: .enhancement,
+                intent: .dictionaryHistoryScan,
                 provider: provider,
                 configuration: configuration,
                 textFormat: DictionaryHistoryScanResponseParser.responsesTextFormatPayload()
@@ -154,7 +155,7 @@ struct RemoteLLMRuntimeClient {
             debugInput: input,
             userPrompt: input,
             inputTextLength: input.count,
-            intent: .enhancement,
+            intent: .dictionaryHistoryScan,
             provider: provider,
             configuration: configuration
         )
@@ -1172,10 +1173,25 @@ struct RemoteLLMRuntimeClient {
             baseMultiplier = 1.15
             minimumBudget = 128
             maximumBudget = 1024
+        case .dictionaryHistoryScan:
+            // Dictionary ingest emits compact JSON objects and can legitimately
+            // return a short list of accepted terms, so it needs a wider floor.
+            baseMultiplier = 1.60
+            minimumBudget = 384
+            maximumBudget = 2048
         }
 
         let contentEstimate = Int(Double(safeInput) * baseMultiplier)
-        let instructionReserve = min(intent == .rewrite ? 256 : 192, max(32, instructionChars / 12))
+        let instructionReserveLimit: Int
+        switch intent {
+        case .rewrite:
+            instructionReserveLimit = 256
+        case .dictionaryHistoryScan:
+            instructionReserveLimit = 320
+        case .enhancement, .translation:
+            instructionReserveLimit = 192
+        }
+        let instructionReserve = min(instructionReserveLimit, max(32, instructionChars / 12))
         let estimate = contentEstimate + instructionReserve
         return max(minimumBudget, min(estimate, maximumBudget))
     }

@@ -203,7 +203,13 @@ class CustomLLMModelManager: ObservableObject {
     private func generationParameters(for kind: CustomLLMTaskKind, inputLength: Int) -> GenerateParameters {
         let safeInput = max(1, inputLength)
         let estimated = Int(Double(safeInput) * kind.tokenBudgetMultiplier)
-        let budget = max(96, min(estimated + 48, 320))
+        let budget: Int
+        switch kind {
+        case .dictionaryHistoryScan:
+            budget = max(256, min(estimated + 96, 1024))
+        case .enhancement, .translation, .rewrite:
+            budget = max(96, min(estimated + 48, 320))
+        }
         return GenerateParameters(
             maxTokens: budget,
             temperature: 0.1,

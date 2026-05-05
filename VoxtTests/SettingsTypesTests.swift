@@ -40,8 +40,57 @@ final class SettingsTypesTests: XCTestCase {
         XCTAssertEqual(sanitized.maxCandidatesPerBatch, DictionarySuggestionFilterSettings.minimumMaxCandidates)
     }
 
+    func testDictionarySuggestionFilterSettingsSanitizedMigratesLegacyDefaultPrompt() {
+        let legacyPrompt = """
+        You are building a personal dictionary for a speech-to-text app.
+
+        Output: Structured list of recommended terms
+        One term per line
+        Return null if no worthy terms
+        """
+
+        XCTAssertEqual(
+            DictionarySuggestionFilterSettings(prompt: legacyPrompt, batchSize: 12, maxCandidatesPerBatch: 12)
+                .sanitized()
+                .prompt,
+            DictionarySuggestionFilterSettings.defaultPrompt
+        )
+    }
+
+    func testDictionarySuggestionDefaultPromptFollowsInterfaceLanguage() {
+        let englishPrompt = DictionarySuggestionFilterSettings.defaultPrompt(language: .english)
+        let chinesePrompt = DictionarySuggestionFilterSettings.defaultPrompt(language: .chineseSimplified)
+        let japanesePrompt = DictionarySuggestionFilterSettings.defaultPrompt(language: .japanese)
+
+        XCTAssertTrue(englishPrompt.contains("You are building a personal dictionary"))
+        XCTAssertTrue(chinesePrompt.contains("你正在为一款语音转文字应用构建个人词典"))
+        XCTAssertTrue(japanesePrompt.contains("音声文字起こしアプリ向けの個人辞書"))
+    }
+
+    func testDictionarySuggestionFilterSettingsSanitizedReplacesKnownDefaultWithCurrentLanguage() {
+        let englishPrompt = DictionarySuggestionFilterSettings.defaultPrompt(language: .english)
+        let japanesePrompt = DictionarySuggestionFilterSettings.defaultPrompt(language: .japanese)
+
+        XCTAssertEqual(
+            DictionarySuggestionFilterSettings.sanitizedPrompt(
+                englishPrompt,
+                language: .japanese
+            ),
+            japanesePrompt
+        )
+    }
+
+    func testDictionarySuggestionFilterSettingsCanonicalStoredPromptClearsLocalizedDefault() {
+        XCTAssertEqual(
+            DictionarySuggestionFilterSettings.canonicalStoredPrompt(
+                DictionarySuggestionFilterSettings.defaultPrompt(language: .chineseSimplified)
+            ),
+            ""
+        )
+    }
+
     func testDictionarySuggestionDefaultPromptTightensTermSelectionRules() {
-        let prompt = DictionarySuggestionFilterSettings.defaultPrompt
+        let prompt = DictionarySuggestionFilterSettings.defaultPrompt(language: .english)
 
         XCTAssertTrue(prompt.contains("ASR mistakes"))
         XCTAssertTrue(prompt.contains("mixed-language speech"))
@@ -59,11 +108,17 @@ final class SettingsTypesTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Common vocabulary never belongs in the dictionary"))
         XCTAssertTrue(prompt.contains("Context-only items do not belong in the dictionary"))
         XCTAssertTrue(prompt.contains("stable correction targets"))
-        XCTAssertTrue(prompt.contains("我们的规则"))
-        XCTAssertTrue(prompt.contains("航班"))
-        XCTAssertTrue(prompt.contains("车次"))
+        XCTAssertTrue(prompt.contains("our rule"))
+        XCTAssertTrue(prompt.contains("flight"))
+        XCTAssertTrue(prompt.contains("train service"))
         XCTAssertTrue(prompt.contains("token"))
         XCTAssertTrue(prompt.contains("MU5735"))
+        XCTAssertNil(
+            prompt.range(
+                of: #"[\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Hangul}]"#,
+                options: .regularExpression
+            )
+        )
     }
 
     func testDictionaryHistoryScanPromptLanguageSupportBuildsOtherLanguagesPromptValue() {
@@ -217,6 +272,33 @@ final class SettingsTypesTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try DictionaryHistoryScanResponseParser.parseTerms(from: response))
+    }
+
+    func testDictionaryHistoryScanResponseParserAcceptsLegacyLineBasedTerms() throws {
+        let response = """
+        Recommended terms:
+        1. OpenAI
+        2. MCP
+        """
+
+        XCTAssertEqual(
+            try DictionaryHistoryScanResponseParser.parseTerms(from: response),
+            ["OpenAI", "MCP"]
+        )
+    }
+
+    func testDictionaryHistoryScanResponseParserAcceptsSingleLegacyTermLine() throws {
+        XCTAssertEqual(
+            try DictionaryHistoryScanResponseParser.parseTerms(from: "OpenAI"),
+            ["OpenAI"]
+        )
+    }
+
+    func testDictionaryHistoryScanResponseParserAcceptsLegacyNullResponse() throws {
+        XCTAssertEqual(
+            try DictionaryHistoryScanResponseParser.parseTerms(from: "null"),
+            []
+        )
     }
 
     func testDictionaryHistoryScanResponseParserFiltersRejectedJSONArrayItems() throws {

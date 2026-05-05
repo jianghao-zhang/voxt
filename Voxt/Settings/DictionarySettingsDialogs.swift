@@ -23,100 +23,110 @@ struct DictionaryAdvancedSettingsDialog: View {
         selectedModelOption?.title ?? modelOptions.first?.title ?? String(localized: "Select Model")
     }
 
+    private let dialogWidth: CGFloat = 520
+    private let dialogMaxHeight: CGFloat = 700
+    private let contentMaxHeight: CGFloat = 620
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Dictionary Advanced Settings")
-                .font(.title3.weight(.semibold))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Dictionary Advanced Settings")
+                        .font(.title3.weight(.semibold))
 
-            Toggle("Allow High-Confidence Auto Correction", isOn: $dictionaryHighConfidenceCorrectionEnabled)
-                .controlSize(.small)
-                .disabled(!dictionaryRecognitionEnabled)
+                    Toggle("Allow High-Confidence Auto Correction", isOn: $dictionaryHighConfidenceCorrectionEnabled)
+                        .controlSize(.small)
+                        .disabled(!dictionaryRecognitionEnabled)
 
-            Text("When enabled, the final output can replace very high-confidence near matches with exact dictionary terms before the text is inserted.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text(String(localized: "One-Click Ingest"))
-                    .font(.headline)
-
-                Text("Choose the model and prompt used by one-click ingest.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text(
-                    AppLocalization.format(
-                        "%d new history records are ready for dictionary ingestion.",
-                        pendingHistoryScanCount
-                    )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "Model"))
-                        .font(.caption.weight(.semibold))
+                    Text("When enabled, the final output can replace very high-confidence near matches with exact dictionary terms before the text is inserted.")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    SettingsMenuPicker(
-                        selection: $selectedModelID,
-                        options: modelOptions,
-                        selectedTitle: selectedModelTitle,
-                        width: 260
-                    )
-                    .disabled(modelOptions.isEmpty)
+                    Divider()
 
-                    if let selectedModelOption, !selectedModelOption.detail.isEmpty {
-                        Text(selectedModelOption.detail)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(String(localized: "One-Click Ingest"))
+                            .font(.headline)
+
+                        Text("Choose the model and prompt used by one-click ingest.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    } else if modelOptions.isEmpty {
-                        Text("No configured local or remote model is available for dictionary ingestion. Configure one in Model settings first.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(String(localized: "Ingest Prompt"))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        Spacer(minLength: 8)
-
-                        Button("Restore Default", action: onRestoreDefaultPrompt)
-                            .buttonStyle(SettingsPillButtonStyle())
-                    }
-
-                    PromptEditorView(
-                        text: $draftPrompt,
-                        height: 180,
-                        contentPadding: 2,
-                        variables: [
-                            PromptTemplateVariableDescriptor(
-                                token: "{{USER_MAIN_LANGUAGE}}",
-                                tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
-                            ),
-                            PromptTemplateVariableDescriptor(
-                                token: "{{USER_OTHER_LANGUAGES}}",
-                                tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
-                            ),
-                            PromptTemplateVariableDescriptor(
-                                token: "{{HISTORY_RECORDS}}",
-                                tipKey: "Template tip {{HISTORY_RECORDS}}"
+                        Text(
+                            AppLocalization.format(
+                                "%d new history records are ready for dictionary ingestion.",
+                                pendingHistoryScanCount
                             )
-                        ]
-                    )
-                }
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                Text("One-click ingest scans new history records and writes accepted terms directly into the dictionary.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(String(localized: "Model"))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            SettingsMenuPicker(
+                                selection: $selectedModelID,
+                                options: modelOptions,
+                                selectedTitle: selectedModelTitle,
+                                width: 260
+                            )
+                            .disabled(modelOptions.isEmpty)
+
+                            if let selectedModelOption, !selectedModelOption.detail.isEmpty {
+                                Text(selectedModelOption.detail)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            } else if modelOptions.isEmpty {
+                                Text("No configured local or remote model is available for dictionary ingestion. Configure one in Model settings first.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(String(localized: "Ingest Prompt"))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+
+                                Spacer(minLength: 8)
+
+                                Button("Restore Default", action: onRestoreDefaultPrompt)
+                                    .buttonStyle(SettingsPillButtonStyle())
+                            }
+
+                            PromptEditorView(
+                                text: $draftPrompt,
+                                height: 180,
+                                contentPadding: 2,
+                                variables: [
+                                    PromptTemplateVariableDescriptor(
+                                        token: "{{USER_MAIN_LANGUAGE}}",
+                                        tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
+                                    ),
+                                    PromptTemplateVariableDescriptor(
+                                        token: "{{USER_OTHER_LANGUAGES}}",
+                                        tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
+                                    ),
+                                    PromptTemplateVariableDescriptor(
+                                        token: "{{HISTORY_RECORDS}}",
+                                        tipKey: "Template tip {{HISTORY_RECORDS}}"
+                                    )
+                                ]
+                            )
+                        }
+
+                        Text("One-click ingest scans new history records and writes accepted terms directly into the dictionary.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxHeight: contentMaxHeight)
 
             SettingsDialogActionRow {
                 Button("Done") {
@@ -128,6 +138,7 @@ struct DictionaryAdvancedSettingsDialog: View {
             }
         }
         .padding(20)
-        .frame(width: 520)
+        .frame(width: dialogWidth)
+        .frame(maxHeight: dialogMaxHeight)
     }
 }
