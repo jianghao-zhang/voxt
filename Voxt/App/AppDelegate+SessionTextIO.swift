@@ -194,6 +194,7 @@ extension AppDelegate {
             usesConservativeEvidence: usesConservativeEvidence,
             automaticReplacementEnabled: automaticReplacementEnabled
         )
+        let uniqueDictionaryMatches = orderedUniqueDictionaryMatches(dictionaryCorrection.candidates)
         let rewriteAnswerPayload = extractedRewriteAnswerPayload.map {
             RewriteAnswerPayload(title: $0.title, content: dictionaryCorrection.text)
         }
@@ -201,12 +202,25 @@ extension AppDelegate {
         return SessionFinalizeContext(
             outputText: dictionaryCorrection.text,
             llmDurationSeconds: llmDurationSeconds,
-            dictionaryMatches: dictionaryCorrection.candidates,
+            dictionaryMatches: uniqueDictionaryMatches,
             dictionaryCorrectedTerms: dictionaryCorrection.correctedTerms,
             dictionarySuggestions: [],
             historyEntryID: nil,
             rewriteAnswerPayload: rewriteAnswerPayload
         )
+    }
+
+    nonisolated private static func orderedUniqueDictionaryMatches(
+        _ candidates: [DictionaryMatchCandidate]
+    ) -> [DictionaryMatchCandidate] {
+        var seen = Set<String>()
+        var ordered: [DictionaryMatchCandidate] = []
+        for candidate in candidates {
+            let normalized = DictionaryStore.normalizeTerm(candidate.term)
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
+            ordered.append(candidate)
+        }
+        return ordered
     }
 
     nonisolated private static func orderedUniqueDictionaryTerms(from values: [String]) -> [String] {
