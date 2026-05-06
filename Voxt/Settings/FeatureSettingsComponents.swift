@@ -511,35 +511,39 @@ struct FeaturePromptSection: View {
     let defaultText: String
     let variables: [PromptTemplateVariableDescriptor]
     let persistChanges: () -> Void
-    @State private var draft: String = ""
-    @State private var lastSyncedText: String = ""
+    @State private var coordinator: FeaturePromptDraftCoordinator
     @State private var pendingSaveTask: Task<Void, Never>?
-    @State private var didSeedDraft = false
+
+    init(
+        title: String,
+        text: Binding<String>,
+        defaultText: String,
+        variables: [PromptTemplateVariableDescriptor],
+        persistChanges: @escaping () -> Void
+    ) {
+        self.title = title
+        _text = text
+        self.defaultText = defaultText
+        self.variables = variables
+        self.persistChanges = persistChanges
+        _coordinator = State(initialValue: FeaturePromptDraftCoordinator(text: text.wrappedValue))
+    }
 
     var body: some View {
         ResettablePromptSection(
             title: localizedKey(title),
-            text: $draft,
+            text: Binding(
+                get: { coordinator.draft },
+                set: { coordinator.updateDraft($0) }
+            ),
             defaultText: defaultText,
             variables: variables,
             promptHeight: 196,
             onTextChange: schedulePersist,
             onFocusChange: handleFocusChange
         )
-        .onAppear {
-            guard !didSeedDraft else { return }
-            draft = text
-            lastSyncedText = text
-            didSeedDraft = true
-        }
         .onChange(of: text) { _, newValue in
-            // Pull external mutations into the draft (e.g. another window edits the
-            // same setting), but ignore the round-trip echo of a write we just made.
-            // This keeps the TextEditor's NSTextView from being re-stringified mid-typing,
-            // which is what was collapsing the caret to the end of the document.
-            guard newValue != lastSyncedText, newValue != draft else { return }
-            draft = newValue
-            lastSyncedText = newValue
+            coordinator.syncExternalText(newValue)
         }
         .onDisappear {
             flushPendingChanges()
@@ -566,15 +570,42 @@ struct FeaturePromptSection: View {
         pendingSaveTask?.cancel()
         pendingSaveTask = nil
 
-        let currentDraft = draft
-        guard currentDraft != lastSyncedText else { return }
-        if let expectedText, currentDraft != expectedText {
-            return
+        if let persistedText = coordinator.takePendingPersist(expectedText: expectedText) {
+            text = persistedText
+            persistChanges()
+        }
+    }
+}
+
+struct FeaturePromptDraftCoordinator: Equatable {
+    private(set) var draft: String
+    private(set) var lastSyncedText: String
+
+    init(text: String) {
+        draft = text
+        lastSyncedText = text
+    }
+
+    mutating func updateDraft(_ newValue: String) {
+        draft = newValue
+    }
+
+    mutating func syncExternalText(_ newValue: String) {
+        // Ignore the round-trip echo of our own write so the active TextEditor
+        // does not receive a redundant string assignment mid-typing.
+        guard newValue != lastSyncedText, newValue != draft else { return }
+        draft = newValue
+        lastSyncedText = newValue
+    }
+
+    mutating func takePendingPersist(expectedText: String? = nil) -> String? {
+        guard draft != lastSyncedText else { return nil }
+        if let expectedText, draft != expectedText {
+            return nil
         }
 
-        lastSyncedText = currentDraft
-        text = currentDraft
-        persistChanges()
+        lastSyncedText = draft
+        return draft
     }
 }
 
