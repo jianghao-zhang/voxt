@@ -1174,90 +1174,82 @@ class HotkeyManager {
     }
 
     private func scheduleTranslationLongPressRelease() {
-        pendingTranslationLongPressReleaseTask?.cancel()
-        pendingTranslationLongPressReleaseTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(80))
-            } catch {
-                return
-            }
-            guard let self else { return }
-            guard !Task.isCancelled else { return }
-            guard self.isTranslationKeyDown else { return }
-            self.pendingTranslationLongPressReleaseTask = nil
-            self.isTranslationKeyDown = false
-            self.emitTranslationKeyUp()
+        scheduleLongPressRelease(
+            task: \.pendingTranslationLongPressReleaseTask,
+            isKeyDown: \.isTranslationKeyDown
+        ) { manager in
+            manager.emitTranslationKeyUp()
         }
     }
 
     private func cancelPendingTranslationLongPressRelease() {
-        pendingTranslationLongPressReleaseTask?.cancel()
-        pendingTranslationLongPressReleaseTask = nil
+        cancelPendingLongPressRelease(task: \.pendingTranslationLongPressReleaseTask)
     }
 
     private func scheduleRewriteLongPressRelease() {
-        pendingRewriteLongPressReleaseTask?.cancel()
-        pendingRewriteLongPressReleaseTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(80))
-            } catch {
-                return
-            }
-            guard let self else { return }
-            guard !Task.isCancelled else { return }
-            guard self.isRewriteKeyDown else { return }
-            self.pendingRewriteLongPressReleaseTask = nil
-            self.isRewriteKeyDown = false
-            self.emitRewriteKeyUp()
+        scheduleLongPressRelease(
+            task: \.pendingRewriteLongPressReleaseTask,
+            isKeyDown: \.isRewriteKeyDown
+        ) { manager in
+            manager.emitRewriteKeyUp()
         }
     }
 
     private func cancelPendingRewriteLongPressRelease() {
-        pendingRewriteLongPressReleaseTask?.cancel()
-        pendingRewriteLongPressReleaseTask = nil
+        cancelPendingLongPressRelease(task: \.pendingRewriteLongPressReleaseTask)
     }
 
     private func scheduleMeetingLongPressRelease() {
-        pendingMeetingLongPressReleaseTask?.cancel()
-        pendingMeetingLongPressReleaseTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(80))
-            } catch {
-                return
-            }
-            guard let self else { return }
-            guard !Task.isCancelled else { return }
-            guard self.isMeetingKeyDown else { return }
-            self.pendingMeetingLongPressReleaseTask = nil
-            self.isMeetingKeyDown = false
-        }
+        scheduleLongPressRelease(
+            task: \.pendingMeetingLongPressReleaseTask,
+            isKeyDown: \.isMeetingKeyDown
+        )
     }
 
     private func cancelPendingMeetingLongPressRelease() {
-        pendingMeetingLongPressReleaseTask?.cancel()
-        pendingMeetingLongPressReleaseTask = nil
+        cancelPendingLongPressRelease(task: \.pendingMeetingLongPressReleaseTask)
     }
 
     private func scheduleTranscriptionLongPressRelease() {
-        pendingTranscriptionLongPressReleaseTask?.cancel()
-        pendingTranscriptionLongPressReleaseTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(80))
-            } catch {
-                return
-            }
-            guard let self else { return }
-            guard !Task.isCancelled else { return }
-            guard self.isKeyDown else { return }
-            self.pendingTranscriptionLongPressReleaseTask = nil
-            self.isKeyDown = false
-            self.emitKeyUp()
+        scheduleLongPressRelease(
+            task: \.pendingTranscriptionLongPressReleaseTask,
+            isKeyDown: \.isKeyDown
+        ) { manager in
+            manager.emitKeyUp()
         }
     }
 
     private func cancelPendingTranscriptionLongPressRelease() {
-        pendingTranscriptionLongPressReleaseTask?.cancel()
-        pendingTranscriptionLongPressReleaseTask = nil
+        cancelPendingLongPressRelease(task: \.pendingTranscriptionLongPressReleaseTask)
+    }
+
+    private func scheduleLongPressRelease(
+        task taskKeyPath: ReferenceWritableKeyPath<HotkeyManager, Task<Void, Never>?>,
+        isKeyDown isKeyDownKeyPath: ReferenceWritableKeyPath<HotkeyManager, Bool>,
+        delay: Duration = .milliseconds(80),
+        onRelease: @escaping @MainActor (HotkeyManager) -> Void = { _ in }
+    ) {
+        cancelPendingLongPressRelease(task: taskKeyPath)
+        self[keyPath: taskKeyPath] = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                return
+            }
+            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            guard self[keyPath: isKeyDownKeyPath] else { return }
+            self[keyPath: taskKeyPath] = nil
+            self[keyPath: isKeyDownKeyPath] = false
+            onRelease(self)
+        }
+    }
+
+    private func cancelPendingLongPressRelease(
+        task taskKeyPath: ReferenceWritableKeyPath<HotkeyManager, Task<Void, Never>?>
+    ) {
+        self[keyPath: taskKeyPath]?.cancel()
+        self[keyPath: taskKeyPath] = nil
     }
 
     private func emitKeyDown() {

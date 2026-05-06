@@ -4,6 +4,10 @@ func featureSettingsLocalized(_ key: String) -> String {
     AppLocalization.localizedString(key)
 }
 
+func featureSettingsLocalizedKey(_ key: String) -> LocalizedStringKey {
+    LocalizedStringKey(AppLocalization.localizedString(key))
+}
+
 extension FeatureSettingsView {
     func promptBinding(
         get: @escaping () -> String,

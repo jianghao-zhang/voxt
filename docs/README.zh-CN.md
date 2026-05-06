@@ -67,6 +67,15 @@ brew tap hehehai/tap
 brew install --cask voxt
 ```
 
+## 开发协作 / 签名说明
+
+- 共享签名配置现在统一放在 `Config/Signing.shared.xcconfig`。
+- 本地签名覆盖请把 `Config/Signing.local.xcconfig.example` 复制为 `Config/Signing.local.xcconfig`，按需填写自己的 `VOXT_DEVELOPMENT_TEAM`。本地文件已加入 gitignore。
+- `Voxt` app target 和 `VoxtTests` 现在都从同一份 xcconfig 读取签名设置，避免多人协作时各改各的。
+- `VoxtTests` 仍然保留 `GENERATE_INFOPLIST_FILE = YES`，避免测试 bundle 因 plist 为空出现问题。
+- GitHub Actions 测试流程不受影响：`.github/workflows/tests.yml` 仍然通过 `CODE_SIGNING_ALLOWED=NO` 跑测试，不依赖本地签名文件。
+- 版本发布流程也不受本地覆盖文件影响：`.github/workflows/release.yml` 仍然先做 unsigned build，再在 workflow 内完成 Developer ID 签名与发布。
+
 ## 模型支持
 
 <img width="1015" height="724" alt="image" src="https://github.com/user-attachments/assets/2e5e71c9-5fdb-4f14-b86a-ea3f67e62c98" />

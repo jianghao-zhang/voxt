@@ -67,6 +67,15 @@ brew tap hehehai/tap
 brew install --cask voxt
 ```
 
+## Development Notes
+
+- Shared signing defaults now live in `Config/Signing.shared.xcconfig`.
+- For local signing overrides, copy `Config/Signing.local.xcconfig.example` to `Config/Signing.local.xcconfig` and set your own `VOXT_DEVELOPMENT_TEAM` if needed. The local file is gitignored.
+- Both the `Voxt` app target and `VoxtTests` now read signing settings from the same xcconfig so local overrides stay consistent.
+- `VoxtTests` still keeps `GENERATE_INFOPLIST_FILE = YES` to avoid empty test bundle plist issues.
+- GitHub Actions tests are unchanged: `.github/workflows/tests.yml` still runs with `CODE_SIGNING_ALLOWED=NO`, so no local signing file is required in CI.
+- Release packaging is also unchanged: `.github/workflows/release.yml` builds unsigned first and performs Developer ID signing in the workflow, so local signing overrides do not affect version publishing.
+
 ## Model Support
 
 <img width="1041" height="744" alt="image" src="https://github.com/user-attachments/assets/30d9e4fa-d88e-44db-8ab7-9d216c6a03d8" />

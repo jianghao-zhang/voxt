@@ -1,9 +1,5 @@
 import SwiftUI
 
-private func localized(_ key: String) -> String {
-    AppLocalization.localizedString(key)
-}
-
 struct FeatureShortcutCaptureRow: View {
     let title: String
     let detail: String
@@ -57,15 +53,15 @@ struct FeatureShortcutCaptureRow: View {
             )
 
             if let recorderMessage, !recorderMessage.isEmpty {
-                Text(localized(recorderMessage))
+                Text(featureSettingsLocalized(recorderMessage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if pendingCapturedHotkey != nil {
-                Text(localized("Shortcut captured. Press another shortcut to replace it, or choose Confirm / Cancel."))
+                Text(featureSettingsLocalized("Shortcut captured. Press another shortcut to replace it, or choose Confirm / Cancel."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if isRecording {
-                Text(localized("Type your shortcut now. Press Esc to cancel recording."))
+                Text(featureSettingsLocalized("Type your shortcut now. Press Esc to cancel recording."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
