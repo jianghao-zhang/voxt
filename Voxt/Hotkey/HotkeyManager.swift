@@ -27,6 +27,7 @@ class HotkeyManager {
     var onRewriteKeyUp: (() -> Void)?
     var onMeetingKeyDown: (() -> Void)?
     var onCustomPasteKeyDown: (() -> Void)?
+    var onEscapeKeyDown: (() -> Bool)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -353,11 +354,11 @@ class HotkeyManager {
             switch type {
             case .keyDown:
                 if keyCode == translationHotkey.keyCode, translationFlagsMatch, !isAutoRepeat {
+                    activeTranslationKeyCode = keyCode
                     if triggerMode == .tap {
                         emitTranslationKeyDown()
                     } else if !isTranslationKeyDown {
                         isTranslationKeyDown = true
-                        activeTranslationKeyCode = keyCode
                         emitTranslationKeyDown()
                     }
                     eventWasConsumed = true
@@ -367,8 +368,6 @@ class HotkeyManager {
                 if triggerMode == .tap {
                     if activeTranslationKeyCode == keyCode {
                         activeTranslationKeyCode = nil
-                    }
-                    if keyCode == translationHotkey.keyCode {
                         emitTranslationKeyUp()
                         eventWasConsumed = true
                         return
@@ -409,11 +408,11 @@ class HotkeyManager {
             switch type {
             case .keyDown:
                 if keyCode == rewriteHotkey.keyCode, rewriteFlagsMatch, !isAutoRepeat {
+                    activeRewriteKeyCode = keyCode
                     if triggerMode == .tap {
                         emitRewriteKeyDown()
                     } else if !isRewriteKeyDown {
                         isRewriteKeyDown = true
-                        activeRewriteKeyCode = keyCode
                         emitRewriteKeyDown()
                     }
                     eventWasConsumed = true
@@ -423,8 +422,6 @@ class HotkeyManager {
                 if triggerMode == .tap {
                     if activeRewriteKeyCode == keyCode {
                         activeRewriteKeyCode = nil
-                    }
-                    if keyCode == rewriteHotkey.keyCode {
                         emitRewriteKeyUp()
                         eventWasConsumed = true
                         return
@@ -510,11 +507,11 @@ class HotkeyManager {
             switch type {
             case .keyDown:
                 if keyCode == meetingHotkey.keyCode, meetingFlagsMatch, !isAutoRepeat {
+                    activeMeetingKeyCode = keyCode
                     if triggerMode == .tap {
                         emitMeetingKeyDown()
                     } else if !isMeetingKeyDown {
                         isMeetingKeyDown = true
-                        activeMeetingKeyCode = keyCode
                         emitMeetingKeyDown()
                     }
                     eventWasConsumed = true
@@ -524,9 +521,9 @@ class HotkeyManager {
                 if triggerMode == .tap {
                     if activeMeetingKeyCode == keyCode {
                         activeMeetingKeyCode = nil
+                        eventWasConsumed = true
+                        return
                     }
-                    eventWasConsumed = true
-                    return
                 }
                 if isMeetingKeyDown, activeMeetingKeyCode == keyCode {
                     isMeetingKeyDown = false
@@ -537,6 +534,14 @@ class HotkeyManager {
             default:
                 break
             }
+        }
+
+        if type == .keyDown,
+           keyCode == UInt16(kVK_Escape),
+           !isAutoRepeat,
+           onEscapeKeyDown?() == true {
+            eventWasConsumed = true
+            return
         }
 
         // Transcription path runs after translation handling.
@@ -572,13 +577,13 @@ class HotkeyManager {
         switch type {
         case .keyDown:
             guard keyCode == transcriptionHotkey.keyCode, transcriptionFlagsMatch, !isAutoRepeat else { return }
+            activeKeyCode = keyCode
             if triggerMode == .tap {
                 emitKeyDown()
                 eventWasConsumed = true
                 return
             } else if !isKeyDown {
                 isKeyDown = true
-                activeKeyCode = keyCode
                 emitKeyDown()
                 eventWasConsumed = true
                 return
@@ -587,12 +592,10 @@ class HotkeyManager {
             if triggerMode == .tap {
                 if activeKeyCode == keyCode {
                     activeKeyCode = nil
-                }
-                if keyCode == transcriptionHotkey.keyCode {
                     emitKeyUp()
+                    eventWasConsumed = true
+                    return
                 }
-                eventWasConsumed = true
-                return
             }
             if isKeyDown, activeKeyCode == keyCode {
                 isKeyDown = false
@@ -1350,18 +1353,20 @@ extension HotkeyManager {
         let currentSidedModifiers: SidedModifierFlags
     }
 
+    @discardableResult
     func testingHandleEvent(
         type: CGEventType,
         keyCode: UInt16,
         flags: CGEventFlags,
         isAutoRepeat: Bool = false
-    ) {
+    ) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             _ = recoverEventTapIfNeeded(disabledEventType: type)
-            return
+            return false
         }
         var eventWasConsumed = false
         handleResolvedEvent(type: type, keyCode: keyCode, flags: flags, isAutoRepeat: isAutoRepeat, eventWasConsumed: &eventWasConsumed)
+        return eventWasConsumed
     }
 
     func testingSetTransientState(
