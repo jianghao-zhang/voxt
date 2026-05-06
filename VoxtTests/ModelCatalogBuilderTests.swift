@@ -207,7 +207,10 @@ final class ModelCatalogBuilderTests: XCTestCase {
         isDownloadingWhisperModel: @escaping (String) -> Bool = { _ in false },
         isAnotherWhisperModelDownloading: @escaping (String) -> Bool = { _ in false },
         isDownloadingCustomLLM: @escaping (String) -> Bool = { _ in false },
-        isAnotherCustomLLMDownloading: @escaping (String) -> Bool = { _ in false }
+        isAnotherCustomLLMDownloading: @escaping (String) -> Bool = { _ in false },
+        isUninstallingModel: @escaping (String) -> Bool = { _ in false },
+        isUninstallingWhisperModel: @escaping (String) -> Bool = { _ in false },
+        isUninstallingCustomLLM: @escaping (String) -> Bool = { _ in false }
     ) -> ModelCatalogBuilder {
         ModelCatalogBuilder(
             mlxModelManager: TestModelManagers.mlx,
@@ -230,6 +233,9 @@ final class ModelCatalogBuilderTests: XCTestCase {
             isAnotherWhisperModelDownloading: isAnotherWhisperModelDownloading,
             isDownloadingCustomLLM: isDownloadingCustomLLM,
             isAnotherCustomLLMDownloading: isAnotherCustomLLMDownloading,
+            isUninstallingModel: isUninstallingModel,
+            isUninstallingWhisperModel: isUninstallingWhisperModel,
+            isUninstallingCustomLLM: isUninstallingCustomLLM,
             downloadModel: { _ in },
             deleteModel: { _ in },
             openMLXModelDirectory: { _ in },

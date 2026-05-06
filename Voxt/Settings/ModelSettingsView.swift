@@ -20,6 +20,23 @@ enum LocalASRConfigurationTarget: Equatable, Identifiable {
     }
 }
 
+enum LocalModelRemovalTarget: Equatable, Identifiable {
+    case mlx(repo: String)
+    case whisper(modelID: String)
+    case customLLM(repo: String)
+
+    var id: String {
+        switch self {
+        case .mlx(let repo):
+            return "mlx:\(MLXModelManager.canonicalModelRepo(repo))"
+        case .whisper(let modelID):
+            return "whisper:\(WhisperKitModelManager.canonicalModelID(modelID))"
+        case .customLLM(let repo):
+            return "custom-llm:\(CustomLLMModelManager.canonicalModelRepo(repo))"
+        }
+    }
+}
+
 struct ModelSettingsView: View {
     private struct DownloadEndpointCheckResult: Equatable {
         let isReachable: Bool
@@ -106,6 +123,8 @@ struct ModelSettingsView: View {
     @State private var globalDownloadEndpointResult: DownloadEndpointCheckResult?
     @State private var chinaDownloadEndpointResult: DownloadEndpointCheckResult?
     @State private var catalogSnapshot = CatalogSnapshot.empty
+    @State var pendingModelRemovalTarget: LocalModelRemovalTarget?
+    @State var uninstallingModelTarget: LocalModelRemovalTarget?
 
     let modelStateRefreshTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
 
@@ -207,20 +226,23 @@ struct ModelSettingsView: View {
             isAnotherWhisperModelDownloading: isAnotherWhisperModelDownloading,
             isDownloadingCustomLLM: isDownloadingCustomLLM,
             isAnotherCustomLLMDownloading: isAnotherCustomLLMDownloading,
+            isUninstallingModel: isUninstallingModel,
+            isUninstallingWhisperModel: isUninstallingWhisperModel,
+            isUninstallingCustomLLM: isUninstallingCustomLLM,
             downloadModel: downloadModel,
-            deleteModel: deleteModel,
+            deleteModel: requestDeleteModel,
             openMLXModelDirectory: openMLXModelDirectory,
             presentMLXSettings: { repo in
                 activeLocalASRConfigurationTarget = .mlx(repo: repo)
             },
             downloadWhisperModel: downloadWhisperModel,
-            deleteWhisperModel: deleteWhisperModel,
+            deleteWhisperModel: requestDeleteWhisperModel,
             openWhisperModelDirectory: openWhisperModelDirectory,
             presentWhisperSettings: {
                 activeLocalASRConfigurationTarget = .whisper(modelID: whisperModelID)
             },
             downloadCustomLLM: downloadCustomLLM,
-            deleteCustomLLM: deleteCustomLLM,
+            deleteCustomLLM: requestDeleteCustomLLM,
             openCustomLLMModelDirectory: openCustomLLMModelDirectory,
             configureASRProvider: { editingASRProvider = $0 },
             configureLLMProvider: { editingLLMProvider = $0 },
@@ -470,6 +492,12 @@ struct ModelSettingsView: View {
                 .onChange(of: whisperModelManager.state) { _, _ in
                     refreshCatalogSnapshot()
                 }
+                .onChange(of: whisperModelManager.activeDownload) { _, _ in
+                    refreshCatalogSnapshot()
+                }
+                .onChange(of: whisperModelManager.pausedStatusMessageByID) { _, _ in
+                    refreshCatalogSnapshot()
+                }
                 .onChange(of: customLLMManager.state) { _, _ in
                     refreshCatalogSnapshot()
                 }
@@ -543,6 +571,16 @@ struct ModelSettingsView: View {
         .sheet(isPresented: $isModelDownloadSettingsPresented) {
             modelDownloadSettingsSheet
         }
+        .alert(item: $pendingModelRemovalTarget) { target in
+            Alert(
+                title: Text(AppLocalization.localizedString("Uninstall Model?")),
+                message: Text(uninstallConfirmationMessage(for: target)),
+                primaryButton: .destructive(Text(AppLocalization.localizedString("Uninstall"))) {
+                    confirmDeleteModel(target)
+                },
+                secondaryButton: .cancel()
+            )
+        }
     }
 
     var body: some View {
@@ -563,7 +601,7 @@ struct ModelSettingsView: View {
         refreshCatalogSnapshot()
     }
 
-    private func refreshCatalogSnapshot() {
+    func refreshCatalogSnapshot() {
         let entries = switch catalogTab {
         case .asr:
             prioritizedEntries(catalogBuilder.asrEntries())

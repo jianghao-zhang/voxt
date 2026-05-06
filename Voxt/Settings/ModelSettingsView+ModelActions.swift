@@ -169,6 +169,10 @@ extension ModelSettingsView {
     }
 
     private func whisperActions(for modelID: String, isDownloaded: Bool) -> [ModelTableAction] {
+        if isUninstallingWhisperModel(modelID) {
+            return [ModelTableAction(title: AppLocalization.localizedString("Uninstalling…"), isEnabled: false) {}]
+        }
+
         if isDownloadingWhisperModel(modelID) {
             return ModelDownloadPresentationSupport.downloadingActions(
                 onPause: { whisperModelManager.pauseDownload() },
@@ -187,7 +191,7 @@ extension ModelSettingsView {
             return ModelDownloadPresentationSupport.installedActions(
                 isCurrent: isCurrentWhisperModel(modelID),
                 onUse: { useWhisperModel(modelID) },
-                onUninstall: { deleteWhisperModel(modelID) }
+                onUninstall: { requestDeleteWhisperModel(modelID) }
             )
         }
 
@@ -198,6 +202,10 @@ extension ModelSettingsView {
     }
 
     private func mlxActions(for repo: String, isDownloaded: Bool) -> [ModelTableAction] {
+        if isUninstallingModel(repo) {
+            return [ModelTableAction(title: AppLocalization.localizedString("Uninstalling…"), isEnabled: false) {}]
+        }
+
         if isDownloadingModel(repo) {
             return ModelDownloadPresentationSupport.downloadingActions(
                 onPause: { mlxModelManager.pauseDownload() },
@@ -216,7 +224,7 @@ extension ModelSettingsView {
             return ModelDownloadPresentationSupport.installedActions(
                 isCurrent: isCurrentModel(repo),
                 onUse: { useModel(repo) },
-                onUninstall: { deleteModel(repo) }
+                onUninstall: { requestDeleteModel(repo) }
             )
         }
 
@@ -227,6 +235,10 @@ extension ModelSettingsView {
     }
 
     private func customLLMActions(for repo: String, isDownloaded: Bool) -> [ModelTableAction] {
+        if isUninstallingCustomLLM(repo) {
+            return [ModelTableAction(title: AppLocalization.localizedString("Uninstalling…"), isEnabled: false) {}]
+        }
+
         if isDownloadingCustomLLM(repo) {
             return ModelDownloadPresentationSupport.downloadingActions(
                 onPause: { customLLMManager.pauseDownload() },
@@ -245,7 +257,7 @@ extension ModelSettingsView {
             return ModelDownloadPresentationSupport.installedActions(
                 isCurrent: isCurrentCustomLLM(repo),
                 onUse: { useCustomLLM(repo) },
-                onUninstall: { deleteCustomLLM(repo) }
+                onUninstall: { requestDeleteCustomLLM(repo) }
             )
         }
 
@@ -345,6 +357,10 @@ extension ModelSettingsView {
     }
 
     func modelStatusText(for repo: String) -> String {
+        if isUninstallingModel(repo) {
+            return AppLocalization.localizedString("Uninstalling…")
+        }
+
         if isDownloadingModel(repo),
            case .downloading(_, let completed, let total, _, _, _) = mlxModelManager.state {
             return ModelDownloadPresentationSupport.statusText(
@@ -377,6 +393,10 @@ extension ModelSettingsView {
     }
 
     func whisperModelStatusText(for modelID: String) -> String {
+        if isUninstallingWhisperModel(modelID) {
+            return AppLocalization.localizedString("Uninstalling…")
+        }
+
         let canonicalModelID = WhisperKitModelManager.canonicalModelID(modelID)
         let activeDownload = whisperModelManager.activeDownload?.modelID == canonicalModelID
             ? whisperModelManager.activeDownload
@@ -414,6 +434,68 @@ extension ModelSettingsView {
         }
     }
 
+    func requestDeleteModel(_ repo: String) {
+        pendingModelRemovalTarget = .mlx(repo: repo)
+    }
+
+    func requestDeleteWhisperModel(_ modelID: String) {
+        pendingModelRemovalTarget = .whisper(modelID: modelID)
+    }
+
+    func requestDeleteCustomLLM(_ repo: String) {
+        pendingModelRemovalTarget = .customLLM(repo: repo)
+    }
+
+    func confirmDeleteModel(_ target: LocalModelRemovalTarget) {
+        pendingModelRemovalTarget = nil
+        uninstallingModelTarget = target
+
+        Task { @MainActor in
+            await Task.yield()
+            switch target {
+            case .mlx(let repo):
+                deleteModel(repo)
+            case .whisper(let modelID):
+                deleteWhisperModel(modelID)
+            case .customLLM(let repo):
+                deleteCustomLLM(repo)
+            }
+            uninstallingModelTarget = nil
+            refreshCatalogSnapshot()
+        }
+    }
+
+    func isUninstallingModel(_ repo: String) -> Bool {
+        guard case .mlx(let uninstallingRepo) = uninstallingModelTarget else { return false }
+        return MLXModelManager.canonicalModelRepo(uninstallingRepo) == MLXModelManager.canonicalModelRepo(repo)
+    }
+
+    func isUninstallingWhisperModel(_ modelID: String) -> Bool {
+        guard case .whisper(let uninstallingModelID) = uninstallingModelTarget else { return false }
+        return WhisperKitModelManager.canonicalModelID(uninstallingModelID) == WhisperKitModelManager.canonicalModelID(modelID)
+    }
+
+    func isUninstallingCustomLLM(_ repo: String) -> Bool {
+        guard case .customLLM(let uninstallingRepo) = uninstallingModelTarget else { return false }
+        return CustomLLMModelManager.canonicalModelRepo(uninstallingRepo) == CustomLLMModelManager.canonicalModelRepo(repo)
+    }
+
+    func uninstallConfirmationMessage(for target: LocalModelRemovalTarget) -> String {
+        let modelName: String
+        switch target {
+        case .mlx(let repo):
+            modelName = mlxModelManager.displayTitle(for: repo)
+        case .whisper(let modelID):
+            modelName = whisperModelManager.displayTitle(for: modelID)
+        case .customLLM(let repo):
+            modelName = customLLMManager.displayTitle(for: repo)
+        }
+        return AppLocalization.format(
+            "Uninstall %@ from this Mac? You can download it again later.",
+            modelName
+        )
+    }
+
     func isCurrentCustomLLM(_ repo: String) -> Bool {
         CustomLLMModelManager.canonicalModelRepo(repo) == CustomLLMModelManager.canonicalModelRepo(customLLMRepo)
     }
@@ -443,6 +525,10 @@ extension ModelSettingsView {
     }
 
     func customLLMStatusText(for repo: String) -> String {
+        if isUninstallingCustomLLM(repo) {
+            return AppLocalization.localizedString("Uninstalling…")
+        }
+
         if isDownloadingCustomLLM(repo),
            case .downloading(_, let completed, let total, _, _, _) = customLLMManager.state {
             return ModelDownloadPresentationSupport.statusText(

@@ -26,6 +26,9 @@ struct ModelCatalogBuilder {
     let isAnotherWhisperModelDownloading: (String) -> Bool
     let isDownloadingCustomLLM: (String) -> Bool
     let isAnotherCustomLLMDownloading: (String) -> Bool
+    let isUninstallingModel: (String) -> Bool
+    let isUninstallingWhisperModel: (String) -> Bool
+    let isUninstallingCustomLLM: (String) -> Bool
     let downloadModel: (String) -> Void
     let deleteModel: (String) -> Void
     let openMLXModelDirectory: (String) -> Void
@@ -79,11 +82,13 @@ struct ModelCatalogBuilder {
             let selectionID = FeatureModelSelectionID.mlx(repo)
             let isInstalled = mlxModelManager.isModelDownloaded(repo: repo)
             let badge = hasIssue(.mlxModel(repo)) ? localized("Needs Setup") : nil
-            let status = modelStatusText(repo)
+            let status = isUninstallingModel(repo) ? localized("Uninstalling…") : modelStatusText(repo)
 
             let primaryAction: ModelTableAction?
             var secondaryActions = [ModelTableAction]()
-            if isDownloadingModel(repo) {
+            if isUninstallingModel(repo) {
+                primaryAction = ModelTableAction(title: localized("Uninstalling…"), isEnabled: false) {}
+            } else if isDownloadingModel(repo) {
                 primaryAction = ModelTableAction(title: localized("Pause")) {
                     mlxModelManager.pauseDownload()
                 }
@@ -159,11 +164,13 @@ struct ModelCatalogBuilder {
             let selectionID = FeatureModelSelectionID.whisper(modelID)
             let isInstalled = whisperModelManager.isModelDownloaded(id: modelID)
             let badge = hasIssue(.whisperModel(modelID)) ? localized("Needs Setup") : nil
-            let status = whisperModelStatusText(modelID)
+            let status = isUninstallingWhisperModel(modelID) ? localized("Uninstalling…") : whisperModelStatusText(modelID)
 
             let primaryAction: ModelTableAction?
             var secondaryActions = [ModelTableAction]()
-            if isDownloadingWhisperModel(modelID) {
+            if isUninstallingWhisperModel(modelID) {
+                primaryAction = ModelTableAction(title: localized("Uninstalling…"), isEnabled: false) {}
+            } else if isDownloadingWhisperModel(modelID) {
                 primaryAction = ModelTableAction(title: localized("Pause")) {
                     whisperModelManager.pauseDownload()
                 }
@@ -288,11 +295,14 @@ struct ModelCatalogBuilder {
             let selectionID = FeatureModelSelectionID.localLLM(repo)
             let isInstalled = customLLMManager.isModelDownloaded(repo: repo)
             let badge = customLLMBadgeText(repo)
-            let status = customLLMStatusText(repo)
+            let status = isUninstallingCustomLLM(repo) ? localized("Uninstalling…") : customLLMStatusText(repo)
 
             let primaryAction: ModelTableAction?
             let secondaryActions: [ModelTableAction]
-            if isDownloadingCustomLLM(repo) {
+            if isUninstallingCustomLLM(repo) {
+                primaryAction = ModelTableAction(title: localized("Uninstalling…"), isEnabled: false) {}
+                secondaryActions = []
+            } else if isDownloadingCustomLLM(repo) {
                 primaryAction = ModelTableAction(title: localized("Pause")) {
                     customLLMManager.pauseDownload()
                 }

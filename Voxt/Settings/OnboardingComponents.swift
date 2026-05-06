@@ -147,6 +147,8 @@ struct LocalModelPickerCard<PickerContent: View>: View {
     var onResume: (() -> Void)? = nil
     var onCancel: (() -> Void)? = nil
     var onUninstall: (() -> Void)? = nil
+    @State private var isShowingUninstallConfirmation = false
+    @State private var isRunningUninstall = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -168,8 +170,11 @@ struct LocalModelPickerCard<PickerContent: View>: View {
                     Button(openLabel, action: onOpen)
                         .buttonStyle(SettingsPillButtonStyle())
                     if let onUninstall {
-                        Button(localized("Uninstall"), role: .destructive, action: onUninstall)
+                        Button(isRunningUninstall ? localized("Uninstalling…") : localized("Uninstall"), role: .destructive) {
+                            isShowingUninstallConfirmation = true
+                        }
                             .buttonStyle(SettingsPillButtonStyle(tone: .destructive))
+                            .disabled(isRunningUninstall)
                     }
                 } else if isInstalling {
                     Text(localized("Downloading"))
@@ -215,6 +220,20 @@ struct LocalModelPickerCard<PickerContent: View>: View {
             }
         }
         .modifier(LocalModelPickerCardSurfaceModifier(isEnabled: showsCardSurface))
+        .alert(localized("Uninstall Model?"), isPresented: $isShowingUninstallConfirmation) {
+            Button(localized("Cancel"), role: .cancel) {}
+            Button(localized("Uninstall"), role: .destructive) {
+                guard let onUninstall else { return }
+                isRunningUninstall = true
+                Task { @MainActor in
+                    await Task.yield()
+                    onUninstall()
+                    isRunningUninstall = false
+                }
+            }
+        } message: {
+            Text(localized("This removes the downloaded model files from this Mac. You can download them again later."))
+        }
     }
 }
 
