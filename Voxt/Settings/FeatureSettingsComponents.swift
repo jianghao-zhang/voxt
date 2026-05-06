@@ -511,13 +511,15 @@ struct FeaturePromptSection: View {
     let defaultText: String
     let variables: [PromptTemplateVariableDescriptor]
     let persistChanges: () -> Void
+    @State private var draft: String = ""
+    @State private var lastSyncedText: String = ""
     @State private var pendingSaveTask: Task<Void, Never>?
-    @State private var lastSavedText = ""
+    @State private var didSeedDraft = false
 
     var body: some View {
         ResettablePromptSection(
             title: localizedKey(title),
-            text: $text,
+            text: $draft,
             defaultText: defaultText,
             variables: variables,
             promptHeight: 196,
@@ -525,7 +527,19 @@ struct FeaturePromptSection: View {
             onFocusChange: handleFocusChange
         )
         .onAppear {
-            lastSavedText = text
+            guard !didSeedDraft else { return }
+            draft = text
+            lastSyncedText = text
+            didSeedDraft = true
+        }
+        .onChange(of: text) { _, newValue in
+            // Pull external mutations into the draft (e.g. another window edits the
+            // same setting), but ignore the round-trip echo of a write we just made.
+            // This keeps the TextEditor's NSTextView from being re-stringified mid-typing,
+            // which is what was collapsing the caret to the end of the document.
+            guard newValue != lastSyncedText, newValue != draft else { return }
+            draft = newValue
+            lastSyncedText = newValue
         }
         .onDisappear {
             flushPendingChanges()
@@ -552,13 +566,14 @@ struct FeaturePromptSection: View {
         pendingSaveTask?.cancel()
         pendingSaveTask = nil
 
-        let currentText = text
-        guard currentText != lastSavedText else { return }
-        if let expectedText, currentText != expectedText {
+        let currentDraft = draft
+        guard currentDraft != lastSyncedText else { return }
+        if let expectedText, currentDraft != expectedText {
             return
         }
 
-        lastSavedText = currentText
+        lastSyncedText = currentDraft
+        text = currentDraft
         persistChanges()
     }
 }
