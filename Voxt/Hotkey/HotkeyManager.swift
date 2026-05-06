@@ -202,15 +202,15 @@ class HotkeyManager {
                 manager.recoverEventTapIfNeeded(disabledEventType: type)
                 return Unmanaged.passUnretained(event)
             }
-            manager.handleEvent(type: type, event: event)
-            return Unmanaged.passUnretained(event)
+            let consumed = manager.handleEvent(type: type, event: event)
+            return consumed ? nil : Unmanaged.passUnretained(event)
         }
 
         for tapLocation in [CGEventTapLocation.cghidEventTap, .cgSessionEventTap] {
             if let tap = CGEvent.tapCreate(
                 tap: tapLocation,
                 place: .tailAppendEventTap,
-                options: .listenOnly,
+                options: .defaultTap,
                 eventsOfInterest: eventMask,
                 callback: callback,
                 userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -222,23 +222,27 @@ class HotkeyManager {
         return nil
     }
 
-    private func handleEvent(type: CGEventType, event: CGEvent) {
+    private func handleEvent(type: CGEventType, event: CGEvent) -> Bool {
         guard !UserDefaults.standard.bool(forKey: AppPreferenceKey.hotkeyCaptureInProgress) else {
-            return
+            return false
         }
+        var eventWasConsumed = false
         handleResolvedEvent(
             type: type,
             keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
             flags: event.flags,
-            isAutoRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+            isAutoRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+            eventWasConsumed: &eventWasConsumed
         )
+        return eventWasConsumed
     }
 
     private func handleResolvedEvent(
         type: CGEventType,
         keyCode: UInt16,
         flags: CGEventFlags,
-        isAutoRepeat: Bool
+        isAutoRepeat: Bool,
+        eventWasConsumed: inout Bool
     ) {
         defer {
             lastEventAt = Date()
@@ -356,6 +360,7 @@ class HotkeyManager {
                         activeTranslationKeyCode = keyCode
                         emitTranslationKeyDown()
                     }
+                    eventWasConsumed = true
                     return
                 }
             case .keyUp:
@@ -365,12 +370,14 @@ class HotkeyManager {
                     }
                     if keyCode == translationHotkey.keyCode {
                         emitTranslationKeyUp()
+                        eventWasConsumed = true
                         return
                     }
                 } else if isTranslationKeyDown, activeTranslationKeyCode == keyCode {
                     isTranslationKeyDown = false
                     activeTranslationKeyCode = nil
                     emitTranslationKeyUp()
+                    eventWasConsumed = true
                     return
                 }
             default:
@@ -409,6 +416,7 @@ class HotkeyManager {
                         activeRewriteKeyCode = keyCode
                         emitRewriteKeyDown()
                     }
+                    eventWasConsumed = true
                     return
                 }
             case .keyUp:
@@ -418,12 +426,14 @@ class HotkeyManager {
                     }
                     if keyCode == rewriteHotkey.keyCode {
                         emitRewriteKeyUp()
+                        eventWasConsumed = true
                         return
                     }
                 } else if isRewriteKeyDown, activeRewriteKeyCode == keyCode {
                     isRewriteKeyDown = false
                     activeRewriteKeyCode = nil
                     emitRewriteKeyUp()
+                    eventWasConsumed = true
                     return
                 }
             default:
@@ -459,6 +469,7 @@ class HotkeyManager {
                         isCustomPasteKeyDown = true
                         activeCustomPasteKeyCode = keyCode
                     }
+                    eventWasConsumed = true
                     return
                 }
             case .keyUp:
@@ -466,6 +477,7 @@ class HotkeyManager {
                     isCustomPasteKeyDown = false
                     activeCustomPasteKeyCode = nil
                     emitCustomPasteKeyDown()
+                    eventWasConsumed = true
                     return
                 }
             default:
@@ -505,6 +517,7 @@ class HotkeyManager {
                         activeMeetingKeyCode = keyCode
                         emitMeetingKeyDown()
                     }
+                    eventWasConsumed = true
                     return
                 }
             case .keyUp:
@@ -512,11 +525,13 @@ class HotkeyManager {
                     if activeMeetingKeyCode == keyCode {
                         activeMeetingKeyCode = nil
                     }
+                    eventWasConsumed = true
                     return
                 }
                 if isMeetingKeyDown, activeMeetingKeyCode == keyCode {
                     isMeetingKeyDown = false
                     activeMeetingKeyCode = nil
+                    eventWasConsumed = true
                     return
                 }
             default:
@@ -559,11 +574,13 @@ class HotkeyManager {
             guard keyCode == transcriptionHotkey.keyCode, transcriptionFlagsMatch, !isAutoRepeat else { return }
             if triggerMode == .tap {
                 emitKeyDown()
+                eventWasConsumed = true
                 return
             } else if !isKeyDown {
                 isKeyDown = true
                 activeKeyCode = keyCode
                 emitKeyDown()
+                eventWasConsumed = true
                 return
             }
         case .keyUp:
@@ -574,12 +591,14 @@ class HotkeyManager {
                 if keyCode == transcriptionHotkey.keyCode {
                     emitKeyUp()
                 }
+                eventWasConsumed = true
                 return
             }
             if isKeyDown, activeKeyCode == keyCode {
                 isKeyDown = false
                 activeKeyCode = nil
                 emitKeyUp()
+                eventWasConsumed = true
                 return
             }
         default:
@@ -1341,7 +1360,8 @@ extension HotkeyManager {
             _ = recoverEventTapIfNeeded(disabledEventType: type)
             return
         }
-        handleResolvedEvent(type: type, keyCode: keyCode, flags: flags, isAutoRepeat: isAutoRepeat)
+        var eventWasConsumed = false
+        handleResolvedEvent(type: type, keyCode: keyCode, flags: flags, isAutoRepeat: isAutoRepeat, eventWasConsumed: &eventWasConsumed)
     }
 
     func testingSetTransientState(
