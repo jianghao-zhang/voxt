@@ -186,6 +186,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var currentEndingSessionID: UUID?
     var lastCompletedSessionEndSessionID: UUID?
     var isSessionCancellationRequested = false
+    var browserAutomationDeniedUntilByBundleID: [String: Date] = [:]
     var pendingCompletedHistoryAudioArchiveURL: URL?
     var latestInjectableOutputText: String?
     var sessionTargetApplicationPID: pid_t?
