@@ -141,6 +141,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var enhancer: (any TextEnhancing)?
     var mainWindowController: NSWindowController?
     let mainWindowVisibilityState = MainWindowVisibilityState()
+    var pendingStatusMenuActions: [() -> Void] = []
+    var isStatusMenuOpen = false
     private var interfaceLanguageObserver: NSObjectProtocol?
     private var updateAvailabilityObserver: NSObjectProtocol?
     private var selectedInputDeviceObserver: NSObjectProtocol?

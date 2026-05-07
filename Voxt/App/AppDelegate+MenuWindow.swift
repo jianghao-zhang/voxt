@@ -75,6 +75,7 @@ extension AppDelegate {
 
     func buildMenu() {
         let menu = NSMenu()
+        menu.delegate = self
 
         let dashboardItem = NSMenuItem(title: AppLocalization.localizedString("Dashboard"), action: #selector(openDashboardFromMenu), keyEquivalent: "")
         dashboardItem.target = self
@@ -512,6 +513,7 @@ extension AppDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = false
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window.contentViewController = hostingController
         window.setContentSize(mainWindowContentSize)
         window.contentMinSize = mainWindowMinimumContentSize
@@ -543,12 +545,13 @@ extension AppDelegate {
     }
 
     private func bringWindowToFront(_ window: NSWindow) {
-        NSApp.activate(ignoringOtherApps: true)
         if window.isMiniaturized {
             window.deminiaturize(nil)
         }
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func centerMainWindow(_ window: NSWindow, on screen: NSScreen?) {
@@ -567,11 +570,18 @@ extension AppDelegate {
     }
 
     private func performAfterStatusMenuDismissal(_ action: @escaping @MainActor () -> Void) {
-        DispatchQueue.main.async {
+        let wrappedAction: () -> Void = {
             Task { @MainActor in
                 action()
             }
         }
+
+        guard isStatusMenuOpen else {
+            wrappedAction()
+            return
+        }
+
+        pendingStatusMenuActions.append(wrappedAction)
     }
 
     private func positionWindowTrafficLightButtons(_ window: NSWindow) {
@@ -649,8 +659,8 @@ extension AppDelegate {
 extension AppDelegate: NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender == mainWindowController?.window else { return true }
-        setMainWindowVisibility(false)
         sender.orderOut(nil)
+        setMainWindowVisibility(false)
         return false
     }
 
@@ -681,5 +691,25 @@ extension AppDelegate: NSWindowDelegate {
     func windowDidDeminiaturize(_ notification: Notification) {
         guard notification.object as? NSWindow == mainWindowController?.window else { return }
         setMainWindowVisibility(true)
+    }
+}
+
+extension AppDelegate: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        guard menu == statusItem?.menu else { return }
+        isStatusMenuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        guard menu == statusItem?.menu else { return }
+        isStatusMenuOpen = false
+
+        guard !pendingStatusMenuActions.isEmpty else { return }
+        let actions = pendingStatusMenuActions
+        pendingStatusMenuActions.removeAll()
+
+        DispatchQueue.main.async {
+            actions.forEach { $0() }
+        }
     }
 }
