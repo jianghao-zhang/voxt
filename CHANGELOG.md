@@ -6,6 +6,59 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-05-08
+
+### English
+
+- New local model tuning and ASR pipeline updates are included in this release. If you run into issues, please report them in GitHub Issues.
+- The current Meeting feature will be removed in a future release because it no longer matches the app direction. If there is enough demand, I plan to ship it later as a separate app.
+
+#### Added
+- Added a deprecation badge to the Start Meeting toggle in transcription settings so the upcoming removal is easier to notice.
+
+#### Changed
+- Localized more of Settings across General, Model, Dictionary, History, and About, including tabs, dialogs, action buttons, helper copy, and history info popovers.
+- Simplified onboarding by removing the Meeting step and shortening the English back action label to `Prev`.
+- Refined the settings sidebar and history tab spacing so English labels align more consistently.
+
+#### Fixed
+- Fixed mixed-language text in dictionary creation, model download settings, history audio settings, and history detail popovers so they follow the selected in-app UI language more reliably.
+- Replaced the History clear-all text action with an icon button and added confirmation before deleting all history or notes.
+
+### 简体中文
+
+- 这个版本包含了新的本地模型调优与 ASR 链路优化。如果遇到问题，请到 GitHub Issues 反馈。
+- 现有会议功能因与 App 后续发展方向不一致，后续版本会删除；如果确实有持续需求，我会考虑将其独立做成一个单独的 App。
+
+#### 新增
+- 为转录设置中的“开启会议”开关新增了即将删除提示徽标，方便提前感知后续下线计划。
+
+#### 改进
+- 继续完善了 General、Model、Dictionary、History、About 等设置页的多语言覆盖，补齐了 tabs、弹窗、操作按钮、说明文案和历史详情信息弹层。
+- 精简了引导流程，移除了会议步骤，并将英文界面的返回按钮文案缩短为 `Prev`。
+- 调整了设置侧栏与历史页 tabs 的间距和对齐，让英文界面的菜单排版更稳定。
+
+#### 修复
+- 修复了词典创建弹窗、模型下载设置、历史音频设置和历史详情信息弹层中的混合语言问题，现在会更稳定地跟随应用内所选语言。
+- 将历史记录中的清空全部文本按钮改为图标按钮，并在删除全部历史或笔记前增加了二次确认。
+
+### 日本語
+
+- このリリースには、ローカルモデルの調整と ASR パイプラインの最適化が含まれています。問題があれば GitHub Issues で報告してください。
+- 現在の Meeting 機能は、今後のアプリ方針と合わないため将来的に削除予定です。需要があれば、後に独立した別アプリとして提供する想定です。
+
+#### 追加
+- 文字起こし設定の Start Meeting トグルに廃止予定バッジを追加し、今後の削除予定がわかりやすくなりました。
+
+#### 変更
+- General、Model、Dictionary、History、About など設定画面の多言語対応をさらに拡張し、タブ、ダイアログ、操作ボタン、補助文言、履歴詳細ポップオーバーまで対応しました。
+- オンボーディングを簡素化し、Meeting ステップを削除するとともに、英語 UI の戻る操作ラベルを `Prev` に短縮しました。
+- 設定サイドバーと履歴タブの余白と整列を調整し、英語 UI でもメニュー配置がより安定するよう改善しました。
+
+#### 修正
+- 辞書作成ダイアログ、モデルダウンロード設定、履歴音声設定、履歴詳細ポップオーバーで混在していた言語表示を修正し、アプリ内で選択した UI 言語により確実に追従するようにしました。
+- 履歴画面の全削除操作をアイコンボタンに変更し、履歴またはノートをすべて削除する前に確認を挟むようにしました。
+
 ## [1.10.4] - 2026-05-05
 
 ### English
