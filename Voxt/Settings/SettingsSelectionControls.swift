@@ -280,13 +280,15 @@ private final class SettingsMenuHostView: NSView {
         }
 
         self.selectedIndex = selectedIndex
-        for item in popupMenu.items {
-            let isSelected = item.tag == selectedIndex
-            (item.view as? SettingsPopupMenuItemView)?.update(
-                title: item.title,
-                width: menuWidth,
-                isSelected: isSelected
-            )
+        if !needsRebuild {
+            for item in popupMenu.items {
+                let isSelected = item.tag == selectedIndex
+                (item.view as? SettingsPopupMenuItemView)?.update(
+                    title: item.title,
+                    width: menuWidth,
+                    isSelected: isSelected
+                )
+            }
         }
 
         popupMenu.minimumWidth = menuWidth
@@ -308,10 +310,12 @@ private final class SettingsMenuHostView: NSView {
 }
 
 private final class SettingsPopupMenuItemView: NSView {
+    private static let itemHeight: CGFloat = 34
     private let checkView = NSImageView()
     private let titleField = NSTextField(labelWithString: "")
     private var itemWidth: CGFloat
     private var isSelected: Bool
+    private var isHighlighted = false
 
     override var isFlipped: Bool {
         true
@@ -320,7 +324,7 @@ private final class SettingsPopupMenuItemView: NSView {
     init(title: String, width: CGFloat, isSelected: Bool) {
         self.itemWidth = width
         self.isSelected = isSelected
-        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 34))
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: Self.itemHeight))
         wantsLayer = true
 
         checkView.translatesAutoresizingMaskIntoConstraints = false
@@ -353,11 +357,15 @@ private final class SettingsPopupMenuItemView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: itemWidth, height: 34)
+        NSSize(width: itemWidth, height: Self.itemHeight)
+    }
+
+    override func viewWillDraw() {
+        syncAppearance(force: false)
+        super.viewWillDraw()
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let isHighlighted = enclosingMenuItem?.isHighlighted ?? false
         if isHighlighted {
             NSColor.controlAccentColor.setFill()
             NSBezierPath(
@@ -367,16 +375,34 @@ private final class SettingsPopupMenuItemView: NSView {
             ).fill()
         }
         super.draw(dirtyRect)
-        applyAppearance(isHighlighted: isHighlighted)
     }
 
     func update(title: String, width: CGFloat, isSelected: Bool) {
-        itemWidth = width
-        self.isSelected = isSelected
-        frame = NSRect(x: 0, y: 0, width: width, height: 34)
-        invalidateIntrinsicContentSize()
-        titleField.stringValue = title
-        needsDisplay = true
+        var needsDisplayRefresh = false
+
+        if abs(itemWidth - width) > 0.5 {
+            itemWidth = width
+            if abs(frame.width - width) > 0.5 || abs(frame.height - Self.itemHeight) > 0.5 {
+                setFrameSize(NSSize(width: width, height: Self.itemHeight))
+            }
+            invalidateIntrinsicContentSize()
+            needsDisplayRefresh = true
+        }
+
+        if self.isSelected != isSelected {
+            self.isSelected = isSelected
+            syncAppearance(force: true)
+            needsDisplayRefresh = true
+        }
+
+        if titleField.stringValue != title {
+            titleField.stringValue = title
+            needsDisplayRefresh = true
+        }
+
+        if needsDisplayRefresh {
+            needsDisplay = true
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -386,8 +412,12 @@ private final class SettingsPopupMenuItemView: NSView {
         }
     }
 
-    private func applyAppearance(isHighlighted: Bool) {
-        let textColor = isHighlighted ? NSColor.white : NSColor.labelColor
+    private func syncAppearance(force: Bool) {
+        let highlighted = enclosingMenuItem?.isHighlighted ?? false
+        guard force || highlighted != isHighlighted else { return }
+
+        isHighlighted = highlighted
+        let textColor = highlighted ? NSColor.white : NSColor.labelColor
         titleField.font = .systemFont(ofSize: 13, weight: isSelected ? .semibold : .medium)
         titleField.textColor = textColor
         checkView.image = isSelected
