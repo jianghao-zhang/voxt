@@ -96,10 +96,7 @@ extension AppDelegate {
         whisper.transcribedText = ""
         whisper.isModelInitializing = needsModelInitialization
         whisper.setPreferredInputDevice(selectedInputDeviceID)
-        whisper.onPartialTranscription = { [weak self] text in
-            guard let self, self.shouldHandleCallbacks(for: sessionID) else { return }
-            self.overlayState.transcribedText = text
-        }
+        whisper.onPartialTranscription = nil
         whisper.onTranscriptionFinished = { [weak self] text in
             self?.stashPendingCompletedHistoryAudioArchive(self?.whisperTranscriber?.consumeCompletedAudioArchiveURL())
             self?.processTranscription(text, sessionID: sessionID)
@@ -335,6 +332,12 @@ extension AppDelegate {
         if transcriptionEngine == .mlxAudio, isMLXReady {
             mlxTranscriber?.stopRecording()
         } else if transcriptionEngine == .whisperKit, isWhisperReady {
+            if let whisperTranscriber {
+                VoxtLog.info(
+                    "Issuing Whisper stop. \(whisperTranscriber.debugCaptureStopSummary())",
+                    verbose: true
+                )
+            }
             whisperTranscriber?.stopRecording()
         } else if transcriptionEngine == .remote {
             remoteASRTranscriber.stopRecording()
