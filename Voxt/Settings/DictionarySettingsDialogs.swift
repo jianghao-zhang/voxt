@@ -1,5 +1,9 @@
 import SwiftUI
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 struct DictionaryAdvancedSettingsDialog: View {
     @Binding var dictionaryHighConfidenceCorrectionEnabled: Bool
     @Binding var isPresented: Bool
@@ -20,7 +24,7 @@ struct DictionaryAdvancedSettingsDialog: View {
     }
 
     private var selectedModelTitle: String {
-        selectedModelOption?.title ?? modelOptions.first?.title ?? String(localized: "Select Model")
+        selectedModelOption?.title ?? modelOptions.first?.title ?? localized("Select Model")
     }
 
     private let dialogWidth: CGFloat = 520
@@ -31,24 +35,24 @@ struct DictionaryAdvancedSettingsDialog: View {
         VStack(alignment: .leading, spacing: 14) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Dictionary Advanced Settings")
+                    Text(localized("Dictionary Advanced Settings"))
                         .font(.title3.weight(.semibold))
 
-                    Toggle("Allow High-Confidence Auto Correction", isOn: $dictionaryHighConfidenceCorrectionEnabled)
+                    Toggle(localized("Allow High-Confidence Auto Correction"), isOn: $dictionaryHighConfidenceCorrectionEnabled)
                         .controlSize(.small)
                         .disabled(!dictionaryRecognitionEnabled)
 
-                    Text("When enabled, the final output can replace very high-confidence near matches with exact dictionary terms before the text is inserted.")
+                    Text(localized("When enabled, the final output can replace very high-confidence near matches with exact dictionary terms before the text is inserted."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     Divider()
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(String(localized: "One-Click Ingest"))
+                        Text(localized("One-Click Ingest"))
                             .font(.headline)
 
-                        Text("Choose the model and prompt used by one-click ingest.")
+                        Text(localized("Choose the model and prompt used by one-click ingest."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -62,7 +66,7 @@ struct DictionaryAdvancedSettingsDialog: View {
                         .foregroundStyle(.secondary)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(String(localized: "Model"))
+                            Text(localized("Model"))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
 
@@ -80,7 +84,7 @@ struct DictionaryAdvancedSettingsDialog: View {
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                             } else if modelOptions.isEmpty {
-                                Text("No configured local or remote model is available for dictionary ingestion. Configure one in Model settings first.")
+                                Text(localized("No configured local or remote model is available for dictionary ingestion. Configure one in Model settings first."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -88,13 +92,13 @@ struct DictionaryAdvancedSettingsDialog: View {
 
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text(String(localized: "Ingest Prompt"))
+                                Text(localized("Ingest Prompt"))
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
 
                                 Spacer(minLength: 8)
 
-                                Button("Restore Default", action: onRestoreDefaultPrompt)
+                                Button(localized("Restore Default"), action: onRestoreDefaultPrompt)
                                     .buttonStyle(SettingsPillButtonStyle())
                             }
 
@@ -119,7 +123,7 @@ struct DictionaryAdvancedSettingsDialog: View {
                             )
                         }
 
-                        Text("One-click ingest scans new history records and writes accepted terms directly into the dictionary.")
+                        Text(localized("One-click ingest scans new history records and writes accepted terms directly into the dictionary."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -129,7 +133,7 @@ struct DictionaryAdvancedSettingsDialog: View {
             .frame(maxHeight: contentMaxHeight)
 
             SettingsDialogActionRow {
-                Button("Done") {
+                Button(localized("Done")) {
                     onSave()
                     isPresented = false
                 }

@@ -348,18 +348,14 @@ final class SettingsTypesTests: XCTestCase {
             hasRecordingMicrophone: true,
             hasRecordingPermissions: true,
             hasRewriteIssues: false,
-            appEnhancementEnabled: true,
-            meetingNotesEnabled: true,
-            hasMeetingIssues: false
+            appEnhancementEnabled: true
         )
         let blockedSnapshot = OnboardingStepStatusSnapshot(
             hasModelIssues: true,
             hasRecordingMicrophone: false,
             hasRecordingPermissions: false,
             hasRewriteIssues: true,
-            appEnhancementEnabled: false,
-            meetingNotesEnabled: true,
-            hasMeetingIssues: true
+            appEnhancementEnabled: false
         )
 
         XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .language, snapshot: blockedSnapshot), .ready)
@@ -368,20 +364,7 @@ final class SettingsTypesTests: XCTestCase {
         XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .translation, snapshot: blockedSnapshot), .ready)
         XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .rewrite, snapshot: blockedSnapshot), .needsSetup)
         XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .appEnhancement, snapshot: blockedSnapshot), .optional)
-        XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .meeting, snapshot: blockedSnapshot), .needsSetup)
         XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .finish, snapshot: blockedSnapshot), .done)
-        XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .meeting, snapshot: readySnapshot), .ready)
-
-        let meetingDisabledSnapshot = OnboardingStepStatusSnapshot(
-            hasModelIssues: false,
-            hasRecordingMicrophone: true,
-            hasRecordingPermissions: true,
-            hasRewriteIssues: false,
-            appEnhancementEnabled: false,
-            meetingNotesEnabled: false,
-            hasMeetingIssues: true
-        )
-        XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .meeting, snapshot: meetingDisabledSnapshot), .optional)
     }
 
     func testVisibleTabsHideAppEnhancementWhenFeatureDisabled() {

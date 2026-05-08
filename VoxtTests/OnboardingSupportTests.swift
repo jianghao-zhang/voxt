@@ -7,8 +7,7 @@ final class OnboardingSupportTests: XCTestCase {
             for: .transcription,
             context: OnboardingPermissionRequirementContext(
                 selectedEngine: .dictation,
-                muteSystemAudioWhileRecording: false,
-                meetingNotesEnabled: false
+                muteSystemAudioWhileRecording: false
             )
         )
 
@@ -23,8 +22,7 @@ final class OnboardingSupportTests: XCTestCase {
             for: .transcription,
             context: OnboardingPermissionRequirementContext(
                 selectedEngine: .mlxAudio,
-                muteSystemAudioWhileRecording: true,
-                meetingNotesEnabled: false
+                muteSystemAudioWhileRecording: true
             )
         )
 
@@ -34,36 +32,10 @@ final class OnboardingSupportTests: XCTestCase {
         )
     }
 
-    func testMeetingPermissionsOnlyAppearWhenMeetingModeEnabled() {
-        let disabledPermissions = OnboardingPermissionRequirementResolver.requiredPermissions(
-            for: .meeting,
-            context: OnboardingPermissionRequirementContext(
-                selectedEngine: .remote,
-                muteSystemAudioWhileRecording: false,
-                meetingNotesEnabled: false
-            )
-        )
-        let enabledPermissions = OnboardingPermissionRequirementResolver.requiredPermissions(
-            for: .meeting,
-            context: OnboardingPermissionRequirementContext(
-                selectedEngine: .remote,
-                muteSystemAudioWhileRecording: false,
-                meetingNotesEnabled: true
-            )
-        )
-
-        XCTAssertTrue(disabledPermissions.isEmpty)
-        XCTAssertEqual(
-            enabledPermissions,
-            [.microphone, .accessibility, .inputMonitoring, .systemAudioCapture]
-        )
-    }
-
     func testNonRecordingStepsDoNotRequirePermissions() {
         let context = OnboardingPermissionRequirementContext(
             selectedEngine: .mlxAudio,
-            muteSystemAudioWhileRecording: true,
-            meetingNotesEnabled: true
+            muteSystemAudioWhileRecording: true
         )
 
         XCTAssertTrue(OnboardingPermissionRequirementResolver.requiredPermissions(for: .language, context: context).isEmpty)

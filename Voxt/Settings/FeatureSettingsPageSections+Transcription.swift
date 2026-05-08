@@ -34,6 +34,7 @@ extension FeatureSettingsView {
 
                 FeatureToggleRow(
                     title: featureSettingsLocalized("Enable Meeting"),
+                    badgeText: featureSettingsLocalized("即将删除"),
                     detail: featureSettingsLocalized("Turn on the dedicated meeting workflow, shortcut, overlay, and meeting-specific model settings."),
                     isOn: binding(
                         get: { featureSettings.meeting.enabled },

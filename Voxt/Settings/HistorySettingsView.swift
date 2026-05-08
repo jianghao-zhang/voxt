@@ -1,6 +1,24 @@
 import SwiftUI
 import AppKit
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
+private enum HistoryBulkDeletionTarget: Identifiable {
+    case history
+    case notes
+
+    var id: String {
+        switch self {
+        case .history:
+            return "history"
+        case .notes:
+            return "notes"
+        }
+    }
+}
+
 struct HistorySettingsView: View {
     private static let pageSize = 40
 
@@ -22,6 +40,7 @@ struct HistorySettingsView: View {
     @State private var historyAudioStorageSelectionError: String?
     @State private var historyAudioExportResultMessage: String?
     @State private var historyAudioStorageStats = HistoryAudioStorageStats(storedFileCount: 0, totalBytes: 0)
+    @State private var pendingBulkDeletionTarget: HistoryBulkDeletionTarget?
 
     private var historyRetentionPeriod: HistoryRetentionPeriod {
         HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) ?? .ninetyDays
@@ -66,10 +85,10 @@ struct HistorySettingsView: View {
                     GroupBox {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack(alignment: .center, spacing: 12) {
-                                Toggle(String(localized: "History Cleanup"), isOn: $historyCleanupEnabled)
+                                Toggle(localized("History Cleanup"), isOn: $historyCleanupEnabled)
                                 Spacer(minLength: 12)
                                 if historyCleanupEnabled {
-                                    Text(String(localized: "Retention"))
+                                    Text(localized("Retention"))
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                     SettingsMenuPicker(
@@ -101,30 +120,26 @@ struct HistorySettingsView: View {
                                     Image(systemName: "gearshape")
                                 }
                                 .buttonStyle(SettingsCompactIconButtonStyle())
-                                Button(String(localized: "Clean All"), role: .destructive) {
-                                    copiedEntryID = nil
-                                    copiedNoteID = nil
-                                    resetVisibleItemLimit()
-                                    if isNoteTabSelected {
-                                        noteStore.clearAll()
-                                    } else {
-                                        historyStore.clearAll()
-                                    }
+                                Button {
+                                    pendingBulkDeletionTarget = isNoteTabSelected ? .notes : .history
+                                } label: {
+                                    Image(systemName: "trash")
                                 }
-                                .buttonStyle(SettingsPillButtonStyle())
+                                .buttonStyle(SettingsCompactIconButtonStyle(tone: .destructive))
+                                .help(localized("Delete All"))
                                 .disabled(isNoteTabSelected ? allNotes.isEmpty : allEntries.isEmpty)
                             }
 
                             if isNoteTabSelected && allNotes.isEmpty {
-                                Text(String(localized: "No notes yet."))
+                                Text(localized("No notes yet."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else if !isNoteTabSelected && allEntries.isEmpty {
-                                Text(String(localized: "No history yet."))
+                                Text(localized("No history yet."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else if !isNoteTabSelected && filteredEntries.isEmpty {
-                                Text(String(localized: "No entries in this category yet."))
+                                Text(localized("No entries in this category yet."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else if isNoteTabSelected {
@@ -160,7 +175,7 @@ struct HistorySettingsView: View {
                                         }
 
                                         if hasMoreVisibleNotes {
-                                            Button(String(localized: "Load More")) {
+                                            Button(localized("Load More")) {
                                                 loadNextPageIfNeeded()
                                             }
                                             .buttonStyle(SettingsPillButtonStyle())
@@ -200,7 +215,7 @@ struct HistorySettingsView: View {
                                         }
 
                                         if hasMoreFilteredEntries {
-                                            Button(String(localized: "Load More")) {
+                                            Button(localized("Load More")) {
                                                 loadNextPageIfNeeded()
                                             }
                                             .buttonStyle(SettingsPillButtonStyle())
@@ -229,6 +244,16 @@ struct HistorySettingsView: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .sheet(isPresented: $isHistoryAudioSettingsPresented) {
             historyAudioSettingsSheet
+        }
+        .alert(item: $pendingBulkDeletionTarget) { target in
+            Alert(
+                title: Text(bulkDeletionTitle(for: target)),
+                message: Text(bulkDeletionMessage(for: target)),
+                primaryButton: .destructive(Text(localized("Delete"))) {
+                    confirmBulkDeletion(target)
+                },
+                secondaryButton: .cancel()
+            )
         }
         .onAppear {
             if !HistoryRetentionPeriod.allCases.contains(where: { $0.rawValue == historyRetentionPeriodRaw }) {
@@ -281,6 +306,36 @@ struct HistorySettingsView: View {
         visibleItemLimit = Self.pageSize
     }
 
+    private func confirmBulkDeletion(_ target: HistoryBulkDeletionTarget) {
+        copiedEntryID = nil
+        copiedNoteID = nil
+        resetVisibleItemLimit()
+        switch target {
+        case .history:
+            historyStore.clearAll()
+        case .notes:
+            noteStore.clearAll()
+        }
+    }
+
+    private func bulkDeletionTitle(for target: HistoryBulkDeletionTarget) -> String {
+        switch target {
+        case .history:
+            return localized("Delete All History?")
+        case .notes:
+            return localized("Delete All Notes?")
+        }
+    }
+
+    private func bulkDeletionMessage(for target: HistoryBulkDeletionTarget) -> String {
+        switch target {
+        case .history:
+            return localized("This will permanently delete all history entries.")
+        case .notes:
+            return localized("This will permanently delete all notes.")
+        }
+    }
+
     private func loadNextPageIfNeeded() {
         if isNoteTabSelected {
             guard hasMoreVisibleNotes else { return }
@@ -294,15 +349,15 @@ struct HistorySettingsView: View {
 
     private var historyAudioSettingsSheet: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(String(localized: "History Audio Settings"))
+            Text(localized("History Audio Settings"))
                 .font(.title3.weight(.semibold))
 
-            GeneralSettingsCard(title: "Audio Storage") {
-                Toggle(String(localized: "Save history audio"), isOn: $historyAudioStorageEnabled)
+            GeneralSettingsCard(titleText: localized("Audio Storage")) {
+                Toggle(localized("Save history audio"), isOn: $historyAudioStorageEnabled)
 
                 if historyAudioStorageEnabled {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(String(localized: "Storage Path"))
+                        Text(localized("Storage Path"))
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button(action: openHistoryAudioStorageInFinder) {
@@ -323,15 +378,15 @@ struct HistorySettingsView: View {
                             }
                         }
                         .buttonStyle(SettingsInlineSelectorButtonStyle())
-                        .help(String(localized: "Open folder"))
+                        .help(localized("Open folder"))
 
-                        Button(String(localized: "Choose")) {
+                        Button(localized("Choose")) {
                             chooseHistoryAudioStorageDirectory()
                         }
                         .buttonStyle(SettingsPillButtonStyle())
                     }
 
-                    Text(String(localized: "New history audio is stored here. Switching the path will not move existing audio files."))
+                    Text(localized("New history audio is stored here. Switching the path will not move existing audio files."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -341,16 +396,16 @@ struct HistorySettingsView: View {
                             .foregroundStyle(.red)
                     }
                 } else {
-                    Text(String(localized: "When disabled, history items will not keep audio files."))
+                    Text(localized("When disabled, history items will not keep audio files."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
             if historyAudioStorageEnabled {
-                GeneralSettingsCard(title: "Export") {
+                GeneralSettingsCard(titleText: localized("Export")) {
                     HStack(spacing: 10) {
-                        Button(String(localized: "Export Audio")) {
+                        Button(localized("Export Audio")) {
                             exportAllHistoryAudio()
                         }
                         .buttonStyle(SettingsPillButtonStyle())
@@ -360,7 +415,7 @@ struct HistorySettingsView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            Text(String(localized: "Copies every saved history audio file into a folder you choose."))
+                            Text(localized("Copies every saved history audio file into a folder you choose."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -376,7 +431,7 @@ struct HistorySettingsView: View {
             }
 
             SettingsDialogActionRow {
-                Button(String(localized: "Done")) {
+                Button(localized("Done")) {
                     isHistoryAudioSettingsPresented = false
                 }
                 .buttonStyle(SettingsPrimaryButtonStyle())

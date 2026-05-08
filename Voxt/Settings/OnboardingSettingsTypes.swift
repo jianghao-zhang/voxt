@@ -12,75 +12,45 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
     case translation
     case rewrite
     case appEnhancement
-    case meeting
     case finish
 
     var id: String { rawValue }
 
-    var titleKey: LocalizedStringKey {
-        switch self {
-        case .language:
-            return "Language"
-        case .model:
-            return "Model"
-        case .transcription:
-            return "Transcription"
-        case .translation:
-            return "Translation"
-        case .rewrite:
-            return "Rewrite"
-        case .appEnhancement:
-            return "App Enhancement"
-        case .meeting:
-            return "Meeting"
-        case .finish:
-            return "Finish"
-        }
-    }
-
-    var subtitleKey: LocalizedStringKey {
-        switch self {
-        case .language:
-            return "Choose interface language and main language."
-        case .model:
-            return "Choose one ASR model path and one LLM path for the rest of onboarding."
-        case .transcription:
-            return "Confirm microphone behavior, shortcut preset, and transcription basics."
-        case .translation:
-            return "Adjust output behavior and verify the current translation model path."
-        case .rewrite:
-            return "Understand voice rewrite mode for selected text and prompt-style generation."
-        case .appEnhancement:
-            return "Optionally enable app-aware prompt switching."
-        case .meeting:
-            return "Optionally enable the dedicated meeting workflow and verify blockers."
-        case .finish:
-            return "Import or export your setup, then leave onboarding."
-        }
-    }
-
     var title: String {
-        AppLocalization.localizedString(rawTitleKey)
-    }
-
-    private var rawTitleKey: String {
         switch self {
         case .language:
-            return "Language"
+            return AppLocalization.localizedString("Language")
         case .model:
-            return "Model"
+            return AppLocalization.localizedString("Model")
         case .transcription:
-            return "Transcription"
+            return AppLocalization.localizedString("Transcription")
         case .translation:
-            return "Translation"
+            return AppLocalization.localizedString("Translation")
         case .rewrite:
-            return "Rewrite"
+            return AppLocalization.localizedString("Rewrite")
         case .appEnhancement:
-            return "App Enhancement"
-        case .meeting:
-            return "Meeting"
+            return AppLocalization.localizedString("App Enhancement")
         case .finish:
-            return "Finish"
+            return AppLocalization.localizedString("Finish")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .language:
+            return AppLocalization.localizedString("Choose interface language and main language.")
+        case .model:
+            return AppLocalization.localizedString("Choose one ASR model path and one LLM path for the rest of onboarding.")
+        case .transcription:
+            return AppLocalization.localizedString("Confirm microphone behavior, shortcut preset, and transcription basics.")
+        case .translation:
+            return AppLocalization.localizedString("Adjust output behavior and verify the current translation model path.")
+        case .rewrite:
+            return AppLocalization.localizedString("Understand voice rewrite mode for selected text and prompt-style generation.")
+        case .appEnhancement:
+            return AppLocalization.localizedString("Optionally enable app-aware prompt switching.")
+        case .finish:
+            return AppLocalization.localizedString("Import or export your setup, then leave onboarding.")
         }
     }
 
@@ -144,8 +114,6 @@ struct OnboardingStepStatusSnapshot {
     var hasRecordingPermissions: Bool
     var hasRewriteIssues: Bool
     var appEnhancementEnabled: Bool
-    var meetingNotesEnabled: Bool
-    var hasMeetingIssues: Bool
 }
 
 enum OnboardingStepStatusResolver {
@@ -166,9 +134,6 @@ enum OnboardingStepStatusResolver {
             return snapshot.hasRewriteIssues ? .needsSetup : .ready
         case .appEnhancement:
             return snapshot.appEnhancementEnabled ? .ready : .optional
-        case .meeting:
-            guard snapshot.meetingNotesEnabled else { return .optional }
-            return snapshot.hasMeetingIssues ? .needsSetup : .ready
         case .finish:
             return .done
         }

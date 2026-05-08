@@ -6,6 +6,11 @@ enum SettingsUIStyle {
     static let panelCornerRadius: CGFloat = 16
     static let compactCornerRadius: CGFloat = 12
     static let controlCornerRadius: CGFloat = 10
+    static let sidebarWidth: CGFloat = 184
+    static let sidebarHorizontalPadding: CGFloat = 12
+    static let sidebarItemHorizontalPadding: CGFloat = 14
+    static let sidebarItemHeight: CGFloat = 36
+    static let sidebarItemIconWidth: CGFloat = 18
 
     static var controlFillNSColor: NSColor {
         dynamicColor(light: NSColor.controlBackgroundColor, dark: NSColor(calibratedWhite: 0.185, alpha: 1))

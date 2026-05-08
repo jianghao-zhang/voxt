@@ -2,6 +2,10 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 struct AboutSettingsView: View {
     let appUpdateManager: AppUpdateManager
     let navigationRequest: SettingsNavigationRequest?
@@ -25,7 +29,7 @@ struct AboutSettingsView: View {
         if let buildVersion, !buildVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return buildVersion
         }
-        return String(localized: "Version metadata missing")
+        return localized("Version metadata missing")
     }
 
     private let feedbackURL = URL(string: "https://github.com/hehehai/voxt/issues/new/choose")!
@@ -36,17 +40,17 @@ struct AboutSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Voxt")
                         .font(.headline)
-                    Text("Voice to Thought")
+                    Text(localized("Voice to Thought"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         HStack(spacing: 4) {
-                            Text("Version")
+                            Text(localized("Version"))
                             Text(appVersionText)
                         }
                         Spacer(minLength: 0)
-                        Button(String(localized: "Check for Updates…")) {
+                        Button(localized("Check for Updates…")) {
                             appUpdateManager.checkForUpdatesWithUserInterface()
                         }
                         .disabled(appUpdateManager.shouldDisableInteractiveUpdateTrigger)
@@ -62,11 +66,11 @@ struct AboutSettingsView: View {
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Project")
+                    Text(localized("Project"))
                         .font(.headline)
                     Link("github.com/hehehai/voxt", destination: URL(string: "https://github.com/hehehai/voxt")!)
                         .font(.caption)
-                    Link(String(localized: "Feedback"), destination: feedbackURL)
+                    Link(localized("Feedback"), destination: feedbackURL)
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -76,7 +80,7 @@ struct AboutSettingsView: View {
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Author")
+                    Text(localized("Author"))
                         .font(.headline)
                     Link("hehehai", destination: URL(string: "https://www.hehehai.cn/")!)
                         .font(.caption)
@@ -88,7 +92,7 @@ struct AboutSettingsView: View {
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Thanks")
+                    Text(localized("Thanks"))
                         .font(.headline)
                     Link(
                         "github.com/hehehai/mlx-audio-swift",
@@ -109,10 +113,10 @@ struct AboutSettingsView: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Logs")
+                        Text(localized("Logs"))
                             .font(.headline)
                         Spacer()
-                        Button("Export Latest Logs (2000)") {
+                        Button(localized("Export Latest Logs (2000)")) {
                             exportLatestLogs()
                         }
                         .buttonStyle(SettingsPillButtonStyle())
@@ -127,7 +131,7 @@ struct AboutSettingsView: View {
                             .hour()
                             .minute()
                             .second()
-                    ) ?? String(localized: "No logs yet")
+                    ) ?? localized("No logs yet")
                     Text(localizedFormat("Last updated: %@", value))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -138,7 +142,7 @@ struct AboutSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Text("Exports the most recent 2000 log entries as a .log file.")
+                    Text(localized("Exports the most recent 2000 log entries as a .log file."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -178,7 +182,7 @@ struct AboutSettingsView: View {
     }
 
     private func localizedFormat(_ key: String, _ argument: String) -> String {
-        let format = NSLocalizedString(key, comment: "")
+        let format = localized(key)
         return String(format: format, locale: locale, argument)
     }
 
@@ -199,12 +203,12 @@ struct AboutSettingsView: View {
         defer { refreshLogUpdateDate() }
 
         guard response == .OK else {
-            logExportStatus = String(localized: "Export canceled")
+            logExportStatus = localized("Export canceled")
             return
         }
 
         guard let destinationURL = panel.url else {
-            logExportStatus = String(localized: "Export canceled")
+            logExportStatus = localized("Export canceled")
             return
         }
 

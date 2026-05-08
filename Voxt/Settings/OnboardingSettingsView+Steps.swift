@@ -21,8 +21,6 @@ extension OnboardingSettingsView {
             rewriteStep
         case .appEnhancement:
             appEnhancementStep
-        case .meeting:
-            meetingStep
         case .finish:
             finishStep
         }
@@ -270,7 +268,7 @@ extension OnboardingSettingsView {
     var localLLMSetupContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             LocalModelPickerCard(
-                title: "Language Model",
+                title: LocalizedStringKey(localized("Language Model")),
                 selectionTitle: customLLMManager.displayTitle(for: customLLMRepo),
                 selectionDescription: customLLMDescription(for: customLLMRepo),
                 isInstalled: customLLMManager.isModelDownloaded(repo: customLLMRepo),
@@ -640,65 +638,6 @@ extension OnboardingSettingsView {
         }
     }
 
-    var meetingStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            GeneralSettingsCard(title: "Meeting") {
-                Toggle(localized("Enable Meeting"), isOn: meetingEnabledBinding)
-
-                Text(localized("Turn on the dedicated meeting workflow, shortcut, overlay, and meeting-specific model settings."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            OnboardingSummaryCard(
-                title: "Meeting Shortcut",
-                lines: onboardingMeetingStatusLines
-            )
-
-            if !featureSettings.meeting.enabled {
-                OnboardingSummaryCard(
-                    title: "Disabled",
-                    lines: [
-                        localized("Meeting permissions are only required after you turn this feature on.")
-                    ]
-                )
-            } else if meetingBlockingMessages.isEmpty {
-                OnboardingSummaryCard(
-                    title: "Meeting Is Ready",
-                    lines: [
-                        localized("The current engine and permissions satisfy the meeting requirements.")
-                    ]
-                )
-            } else {
-                OnboardingSummaryCard(
-                    title: "Setup Needed",
-                    lines: meetingBlockingMessages
-                )
-            }
-
-            GeneralSettingsCard(title: "Demo Video") {
-                Text(localized("Watch a short example of the meeting recording workflow."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let meetingDemoPlayer {
-                    OnboardingVideoPlayerView(player: meetingDemoPlayer)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                        )
-                } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 220)
-                }
-            }
-        }
-    }
-
     var finishStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             GeneralSettingsCard(title: "You're Ready") {
@@ -713,8 +652,7 @@ extension OnboardingSettingsView {
                         AppLocalization.format("ASR: %@", onboardingASRSummary),
                         AppLocalization.format("LLM: %@", onboardingLLMSummary),
                         AppLocalization.format("Translation: %@", translationProviderSummary),
-                        AppLocalization.format("Rewrite: %@", rewriteProviderSummary),
-                        AppLocalization.format("Meeting: %@", onboardingMeetingSummary)
+                        AppLocalization.format("Rewrite: %@", rewriteProviderSummary)
                     ]
                 )
 

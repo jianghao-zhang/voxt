@@ -239,7 +239,7 @@ struct SettingsView: View {
                     appUpdateManager.checkForUpdatesWithUserInterface()
                 }
             )
-            .frame(width: 170)
+            .frame(width: SettingsUIStyle.sidebarWidth)
             .frame(maxHeight: .infinity, alignment: .top)
 
             VStack(alignment: .leading, spacing: 12) {
@@ -625,11 +625,16 @@ private struct SettingsSidebar: View {
                         HStack(spacing: 10) {
                             Image(systemName: tab.iconName)
                                 .font(.system(size: 13, weight: .semibold))
-                                .frame(width: 16)
+                                .frame(width: SettingsUIStyle.sidebarItemIconWidth)
                             Text(tab.titleKey)
                                 .font(.system(size: 13, weight: .medium))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .allowsTightening(true)
+                                .layoutPriority(1)
                             Spacer(minLength: 0)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(SettingsSidebarItemButtonStyle(isActive: tab == selectedTab))
@@ -642,11 +647,16 @@ private struct SettingsSidebar: View {
                         HStack(spacing: 10) {
                             Image(systemName: tab.iconName)
                                 .font(.system(size: 13, weight: .semibold))
-                                .frame(width: 16)
+                                .frame(width: SettingsUIStyle.sidebarItemIconWidth)
                             Text(tab.titleKey)
                                 .font(.system(size: 13, weight: .medium))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .allowsTightening(true)
+                                .layoutPriority(1)
                             Spacer(minLength: 0)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(SettingsSidebarItemButtonStyle(isActive: tab == selectedFeatureTab))
@@ -766,7 +776,7 @@ private struct SettingsSidebar: View {
             }
 
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, SettingsUIStyle.sidebarHorizontalPadding)
         .padding(.bottom, 10)
         .padding(.top, 34)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

@@ -3,6 +3,10 @@ import Combine
 import AppKit
 import UniformTypeIdentifiers
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 struct DictionarySettingsView: View {
     @AppStorage(AppPreferenceKey.dictionaryRecognitionEnabled) private var dictionaryRecognitionEnabled = true
     @AppStorage(AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) private var dictionaryHighConfidenceCorrectionEnabled = true
@@ -62,10 +66,10 @@ struct DictionarySettingsView: View {
     private var oneClickIngestButtonTitle: String {
         if historyScanProgress.isRunning {
             return historyScanProgress.isCancellationRequested
-                ? String(localized: "Canceling...")
-                : String(localized: "Cancel Ingest")
+                ? localized("Canceling...")
+                : localized("Cancel Ingest")
         }
-        return String(localized: "One-Click Ingest")
+        return localized("One-Click Ingest")
     }
 
     private var oneClickIngestButtonDisabled: Bool {
@@ -176,7 +180,7 @@ struct DictionarySettingsView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 16) {
-                    Toggle("Enable Dictionary", isOn: $dictionaryRecognitionEnabled)
+                    Toggle(localized("Enable Dictionary"), isOn: $dictionaryRecognitionEnabled)
                         .controlSize(.small)
 
                     Button {
@@ -186,7 +190,7 @@ struct DictionarySettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help(String(localized: "Dictionary Advanced Settings"))
+                    .help(localized("Dictionary Advanced Settings"))
 
                     Button {
                         showDictionaryInfo.toggle()
@@ -196,7 +200,7 @@ struct DictionarySettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .popover(isPresented: $showDictionaryInfo, arrowEdge: .top) {
-                        Text("Dictionary recognition injects matched terms into prompts and can correct high-confidence near matches before output.")
+                        Text(localized("Dictionary recognition injects matched terms into prompts and can correct high-confidence near matches before output."))
                             .font(.caption)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
@@ -214,12 +218,12 @@ struct DictionarySettingsView: View {
                     Divider()
                         .frame(height: 16)
 
-                    Button("Import") {
+                    Button(localized("Import")) {
                         importDictionary()
                     }
                     .buttonStyle(SettingsPillButtonStyle())
 
-                    Button("Export") {
+                    Button(localized("Export")) {
                         exportDictionary()
                     }
                     .buttonStyle(SettingsPillButtonStyle())
@@ -241,7 +245,7 @@ struct DictionarySettingsView: View {
                         Text(errorMessage)
                             .font(.caption)
                             .foregroundStyle(.red)
-                        Text("Review the ingest prompt in Dictionary Advanced Settings, then run One-Click Ingest again.")
+                        Text(localized("Review the ingest prompt in Dictionary Advanced Settings, then run One-Click Ingest again."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -279,12 +283,12 @@ struct DictionarySettingsView: View {
 
                     Spacer(minLength: 12)
 
-                    Button("Create") {
+                    Button(localized("Create")) {
                         dialog = .create
                     }
                     .buttonStyle(SettingsPillButtonStyle())
 
-                    Button("Clean All", role: .destructive) {
+                    Button(localized("Clean All"), role: .destructive) {
                         dictionaryStore.clearAll()
                     }
                     .buttonStyle(SettingsStatusButtonStyle(tint: .red))
@@ -292,7 +296,7 @@ struct DictionarySettingsView: View {
                 }
 
                 if visibleEntries.isEmpty {
-                    Text("No dictionary terms yet.")
+                    Text(localized("No dictionary terms yet."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -318,7 +322,7 @@ struct DictionarySettingsView: View {
                             }
 
                             if hasMoreVisibleEntries {
-                                Button("Load More") {
+                                Button(localized("Load More")) {
                                     loadNextDictionaryPageIfNeeded()
                                 }
                                 .buttonStyle(SettingsPillButtonStyle())
@@ -483,7 +487,7 @@ struct DictionarySettingsView: View {
     private func exportDictionary() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "Voxt-Dictionary.json"
+        panel.nameFieldStringValue = localized("Voxt-Dictionary.json")
         panel.canCreateDirectories = true
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -491,7 +495,7 @@ struct DictionarySettingsView: View {
         do {
             let text = try dictionaryStore.exportTransferJSONString()
             try text.write(to: url, atomically: true, encoding: .utf8)
-            dictionaryTransferMessage = String(localized: "Dictionary exported successfully.")
+            dictionaryTransferMessage = localized("Dictionary exported successfully.")
         } catch {
             dictionaryTransferMessage = AppLocalization.format(
                 "Dictionary export failed: %@",
@@ -634,10 +638,14 @@ private struct DictionaryTermDialogView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(dialog.title)
+            Text(verbatim: dialog.title)
                 .font(.title3.weight(.semibold))
 
-            TextField(String(localized: "Dictionary Term"), text: $draftTerm)
+            TextField(
+                "",
+                text: $draftTerm,
+                prompt: Text(verbatim: localized("Dictionary Term"))
+            )
                 .textFieldStyle(.plain)
                 .settingsFieldSurface()
 
@@ -650,33 +658,39 @@ private struct DictionaryTermDialogView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text("Replacement Match Terms")
+                    Text(verbatim: localized("Replacement Match Terms"))
                         .font(.caption.weight(.semibold))
 
-                    Text(" (Optional. Without them, Voxt still uses normal dictionary matching and high-confidence correction.)")
+                    Text(verbatim: localized(" (Optional. Without them, Voxt still uses normal dictionary matching and high-confidence correction.)"))
                         .font(.caption)
                 }
                 .foregroundStyle(.secondary)
 
                 HStack(spacing: 8) {
-                    TextField(String(localized: "Replacement Match Term"), text: $draftReplacementTermInput)
+                    TextField(
+                        "",
+                        text: $draftReplacementTermInput,
+                        prompt: Text(verbatim: localized("Replacement Match Term"))
+                    )
                         .textFieldStyle(.plain)
                         .settingsFieldSurface()
                         .onSubmit(addDraftReplacementTerm)
 
-                    Button("Add") {
+                    Button {
                         addDraftReplacementTerm()
+                    } label: {
+                        Text(verbatim: localized("Add"))
                     }
                     .buttonStyle(SettingsPillButtonStyle())
                     .disabled(draftReplacementTermInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
 
-                Text("Add phrases that should always resolve to this dictionary term.")
+                Text(verbatim: localized("Add phrases that should always resolve to this dictionary term."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 if draftReplacementTerms.isEmpty {
-                    Text("No replacement match terms.")
+                    Text(verbatim: localized("No replacement match terms."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -693,14 +707,18 @@ private struct DictionaryTermDialogView: View {
             }
 
             SettingsDialogActionRow {
-                Button("Cancel") {
+                Button {
                     onCancel()
+                } label: {
+                    Text(verbatim: localized("Cancel"))
                 }
                 .buttonStyle(SettingsPillButtonStyle())
                 .keyboardShortcut(.cancelAction)
 
-                Button(dialog.confirmButtonTitle) {
+                Button {
                     save()
+                } label: {
+                    Text(verbatim: dialog.confirmButtonTitle)
                 }
                 .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
@@ -712,11 +730,11 @@ private struct DictionaryTermDialogView: View {
 
     private var dictionaryGroupOptions: [SettingsMenuOption<UUID?>] {
         var options: [SettingsMenuOption<UUID?>] = [
-            SettingsMenuOption(value: nil, title: String(localized: "Global"))
+            SettingsMenuOption(value: nil, title: localized("Global"))
         ]
         if let selectedGroupID,
            availableGroups.contains(where: { $0.id == selectedGroupID }) == false {
-            options.append(SettingsMenuOption(value: selectedGroupID, title: String(localized: "Missing Group")))
+            options.append(SettingsMenuOption(value: selectedGroupID, title: localized("Missing Group")))
         }
         options.append(contentsOf: availableGroups.map { group in
             SettingsMenuOption(value: Optional(group.id), title: group.name)
@@ -726,9 +744,9 @@ private struct DictionaryTermDialogView: View {
 
     private var selectedDictionaryGroupTitle: String {
         guard let selectedGroupID else {
-            return String(localized: "Global")
+            return localized("Global")
         }
-        return availableGroups.first(where: { $0.id == selectedGroupID })?.name ?? String(localized: "Missing Group")
+        return availableGroups.first(where: { $0.id == selectedGroupID })?.name ?? localized("Missing Group")
     }
 
     private func save() {

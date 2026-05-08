@@ -1,5 +1,9 @@
 import SwiftUI
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 struct DictionaryFilterPicker: View {
     @Binding var selectedFilter: DictionaryFilter
 
@@ -60,13 +64,13 @@ struct DictionaryRow: View {
                     Image(systemName: "pencil")
                 }
                 .buttonStyle(SettingsCompactIconButtonStyle())
-                .help("Edit")
+                .help(localized("Edit"))
 
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(SettingsCompactIconButtonStyle(tone: .destructive))
-                .help("Delete")
+                .help(localized("Delete"))
             }
         )
     }
@@ -127,13 +131,13 @@ struct DictionarySuggestionRow: View {
                     Image(systemName: "plus.circle")
                 }
                 .buttonStyle(SettingsCompactIconButtonStyle())
-                .help("Add to Dictionary")
+                .help(localized("Add to Dictionary"))
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle")
                 }
                 .buttonStyle(SettingsCompactIconButtonStyle())
-                .help("Ignore")
+                .help(localized("Ignore"))
             }
         )
     }
@@ -152,21 +156,21 @@ enum DictionaryDialog: Identifiable {
         }
     }
 
-    var title: LocalizedStringKey {
+    var title: String {
         switch self {
         case .create:
-            return "Create Dictionary Term"
+            return localized("Create Dictionary Term")
         case .edit:
-            return "Edit Dictionary Term"
+            return localized("Edit Dictionary Term")
         }
     }
 
-    var confirmButtonTitle: LocalizedStringKey {
+    var confirmButtonTitle: String {
         switch self {
         case .create:
-            return "Create"
+            return localized("Create")
         case .edit:
-            return "Save"
+            return localized("Save")
         }
     }
 }

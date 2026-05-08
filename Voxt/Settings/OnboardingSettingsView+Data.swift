@@ -86,17 +86,14 @@ extension OnboardingSettingsView {
             hasRecordingMicrophone: !inputDevices.isEmpty,
             hasRecordingPermissions: recordingPermissionsSatisfied,
             hasRewriteIssues: !rewriteIssues.isEmpty,
-            appEnhancementEnabled: appEnhancementEnabled,
-            meetingNotesEnabled: featureSettings.meeting.enabled,
-            hasMeetingIssues: !meetingBlockingMessages.isEmpty
+            appEnhancementEnabled: appEnhancementEnabled
         )
     }
 
     var currentPermissionContext: OnboardingPermissionRequirementContext {
         OnboardingPermissionRequirementContext(
             selectedEngine: selectedEngine,
-            muteSystemAudioWhileRecording: muteSystemAudioWhileRecording,
-            meetingNotesEnabled: featureSettings.meeting.enabled
+            muteSystemAudioWhileRecording: muteSystemAudioWhileRecording
         )
     }
 
@@ -209,10 +206,6 @@ extension OnboardingSettingsView {
         case .appEnhancement:
             if appEnhancementDemoPlayer == nil {
                 appEnhancementDemoPlayer = AVPlayer(url: OnboardingVideoDemo.appEnhancementURL)
-            }
-        case .meeting:
-            if meetingDemoPlayer == nil {
-                meetingDemoPlayer = AVPlayer(url: OnboardingVideoDemo.meetingURL)
             }
         default:
             break

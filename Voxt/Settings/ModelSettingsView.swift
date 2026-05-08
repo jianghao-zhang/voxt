@@ -675,7 +675,7 @@ struct ModelSettingsView: View {
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
         panel.directoryURL = ModelStorageDirectoryManager.resolvedRootURL()
-        panel.prompt = String(localized: "Choose")
+        panel.prompt = localized("Choose")
 
         guard panel.runModal() == .OK, let selectedURL = panel.url else { return }
         do {
@@ -844,7 +844,7 @@ struct ModelSettingsView: View {
             Text(localized("Model Download Settings"))
                 .font(.title3.weight(.semibold))
 
-            GeneralSettingsCard(title: "Model Storage") {
+            GeneralSettingsCard(titleText: localized("Model Storage")) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(localized("Storage Path"))
                         .foregroundStyle(.secondary)
@@ -882,7 +882,7 @@ struct ModelSettingsView: View {
                 }
             }
 
-            GeneralSettingsCard(title: "Download Source") {
+            GeneralSettingsCard(titleText: localized("Download Source")) {
                 Toggle(localized("Use China mirror"), isOn: $useHfMirror)
 
                 Text(localized("Use the China mirror when downloading local models. This only changes the download source for Hugging Face based local models."))
@@ -890,20 +890,20 @@ struct ModelSettingsView: View {
                     .foregroundStyle(.secondary)
 
                 endpointTestRow(
-                    title: LocalizedStringKey(localized("Global")),
+                    title: localized("Global"),
                     subtitle: "https://huggingface.co",
                     isTesting: isTestingGlobalDownloadEndpoint,
                     result: globalDownloadEndpointResult,
-                    actionTitle: LocalizedStringKey(localized("Test")),
+                    actionTitle: localized("Test"),
                     action: testGlobalDownloadEndpoint
                 )
 
                 endpointTestRow(
-                    title: LocalizedStringKey(localized("China Mirror")),
+                    title: localized("China Mirror"),
                     subtitle: "https://hf-mirror.com",
                     isTesting: isTestingChinaDownloadEndpoint,
                     result: chinaDownloadEndpointResult,
-                    actionTitle: LocalizedStringKey(localized("Test")),
+                    actionTitle: localized("Test"),
                     action: testChinaDownloadEndpoint
                 )
             }
@@ -922,11 +922,11 @@ struct ModelSettingsView: View {
 
     @ViewBuilder
     private func endpointTestRow(
-        title: LocalizedStringKey,
+        title: String,
         subtitle: String,
         isTesting: Bool,
         result: DownloadEndpointCheckResult?,
-        actionTitle: LocalizedStringKey,
+        actionTitle: String,
         action: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {

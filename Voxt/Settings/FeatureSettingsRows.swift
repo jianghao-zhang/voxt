@@ -3,6 +3,7 @@ import AppKit
 
 struct FeatureToggleRow: View {
     let title: String
+    var badgeText: String? = nil
     let detail: String
     @Binding var isOn: Bool
     var isEmbedded = false
@@ -10,6 +11,7 @@ struct FeatureToggleRow: View {
     var body: some View {
         FeatureRowScaffold(
             title: title,
+            badgeText: badgeText,
             detail: detail,
             isEmbedded: isEmbedded
         ) {
@@ -327,6 +329,7 @@ private struct FeatureRowChromeModifier: ViewModifier {
 
 private struct FeatureRowScaffold<TrailingContent: View>: View {
     let title: String
+    let badgeText: String?
     let detail: String
     var spacerMinLength: CGFloat = 0
     let isEmbedded: Bool
@@ -334,12 +337,14 @@ private struct FeatureRowScaffold<TrailingContent: View>: View {
 
     init(
         title: String,
+        badgeText: String? = nil,
         detail: String,
         spacerMinLength: CGFloat = 0,
         isEmbedded: Bool,
         @ViewBuilder trailingContent: () -> TrailingContent
     ) {
         self.title = title
+        self.badgeText = badgeText
         self.detail = detail
         self.spacerMinLength = spacerMinLength
         self.isEmbedded = isEmbedded
@@ -348,7 +353,7 @@ private struct FeatureRowScaffold<TrailingContent: View>: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            FeatureRowLabelStack(title: title, detail: detail)
+            FeatureRowLabelStack(title: title, badgeText: badgeText, detail: detail)
             Spacer(minLength: spacerMinLength)
             trailingContent
         }
@@ -358,12 +363,33 @@ private struct FeatureRowScaffold<TrailingContent: View>: View {
 
 private struct FeatureRowLabelStack: View {
     let title: String
+    let badgeText: String?
     let detail: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
+            HStack(alignment: .center, spacing: 8) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+
+                if let badgeText, !badgeText.isEmpty {
+                    Text(badgeText)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.orange.opacity(0.12))
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(Color.orange.opacity(0.24), lineWidth: 1)
+                        )
+                }
+
+                Spacer(minLength: 0)
+            }
             Text(detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)

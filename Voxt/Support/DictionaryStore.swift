@@ -10,7 +10,7 @@ enum DictionaryEntrySource: String, Codable, CaseIterable {
         case .manual:
             return "Manual"
         case .auto:
-            return "Automatic"
+            return "Auto"
         }
     }
 }
@@ -38,7 +38,7 @@ enum DictionaryFilter: String, CaseIterable, Identifiable {
         case .all:
             return "All"
         case .autoAdded:
-            return "Automatic"
+            return "Auto"
         case .manualAdded:
             return "Manual"
         }

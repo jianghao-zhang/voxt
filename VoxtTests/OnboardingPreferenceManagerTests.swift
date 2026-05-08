@@ -55,7 +55,7 @@ final class OnboardingPreferenceManagerTests: XCTestCase {
 
     func testMarkCompletedClearsSavedStep() {
         let defaults = TestDoubles.makeUserDefaults()
-        OnboardingPreferenceManager.saveLastStep(.meeting, defaults: defaults)
+        OnboardingPreferenceManager.saveLastStep(.finish, defaults: defaults)
 
         OnboardingPreferenceManager.markCompleted(defaults: defaults)
 

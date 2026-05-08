@@ -1,5 +1,13 @@
 import SwiftUI
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
+private func localizedKey(_ key: String) -> LocalizedStringKey {
+    LocalizedStringKey(localized(key))
+}
+
 struct GeneralConfigurationCard: View {
     let message: String?
     let onExport: () -> Void
@@ -7,19 +15,19 @@ struct GeneralConfigurationCard: View {
     let onOpenSetupGuide: (() -> Void)?
 
     var body: some View {
-        GeneralSettingsCard(title: "Configuration") {
+        GeneralSettingsCard(title: localizedKey("Configuration")) {
             HStack(spacing: 8) {
-                Button("Export Configuration", action: onExport)
+                Button(localized("Export Configuration"), action: onExport)
                     .buttonStyle(SettingsPillButtonStyle())
-                Button("Import Configuration", action: onImport)
+                Button(localized("Import Configuration"), action: onImport)
                     .buttonStyle(SettingsPillButtonStyle())
                 if let onOpenSetupGuide {
-                    Button("Open Setup Guide", action: onOpenSetupGuide)
+                    Button(localized("Open Setup Guide"), action: onOpenSetupGuide)
                         .buttonStyle(SettingsPillButtonStyle())
                 }
             }
 
-            Text("Export or import your setup as JSON. Sensitive fields are cleared and need to be filled in again after import.")
+            Text(localized("Export or import your setup as JSON. Sensitive fields are cleared and need to be filled in again after import."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -43,20 +51,20 @@ struct GeneralAudioCard: View {
     let onViewPriorityList: () -> Void
 
     var body: some View {
-        GeneralSettingsCard(title: "Audio") {
+        GeneralSettingsCard(title: localizedKey("Audio")) {
             HStack(alignment: .center) {
-                Text("Microphone")
+                Text(localized("Microphone"))
                     .foregroundStyle(.secondary)
                 Spacer()
                 if microphoneState.hasAvailableDevices {
                     SettingsSelectionButton(width: 272, action: onManageMicrophones) {
                         HStack(spacing: 0) {
-                            Text(microphoneState.activeDevice?.name ?? String(localized: "No available microphone devices"))
+                            Text(microphoneState.activeDevice?.name ?? localized("No available microphone devices"))
                                 .lineLimit(1)
                         }
                     }
                 } else {
-                    Text(String(localized: "No available microphone devices"))
+                    Text(localized("No available microphone devices"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.red)
                         .padding(.horizontal, 10)
@@ -68,27 +76,27 @@ struct GeneralAudioCard: View {
                 }
             }
 
-            Text("Reorder microphones to control device priority. Auto Switch only applies when devices connect or disconnect.")
+            Text(localized("Reorder microphones to control device priority. Auto Switch only applies when devices connect or disconnect."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if !microphoneState.hasAvailableDevices, microphoneState.hasTrackedDevices {
                 HStack {
                     Spacer()
-                    Button("View Priority List", action: onViewPriorityList)
+                    Button(localized("View Priority List"), action: onViewPriorityList)
                         .buttonStyle(SettingsPillButtonStyle())
                 }
             }
 
             GeneralToggleRow(
-                title: "Interaction Sounds",
-                description: "Play a short start chime when recording begins and an end chime when transcription completes.",
+                title: localizedKey("Interaction Sounds"),
+                description: localizedKey("Play a short start chime when recording begins and an end chime when transcription completes."),
                 isOn: $interactionSoundsEnabled
             )
 
             GeneralToggleRow(
-                title: "Mute other media audio while recording",
-                description: "Temporarily lowers other apps' media audio while you record so your speech stays clear.",
+                title: localizedKey("Mute other media audio while recording"),
+                description: localizedKey("Temporarily lowers other apps' media audio while you record so your speech stays clear."),
                 isOn: $muteSystemAudioWhileRecording
             )
 
@@ -99,7 +107,7 @@ struct GeneralAudioCard: View {
             }
 
             HStack(alignment: .center) {
-                Text("Sound Preset")
+                Text(localized("Sound Preset"))
                     .foregroundStyle(.secondary)
                 Spacer()
                 SettingsMenuPicker(
@@ -111,7 +119,7 @@ struct GeneralAudioCard: View {
                     width: 220
                 )
 
-                Button("Try Sound", action: onTrySound)
+                Button(localized("Try Sound"), action: onTrySound)
                     .buttonStyle(SettingsPillButtonStyle())
             }
         }
@@ -127,9 +135,9 @@ struct GeneralTranscriptionUICard: View {
     @Binding var hideMeetingOverlayFromScreenSharing: Bool
 
     var body: some View {
-        GeneralSettingsCard(title: "Transcription UI") {
+        GeneralSettingsCard(title: localizedKey("Transcription UI")) {
             HStack(alignment: .center) {
-                Text("Position")
+                Text(localized("Position"))
                     .foregroundStyle(.secondary)
                 Spacer()
                 SettingsMenuPicker(
@@ -143,7 +151,7 @@ struct GeneralTranscriptionUICard: View {
             }
 
             overlayNumberField(
-                title: "Opacity",
+                title: localizedKey("Opacity"),
                 value: $overlayCardOpacity,
                 range: 0...100,
                 width: 90,
@@ -151,7 +159,7 @@ struct GeneralTranscriptionUICard: View {
             )
 
             overlayNumberField(
-                title: "Corner Radius",
+                title: localizedKey("Corner Radius"),
                 value: $overlayCardCornerRadius,
                 range: 0...40,
                 width: 90,
@@ -159,7 +167,7 @@ struct GeneralTranscriptionUICard: View {
             )
 
             overlayNumberField(
-                title: "Edge Distance",
+                title: localizedKey("Edge Distance"),
                 value: $overlayScreenEdgeInset,
                 range: 0...120,
                 width: 90,
@@ -168,8 +176,8 @@ struct GeneralTranscriptionUICard: View {
 
             if meetingNotesBetaEnabled {
                 GeneralToggleRow(
-                    title: "Meeting Transcript UI Shareable",
-                    description: "Makes the meeting transcript overlay visible in screen sharing and screen recordings.",
+                    title: localizedKey("Meeting Transcript UI Shareable"),
+                    description: localizedKey("Makes the meeting transcript overlay visible in screen sharing and screen recordings."),
                     isOn: $hideMeetingOverlayFromScreenSharing
                 )
             }
@@ -266,10 +274,10 @@ struct GeneralLanguagesCard: View {
     let onEditUserMainLanguage: () -> Void
 
     var body: some View {
-        GeneralSettingsCard(title: "Languages", spacing: 14) {
+        GeneralSettingsCard(title: localizedKey("Languages"), spacing: 14) {
             GeneralLanguageSettingBlock(
-                title: "Interface Language",
-                description: "Supports English, Chinese, and Japanese. Unsupported system languages default to English."
+                title: localizedKey("Interface Language"),
+                description: localizedKey("Supports English, Chinese, and Japanese. Unsupported system languages default to English.")
             ) {
                 SettingsMenuPicker(
                     selection: $interfaceLanguage,
@@ -284,8 +292,8 @@ struct GeneralLanguagesCard: View {
             Divider()
 
             GeneralLanguageSettingBlock(
-                title: "User Main Language",
-                description: "Used for the {{USER_MAIN_LANGUAGE}} prompt variable in enhancement and translation. You can select multiple languages and mark one as primary."
+                title: localizedKey("User Main Language"),
+                description: localizedKey("Used for the {{USER_MAIN_LANGUAGE}} prompt variable in enhancement and translation. You can select multiple languages and mark one as primary.")
             ) {
                 SettingsSelectionButton(width: 220, action: onEditUserMainLanguage) {
                     HStack(spacing: 0) {
@@ -306,9 +314,9 @@ struct GeneralModelStorageCard: View {
     let onChoose: () -> Void
 
     var body: some View {
-        GeneralSettingsCard(title: "Model Storage") {
+        GeneralSettingsCard(title: localizedKey("Model Storage")) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Storage Path")
+                Text(localized("Storage Path"))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(action: onOpenFinder) {
@@ -325,16 +333,16 @@ struct GeneralModelStorageCard: View {
                     }
                 }
                 .buttonStyle(SettingsInlineSelectorButtonStyle())
-                .help("Open folder")
+                .help(localized("Open folder"))
 
-                Button("Choose", action: onChoose)
+                Button(localized("Choose"), action: onChoose)
                     .buttonStyle(SettingsPillButtonStyle())
             }
 
-            Text("New model downloads in Model settings are stored in this folder.")
+            Text(localized("New model downloads in Model settings are stored in this folder."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("After switching to a new path, previously downloaded models won't be detected and must be downloaded again.")
+            Text(localized("After switching to a new path, previously downloaded models won't be detected and must be downloaded again."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -353,25 +361,19 @@ struct GeneralOutputCard: View {
     let customPasteHotkeyDisplayString: String
 
     private var customPasteDescription: String {
-        String(
-            format: NSLocalizedString(
-                "Lets you paste your latest Voxt result into the current input field. Shortcut: %@.",
-                comment: ""
-            ),
-            customPasteHotkeyDisplayString
-        )
+        String(format: localized("Lets you paste your latest Voxt result into the current input field. Shortcut: %@."), customPasteHotkeyDisplayString)
     }
 
     var body: some View {
-        GeneralSettingsCard(title: "Output") {
+        GeneralSettingsCard(title: localizedKey("Output")) {
             GeneralToggleRow(
-                title: "Also copy result to clipboard",
-                description: "When enabled, Voxt auto-pastes result text and also keeps it in clipboard.",
+                title: localizedKey("Also copy result to clipboard"),
+                description: localizedKey("When enabled, Voxt auto-pastes result text and also keeps it in clipboard."),
                 isOn: $autoCopyWhenNoFocusedInput
             )
 
             GeneralToggleRow(
-                title: "Enable custom paste shortcut",
+                title: localizedKey("Enable custom paste shortcut"),
                 descriptionText: customPasteDescription,
                 isOn: $customPasteHotkeyEnabled
             )
@@ -384,16 +386,16 @@ struct GeneralLoggingCard: View {
     @Binding var llmDebugLoggingEnabled: Bool
 
     var body: some View {
-        GeneralSettingsCard(title: "Logging") {
+        GeneralSettingsCard(title: localizedKey("Logging")) {
             GeneralToggleRow(
-                title: "Enable hotkey debug logs",
-                description: "Records hotkey detection, trigger routing, and shortcut handling details for debugging.",
+                title: localizedKey("Enable hotkey debug logs"),
+                description: localizedKey("Records hotkey detection, trigger routing, and shortcut handling details for debugging."),
                 isOn: $hotkeyDebugLoggingEnabled
             )
 
             GeneralToggleRow(
-                title: "Enable model debug logs",
-                description: "Records local and remote model details, including LLM, ASR, model downloads, and model routing, for debugging.",
+                title: localizedKey("Enable model debug logs"),
+                description: localizedKey("Records local and remote model details, including LLM, ASR, model downloads, and model routing, for debugging."),
                 isOn: $llmDebugLoggingEnabled
             )
         }
@@ -413,47 +415,47 @@ struct GeneralAppBehaviorCard: View {
     let launchAtLoginError: String?
 
     var body: some View {
-        GeneralSettingsCard(title: "App Behavior") {
+        GeneralSettingsCard(title: localizedKey("App Behavior")) {
             GeneralToggleRow(
-                title: "Launch at Login",
-                description: "Automatically start Voxt when your Mac starts.",
+                title: localizedKey("Launch at Login"),
+                description: localizedKey("Automatically start Voxt when your Mac starts."),
                 isOn: $launchAtLogin
             )
 
             GeneralToggleRow(
-                title: "Show in Dock",
-                description: "Show Voxt in your Mac Dock for quick access.",
+                title: localizedKey("Show in Dock"),
+                description: localizedKey("Show Voxt in your Mac Dock for quick access."),
                 isOn: $showInDock
             )
 
             GeneralToggleRow(
-                title: "Automatically check for updates",
-                description: "Let Sparkle periodically check for updates in the background.",
+                title: localizedKey("Automatically check for updates"),
+                description: localizedKey("Let Sparkle periodically check for updates in the background."),
                 isOn: $autoCheckForUpdates
             )
 
             HStack(alignment: .center) {
-                Text("Proxy")
+                Text(localized("Proxy"))
                     .foregroundStyle(.secondary)
                 Spacer()
                 SettingsMenuPicker(
                     selection: $networkProxyMode,
                     options: [
-                        SettingsMenuOption(value: .system, title: String(localized: "Follow System")),
-                        SettingsMenuOption(value: .disabled, title: String(localized: "Off")),
-                        SettingsMenuOption(value: .custom, title: String(localized: "Custom"))
+                        SettingsMenuOption(value: .system, title: localized("Follow System")),
+                        SettingsMenuOption(value: .disabled, title: localized("Off")),
+                        SettingsMenuOption(value: .custom, title: localized("Custom"))
                     ],
                     selectedTitle: networkProxyModeTitle,
                     width: 220
                 )
             }
-            Text("Follow the macOS proxy settings, disable proxy use entirely, or provide a custom proxy endpoint for Voxt network requests.")
+            Text(localized("Follow the macOS proxy settings, disable proxy use entirely, or provide a custom proxy endpoint for Voxt network requests."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if networkProxyMode == .custom {
                 HStack(alignment: .center) {
-                    Text("Protocol")
+                    Text(localized("Protocol"))
                         .foregroundStyle(.secondary)
                     Spacer()
                     SettingsMenuPicker(
@@ -468,20 +470,20 @@ struct GeneralAppBehaviorCard: View {
                     )
                 }
 
-                proxyField(title: "Host", placeholder: "127.0.0.1", text: $customProxyHost, width: 220)
-                proxyField(title: "Port", placeholder: "7890", text: $customProxyPort, width: 120)
-                proxyField(title: "Username", placeholder: "Optional", text: $customProxyUsername, width: 220)
+                proxyField(title: localizedKey("Host"), placeholder: "127.0.0.1", text: $customProxyHost, width: 220)
+                proxyField(title: localizedKey("Port"), placeholder: "7890", text: $customProxyPort, width: 120)
+                proxyField(title: localizedKey("Username"), placeholder: localized("Optional"), text: $customProxyUsername, width: 220)
 
                 HStack(alignment: .center) {
-                    Text("Password")
+                    Text(localized("Password"))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    SecureField("Optional", text: $customProxyPassword)
+                    SecureField(localized("Optional"), text: $customProxyPassword)
                         .textFieldStyle(.plain)
                         .settingsFieldSurface(width: 220)
                 }
 
-                Text("Custom proxy supports HTTP, HTTPS, and SOCKS5 host/port routing. Username and password are saved now, but not injected into requests automatically yet.")
+                Text(localized("Custom proxy supports HTTP, HTTPS, and SOCKS5 host/port routing. Username and password are saved now, but not injected into requests automatically yet."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -510,11 +512,11 @@ private extension GeneralAppBehaviorCard {
     var networkProxyModeTitle: String {
         switch networkProxyMode {
         case .system:
-            return String(localized: "Follow System")
+            return localized("Follow System")
         case .disabled:
-            return String(localized: "Off")
+            return localized("Off")
         case .custom:
-            return String(localized: "Custom")
+            return localized("Custom")
         }
     }
 
@@ -531,7 +533,7 @@ private extension GeneralAppBehaviorCard {
 }
 
 struct GeneralSettingsCard<Content: View>: View {
-    let title: LocalizedStringKey
+    let title: Text
     let spacing: CGFloat
     @ViewBuilder let content: () -> Content
 
@@ -540,14 +542,24 @@ struct GeneralSettingsCard<Content: View>: View {
         spacing: CGFloat = 12,
         @ViewBuilder content: @escaping () -> Content
     ) {
-        self.title = title
+        self.title = Text(title)
+        self.spacing = spacing
+        self.content = content
+    }
+
+    init(
+        titleText: String,
+        spacing: CGFloat = 12,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = Text(titleText)
         self.spacing = spacing
         self.content = content
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
-            Text(title)
+            title
                 .font(.headline)
             content()
         }

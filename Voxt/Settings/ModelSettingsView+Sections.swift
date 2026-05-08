@@ -1,21 +1,25 @@
 import SwiftUI
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 extension ModelSettingsView {
     var translationSettingsCard: some View {
         ModelTaskSettingsCard(
-            title: "Translation",
-            providerPickerTitle: "Translation Provider",
+            title: LocalizedStringKey(localized("Translation")),
+            providerPickerTitle: LocalizedStringKey(localized("Translation Provider")),
             providerOptions: translationProviderOptions,
             selectedProviderID: $translationModelProviderRaw,
             modelLabelText: translationModelLabelText,
-            modelPickerTitle: "Translation Model",
+            modelPickerTitle: LocalizedStringKey(localized("Translation Model")),
             modelOptions: translationModelOptions,
             selectedModelBinding: translationModelSelectionBinding,
             modelDisplayText: translationModelDisplayText,
             emptyStateText: translationModelEmptyStateText,
             statusMessage: translationProviderStatusMessage,
             statusIsWarning: translationProviderStatusIsWarning,
-            promptTitle: "Translation Prompt",
+            promptTitle: LocalizedStringKey(localized("Translation Prompt")),
             promptText: promptBinding(for: $translationPrompt, kind: .translation),
             defaultPromptText: AppPromptDefaults.text(for: .translation),
             variables: ModelSettingsPromptVariables.translation
@@ -24,19 +28,19 @@ extension ModelSettingsView {
 
     var rewriteSettingsCard: some View {
         ModelTaskSettingsCard(
-            title: "Content Rewrite",
-            providerPickerTitle: "Content Rewrite Provider",
+            title: LocalizedStringKey(localized("Content Rewrite")),
+            providerPickerTitle: LocalizedStringKey(localized("Content Rewrite Provider")),
             providerOptions: rewriteProviderOptions,
             selectedProviderID: $rewriteModelProviderRaw,
             modelLabelText: rewriteModelLabelText,
-            modelPickerTitle: "Content Rewrite Model",
+            modelPickerTitle: LocalizedStringKey(localized("Content Rewrite Model")),
             modelOptions: rewriteModelOptions,
             selectedModelBinding: rewriteModelSelectionBinding,
             modelDisplayText: nil,
             emptyStateText: rewriteModelEmptyStateText,
             statusMessage: nil,
             statusIsWarning: false,
-            promptTitle: "Content Rewrite Prompt",
+            promptTitle: LocalizedStringKey(localized("Content Rewrite Prompt")),
             promptText: promptBinding(for: $rewritePrompt, kind: .rewrite),
             defaultPromptText: AppPromptDefaults.text(for: .rewrite),
             variables: ModelSettingsPromptVariables.rewrite
@@ -48,7 +52,7 @@ extension ModelSettingsView {
         Divider()
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Model")
+            Text(localized("Model"))
                 .font(.subheadline.weight(.medium))
 
             HStack(alignment: .center, spacing: 12) {
@@ -63,13 +67,13 @@ extension ModelSettingsView {
 
                 Spacer()
 
-                Button("Configure") {
+                Button(localized("Configure")) {
                     activeLocalASRConfigurationTarget = .mlx(repo: modelRepo)
                 }
                 .buttonStyle(SettingsPillButtonStyle())
 
                 HStack(spacing: 6) {
-                    Toggle("Use China mirror", isOn: $useHfMirror)
+                    Toggle(localized("Use China mirror"), isOn: $useHfMirror)
                         .toggleStyle(.switch)
 
                     Button {
@@ -97,7 +101,7 @@ extension ModelSettingsView {
                 .foregroundStyle(.secondary)
         }
 
-        ModelTableView(title: "Models", rows: mlxRows, viewportHeight: 320)
+        ModelTableView(title: LocalizedStringKey(localized("Models")), rows: mlxRows, viewportHeight: 320)
 
         if let downloadStatus = ModelDownloadStatusSnapshot.fromMLXState(
             mlxModelManager.state,
@@ -112,7 +116,7 @@ extension ModelSettingsView {
         Divider()
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Model")
+            Text(localized("Model"))
                 .font(.subheadline.weight(.medium))
 
             HStack(alignment: .center, spacing: 12) {
@@ -127,13 +131,13 @@ extension ModelSettingsView {
 
                 Spacer()
 
-                Button("Configure") {
+                Button(localized("Configure")) {
                     activeLocalASRConfigurationTarget = .whisper(modelID: whisperModelID)
                 }
                 .buttonStyle(SettingsPillButtonStyle())
 
                 HStack(spacing: 6) {
-                    Toggle("Use China mirror", isOn: $useHfMirror)
+                    Toggle(localized("Use China mirror"), isOn: $useHfMirror)
                         .toggleStyle(.switch)
 
                     Button {
@@ -161,7 +165,7 @@ extension ModelSettingsView {
                 .foregroundStyle(.secondary)
         }
 
-        ModelTableView(title: "Whisper Models", rows: whisperRows, viewportHeight: 260)
+        ModelTableView(title: LocalizedStringKey(localized("Whisper Models")), rows: whisperRows, viewportHeight: 260)
 
         if let downloadStatus = ModelDownloadStatusSnapshot.fromWhisperDownload(
             whisperModelManager.activeDownload,
@@ -207,19 +211,19 @@ extension ModelSettingsView {
 
         if appleIntelligenceAvailable {
             ResettablePromptSection(
-                title: "System Prompt",
+                title: LocalizedStringKey(localized("System Prompt")),
                 text: promptBinding(for: $systemPrompt, kind: .enhancement),
                 defaultText: AppPromptDefaults.text(for: .enhancement),
                 variables: ModelSettingsPromptVariables.enhancement
             )
 
             HStack {
-                Text("Customise how Apple Intelligence enhances your transcriptions.")
+                Text(localized("Customise how Apple Intelligence enhances your transcriptions."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         } else {
-            Text("Apple Intelligence is not available on this Mac, so system prompt enhancement cannot be used.")
+            Text(localized("Apple Intelligence is not available on this Mac, so system prompt enhancement cannot be used."))
                 .font(.caption)
                 .foregroundStyle(.orange)
         }
@@ -230,13 +234,13 @@ extension ModelSettingsView {
         Divider()
 
         ResettablePromptSection(
-            title: "System Prompt",
+            title: LocalizedStringKey(localized("System Prompt")),
             text: promptBinding(for: $systemPrompt, kind: .enhancement),
             defaultText: AppPromptDefaults.text(for: .enhancement),
             variables: ModelSettingsPromptVariables.enhancement
         )
 
-        ModelTableView(title: "Custom LLM Models", rows: customLLMRows, viewportHeight: 260)
+        ModelTableView(title: LocalizedStringKey(localized("Custom LLM Models")), rows: customLLMRows, viewportHeight: 260)
 
         if let downloadStatus = ModelDownloadStatusSnapshot.fromCustomLLMState(
             customLLMManager.state,
@@ -250,10 +254,10 @@ extension ModelSettingsView {
     var remoteASRSection: some View {
         Divider()
 
-        Text("Remote ASR Providers")
+        Text(localized("Remote ASR Providers"))
             .font(.subheadline.weight(.medium))
 
-        ModelTableView(title: "Providers", rows: remoteASRRows, viewportHeight: 220)
+        ModelTableView(title: LocalizedStringKey(localized("Providers")), rows: remoteASRRows, viewportHeight: 220)
     }
 
     @ViewBuilder
@@ -261,19 +265,19 @@ extension ModelSettingsView {
         Divider()
 
         ResettablePromptSection(
-            title: "System Prompt",
+            title: LocalizedStringKey(localized("System Prompt")),
             text: promptBinding(for: $systemPrompt, kind: .enhancement),
             defaultText: AppPromptDefaults.text(for: .enhancement),
             variables: ModelSettingsPromptVariables.enhancement
         )
 
         HStack {
-            Text("Configure a remote provider and model, then click Use.")
+            Text(localized("Configure a remote provider and model, then click Use."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
 
-        ModelTableView(title: "Remote LLM Providers", rows: remoteLLMRows, viewportHeight: 280)
+        ModelTableView(title: LocalizedStringKey(localized("Remote LLM Providers")), rows: remoteLLMRows, viewportHeight: 280)
     }
 }
 
@@ -328,7 +332,7 @@ private struct MLXASRConfigurationSheetView: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("MLX ASR Configuration")
+                    Text(localized("MLX ASR Configuration"))
                         .font(.title3.weight(.semibold))
 
                     Text(modelTitle)
@@ -336,7 +340,7 @@ private struct MLXASRConfigurationSheetView: View {
                         .foregroundStyle(.secondary)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Preset")
+                        Text(localized("Preset"))
                             .font(.subheadline.weight(.medium))
                         SettingsMenuPicker(
                             selection: Binding(
@@ -357,38 +361,38 @@ private struct MLXASRConfigurationSheetView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Toggle("Follow User Main Language", isOn: $hintSettings.followsUserMainLanguage)
+                    Toggle(localized("Follow User Main Language"), isOn: $hintSettings.followsUserMainLanguage)
                         .toggleStyle(.switch)
 
                     HStack(alignment: .top, spacing: 16) {
-                        localInfoRow(label: "Primary language", value: mainLanguageSummary)
-                        localInfoRow(label: "Resolved language", value: resolvedLanguage)
+                        localInfoRow(label: localized("Primary language"), value: mainLanguageSummary)
+                        localInfoRow(label: localized("Resolved language"), value: resolvedLanguage)
                     }
 
-                    localInfoRow(label: "Other languages", value: secondaryLanguageSummary)
+                    localInfoRow(label: localized("Other languages"), value: secondaryLanguageSummary)
 
                     if family.supportsContextBias {
-                        Text("Recognition Context")
+                        Text(localized("Recognition Context"))
                             .font(.subheadline.weight(.medium))
                         PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110, variables: Self.qwenContextVariables)
-                        Text("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription.")
+                        Text(localized("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
                     if family.supportsPromptBias {
-                        Text("Recognition Prompt")
+                        Text(localized("Recognition Prompt"))
                             .font(.subheadline.weight(.medium))
                         PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110, variables: Self.asrLanguageVariables)
-                        Text("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology.")
+                        Text(localized("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
                     if family.supportsITN {
-                        Toggle("Enable ITN", isOn: $tuningSettings.senseVoiceUseITN)
+                        Toggle(localized("Enable ITN"), isOn: $tuningSettings.senseVoiceUseITN)
                             .toggleStyle(.switch)
-                        Text("ITN lets SenseVoice normalize spoken numbers, dates, and similar expressions into written form.")
+                        Text(localized("ITN lets SenseVoice normalize spoken numbers, dates, and similar expressions into written form."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -397,7 +401,7 @@ private struct MLXASRConfigurationSheetView: View {
                         && !family.supportsPromptBias
                         && !family.supportsITN
                     {
-                        Text("This MLX model family currently uses preset-based chunking and language strategy only. Model-native prompt or context controls are not exposed by this family in Voxt yet.")
+                        Text(localized("This MLX model family currently uses preset-based chunking and language strategy only. Model-native prompt or context controls are not exposed by this family in Voxt yet."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -409,13 +413,13 @@ private struct MLXASRConfigurationSheetView: View {
             Divider()
 
             SettingsDialogActionRow {
-                Button("Reset to Default") {
+                Button(localized("Reset to Default")) {
                     hintSettings = ASRHintSettingsStore.defaultSettings(for: .mlxAudio)
                     tuningSettings = MLXLocalTuningSettings.defaults(for: .balanced)
                 }
                 .buttonStyle(SettingsPillButtonStyle())
             } trailing: {
-                Button("Done") {
+                Button(localized("Done")) {
                     onDone()
                 }
                 .buttonStyle(SettingsPrimaryButtonStyle())
@@ -426,7 +430,7 @@ private struct MLXASRConfigurationSheetView: View {
         .frame(width: 520)
     }
 
-    private func localInfoRow(label: LocalizedStringKey, value: String) -> some View {
+    private func localInfoRow(label: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(label)
                 .foregroundStyle(.secondary)
@@ -480,11 +484,11 @@ private struct WhisperASRConfigurationSheetView: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Whisper Configuration")
+                    Text(localized("Whisper Configuration"))
                         .font(.title3.weight(.semibold))
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Preset")
+                        Text(localized("Preset"))
                             .font(.subheadline.weight(.medium))
                         SettingsMenuPicker(
                             selection: Binding(
@@ -505,39 +509,39 @@ private struct WhisperASRConfigurationSheetView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Toggle("Follow User Main Language", isOn: $hintSettings.followsUserMainLanguage)
+                    Toggle(localized("Follow User Main Language"), isOn: $hintSettings.followsUserMainLanguage)
                         .toggleStyle(.switch)
 
                     HStack(alignment: .top, spacing: 16) {
-                        localInfoRow(label: "Primary language", value: mainLanguageSummary)
-                        localInfoRow(label: "Resolved language", value: resolvedLanguage)
+                        localInfoRow(label: localized("Primary language"), value: mainLanguageSummary)
+                        localInfoRow(label: localized("Resolved language"), value: resolvedLanguage)
                     }
 
-                    localInfoRow(label: "Other languages", value: secondaryLanguageSummary)
+                    localInfoRow(label: localized("Other languages"), value: secondaryLanguageSummary)
 
-                    Text("Recognition Prompt")
+                    Text(localized("Recognition Prompt"))
                         .font(.subheadline.weight(.medium))
                     PromptEditorView(text: $hintSettings.promptTemplate, height: 110, variables: Self.asrLanguageVariables)
-                    Text("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise.")
+                    Text(localized("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .center, spacing: 12) {
-                            Toggle("Enable VAD", isOn: $whisperVADEnabled)
+                            Toggle(localized("Enable VAD"), isOn: $whisperVADEnabled)
                                 .toggleStyle(.switch)
-                            Toggle("Enable Timestamps", isOn: $whisperTimestampsEnabled)
+                            Toggle(localized("Enable Timestamps"), isOn: $whisperTimestampsEnabled)
                                 .toggleStyle(.switch)
-                            Toggle("Live Realtime (Experimental)", isOn: $whisperRealtimeEnabled)
+                            Toggle(localized("Live Realtime (Experimental)"), isOn: $whisperRealtimeEnabled)
                                 .toggleStyle(.switch)
                         }
 
-                        Toggle("Keep Resident", isOn: $whisperKeepResidentLoaded)
+                        Toggle(localized("Keep Resident"), isOn: $whisperKeepResidentLoaded)
                             .toggleStyle(.switch)
 
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text("Temperature")
+                                Text(localized("Temperature"))
                                 Spacer()
                                 Text(String(format: "%.1f", whisperTemperature))
                                     .foregroundStyle(.secondary)
@@ -547,14 +551,14 @@ private struct WhisperASRConfigurationSheetView: View {
                         }
 
                         whisperIntegerRow(
-                            title: "Fallback Count",
+                            title: localized("Fallback Count"),
                             value: $tuningSettings.temperatureFallbackCount,
                             range: 0...8
                         )
 
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text("Fallback Increment")
+                                Text(localized("Fallback Increment"))
                                 Spacer()
                                 Text(String(format: "%.1f", tuningSettings.temperatureIncrementOnFallback))
                                     .foregroundStyle(.secondary)
@@ -564,23 +568,23 @@ private struct WhisperASRConfigurationSheetView: View {
                         }
 
                         whisperThresholdRow(
-                            title: "No Speech Threshold",
+                            title: localized("No Speech Threshold"),
                             value: $tuningSettings.noSpeechThreshold,
                             range: 0...1
                         )
                         whisperThresholdRow(
-                            title: "Log Prob Threshold",
+                            title: localized("Log Prob Threshold"),
                             value: $tuningSettings.logProbThreshold,
                             range: -3...0
                         )
                         whisperThresholdRow(
-                            title: "Compression Ratio Threshold",
+                            title: localized("Compression Ratio Threshold"),
                             value: $tuningSettings.compressionRatioThreshold,
                             range: 1...4
                         )
                     }
 
-                    Text("These settings apply to Whisper transcription sessions. Live Realtime (Experimental) streams partial text while you speak and does a final correction after stop. Turn it off to use the quality-first non-live path. Whisper translate is only used when Whisper translation is selected.")
+                    Text(localized("These settings apply to Whisper transcription sessions. Live Realtime (Experimental) streams partial text while you speak and does a final correction after stop. Turn it off to use the quality-first non-live path. Whisper translate is only used when Whisper translation is selected."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -591,7 +595,7 @@ private struct WhisperASRConfigurationSheetView: View {
             Divider()
 
             SettingsDialogActionRow {
-                Button("Reset to Default") {
+                Button(localized("Reset to Default")) {
                     hintSettings = ASRHintSettingsStore.defaultSettings(for: .whisperKit)
                     tuningSettings = WhisperLocalTuningSettings.defaults(for: .balanced)
                     whisperTemperature = 0
@@ -602,7 +606,7 @@ private struct WhisperASRConfigurationSheetView: View {
                 }
                 .buttonStyle(SettingsPillButtonStyle())
             } trailing: {
-                Button("Done") {
+                Button(localized("Done")) {
                     onDone()
                 }
                 .buttonStyle(SettingsPrimaryButtonStyle())
@@ -613,7 +617,7 @@ private struct WhisperASRConfigurationSheetView: View {
         .frame(width: 540)
     }
 
-    private func localInfoRow(label: LocalizedStringKey, value: String) -> some View {
+    private func localInfoRow(label: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(label)
                 .foregroundStyle(.secondary)
@@ -624,7 +628,7 @@ private struct WhisperASRConfigurationSheetView: View {
     }
 
     private func whisperThresholdRow(
-        title: LocalizedStringKey,
+        title: String,
         value: Binding<Double>,
         range: ClosedRange<Double>
     ) -> some View {
@@ -641,7 +645,7 @@ private struct WhisperASRConfigurationSheetView: View {
     }
 
     private func whisperIntegerRow(
-        title: LocalizedStringKey,
+        title: String,
         value: Binding<Int>,
         range: ClosedRange<Int>
     ) -> some View {

@@ -1,5 +1,9 @@
 import SwiftUI
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 enum TranscriptionDetailPresentationStyle {
     case popover
     case window
@@ -61,7 +65,7 @@ struct TranscriptionDetailContentView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: stackSpacing) {
-                detailSection(title: String(localized: "Text")) {
+                detailSection(title: localized("Text")) {
                     Text(entry.text)
                         .font(.system(size: style == .popover ? 13 : 14, weight: .medium))
                         .foregroundStyle(.primary)
@@ -71,31 +75,31 @@ struct TranscriptionDetailContentView: View {
                         .textSelection(.enabled)
                 }
 
-                detailSection(title: String(localized: "Metadata")) {
-                    detailLine(label: String(localized: "Type"), value: historyKindTitle(entry.kind))
-                    detailLine(label: String(localized: "Created At"), value: formattedDate(entry.createdAt))
-                    detailLine(label: String(localized: "Engine"), value: entry.transcriptionEngine)
-                    detailLine(label: String(localized: "Model"), value: entry.transcriptionModel)
+                detailSection(title: localized("Metadata")) {
+                    detailLine(label: localized("Type"), value: historyKindTitle(entry.kind))
+                    detailLine(label: localized("Created At"), value: formattedDate(entry.createdAt))
+                    detailLine(label: localized("Engine"), value: entry.transcriptionEngine)
+                    detailLine(label: localized("Model"), value: entry.transcriptionModel)
                     detailLine(label: modeMetadataLabel(for: entry.kind), value: entry.enhancementMode)
                     detailLine(label: modelMetadataLabel(for: entry.kind), value: entry.enhancementModel)
-                    optionalDetailLine(label: String(localized: "Audio Duration"), value: formattedDuration(entry.audioDurationSeconds))
-                    optionalDetailLine(label: String(localized: "ASR Processing"), value: formattedDuration(entry.transcriptionProcessingDurationSeconds))
-                    optionalDetailLine(label: String(localized: "LLM Duration"), value: formattedDuration(entry.llmDurationSeconds))
-                    optionalDetailLine(label: String(localized: "Remote ASR Provider"), value: entry.remoteASRProvider)
-                    optionalDetailLine(label: String(localized: "Remote ASR Model"), value: entry.remoteASRModel)
-                    optionalDetailLine(label: String(localized: "Remote ASR Endpoint"), value: entry.remoteASREndpoint)
-                    optionalDetailLine(label: String(localized: "Remote LLM Provider"), value: entry.remoteLLMProvider)
-                    optionalDetailLine(label: String(localized: "Remote LLM Model"), value: entry.remoteLLMModel)
-                    optionalDetailLine(label: String(localized: "Remote LLM Endpoint"), value: entry.remoteLLMEndpoint)
-                    optionalDetailLine(label: String(localized: "Focused App"), value: entry.focusedAppName)
-                    optionalDetailLine(label: String(localized: "Focused App Bundle ID"), value: entry.focusedAppBundleID)
-                    optionalDetailLine(label: String(localized: "Matched Group"), value: entry.matchedGroupName)
-                    optionalDetailLine(label: String(localized: "App Group"), value: entry.matchedAppGroupName)
-                    optionalDetailLine(label: String(localized: "URL Group"), value: entry.matchedURLGroupName)
+                    optionalDetailLine(label: localized("Audio Duration"), value: formattedDuration(entry.audioDurationSeconds))
+                    optionalDetailLine(label: localized("ASR Processing"), value: formattedDuration(entry.transcriptionProcessingDurationSeconds))
+                    optionalDetailLine(label: localized("LLM Duration"), value: formattedDuration(entry.llmDurationSeconds))
+                    optionalDetailLine(label: localized("Remote ASR Provider"), value: entry.remoteASRProvider)
+                    optionalDetailLine(label: localized("Remote ASR Model"), value: entry.remoteASRModel)
+                    optionalDetailLine(label: localized("Remote ASR Endpoint"), value: entry.remoteASREndpoint)
+                    optionalDetailLine(label: localized("Remote LLM Provider"), value: entry.remoteLLMProvider)
+                    optionalDetailLine(label: localized("Remote LLM Model"), value: entry.remoteLLMModel)
+                    optionalDetailLine(label: localized("Remote LLM Endpoint"), value: entry.remoteLLMEndpoint)
+                    optionalDetailLine(label: localized("Focused App"), value: entry.focusedAppName)
+                    optionalDetailLine(label: localized("Focused App Bundle ID"), value: entry.focusedAppBundleID)
+                    optionalDetailLine(label: localized("Matched Group"), value: entry.matchedGroupName)
+                    optionalDetailLine(label: localized("App Group"), value: entry.matchedAppGroupName)
+                    optionalDetailLine(label: localized("URL Group"), value: entry.matchedURLGroupName)
                 }
 
                 if playbackController.isAvailable {
-                    detailSection(title: String(localized: "Audio")) {
+                    detailSection(title: localized("Audio")) {
                         HistoryAudioPlayerView(
                             controller: playbackController,
                             compact: style == .popover
@@ -105,7 +109,7 @@ struct TranscriptionDetailContentView: View {
 
                 if let whisperWordTimings = entry.whisperWordTimings,
                    !whisperWordTimings.isEmpty {
-                    detailSection(title: String(localized: "Whisper Timestamps")) {
+                    detailSection(title: localized("Whisper Timestamps")) {
                         ForEach(Array(whisperWordTimings.enumerated()), id: \.offset) { _, timing in
                             detailLine(
                                 label: timeRangeLabel(for: timing),
@@ -117,7 +121,7 @@ struct TranscriptionDetailContentView: View {
 
                 if let meetingSegments = entry.meetingSegments,
                    !meetingSegments.isEmpty {
-                    detailSection(title: String(localized: "Meeting Segments")) {
+                    detailSection(title: localized("Meeting Segments")) {
                         ForEach(meetingSegments) { segment in
                             detailLine(
                                 label: "\(MeetingTranscriptFormatter.timestampString(for: segment.startSeconds)) · \(segment.speaker.displayTitle)",
@@ -128,22 +132,22 @@ struct TranscriptionDetailContentView: View {
                 }
 
                 if hasDictionaryActivity {
-                    detailSection(title: String(localized: "Dictionary")) {
+                    detailSection(title: localized("Dictionary")) {
                         if !entry.dictionaryHitTerms.isEmpty {
                             detailTagGroup(
-                                title: String(localized: "Matched dictionary terms"),
+                                title: localized("Matched dictionary terms"),
                                 values: entry.dictionaryHitTerms
                             )
                         }
                         if !entry.dictionaryCorrectedTerms.isEmpty {
                             detailTagGroup(
-                                title: String(localized: "Corrected terms"),
+                                title: localized("Corrected terms"),
                                 values: entry.dictionaryCorrectedTerms
                             )
                         }
                         if !entry.dictionarySuggestedTerms.isEmpty {
                             detailTagGroup(
-                                title: String(localized: "Suggested terms"),
+                                title: localized("Suggested terms"),
                                 values: entry.dictionarySuggestedTerms.map(\.term)
                             )
                         }
@@ -226,39 +230,39 @@ struct TranscriptionDetailContentView: View {
     private func historyKindTitle(_ kind: TranscriptionHistoryKind) -> String {
         switch kind {
         case .normal:
-            return String(localized: "Transcription")
+            return localized("Transcription")
         case .translation:
-            return String(localized: "Translation")
+            return localized("Translation")
         case .rewrite:
-            return String(localized: "Rewrite")
+            return localized("Rewrite")
         case .meeting:
-            return String(localized: "Meeting")
+            return localized("Meeting")
         }
     }
 
     private func modeMetadataLabel(for kind: TranscriptionHistoryKind) -> String {
         switch kind {
         case .normal:
-            return String(localized: "Enhancement")
+            return localized("Enhancement")
         case .translation:
-            return String(localized: "Translation Mode")
+            return localized("Translation Mode")
         case .rewrite:
-            return String(localized: "Rewrite Mode")
+            return localized("Rewrite Mode")
         case .meeting:
-            return String(localized: "Summary Mode")
+            return localized("Summary Mode")
         }
     }
 
     private func modelMetadataLabel(for kind: TranscriptionHistoryKind) -> String {
         switch kind {
         case .normal:
-            return String(localized: "Enhancer Model")
+            return localized("Enhancer Model")
         case .translation:
-            return String(localized: "Translation Model")
+            return localized("Translation Model")
         case .rewrite:
-            return String(localized: "Rewrite Model")
+            return localized("Rewrite Model")
         case .meeting:
-            return String(localized: "Summary Model")
+            return localized("Summary Model")
         }
     }
 
@@ -278,22 +282,22 @@ struct TranscriptionDetailContentView: View {
     private func formattedDuration(_ seconds: TimeInterval?) -> String? {
         guard let seconds else { return nil }
         if seconds < 1 {
-            let format = NSLocalizedString("%d ms", comment: "")
+            let format = localized("%d ms")
             return String(format: format, locale: locale, Int(seconds * 1000))
         }
         if seconds < 60 {
-            let format = NSLocalizedString("%.1f s", comment: "")
+            let format = localized("%.1f s")
             return String(format: format, locale: locale, seconds)
         }
         let minutes = Int(seconds) / 60
         let remain = Int(seconds) % 60
-        let format = NSLocalizedString("%dm %ds", comment: "")
+        let format = localized("%dm %ds")
         return String(format: format, locale: locale, minutes, remain)
     }
 
     private func timeRangeLabel(for timing: WhisperHistoryWordTiming) -> String {
         String(
-            format: NSLocalizedString("%.2fs → %.2fs", comment: ""),
+            format: localized("%.2fs → %.2fs"),
             locale: locale,
             timing.startSeconds,
             timing.endSeconds

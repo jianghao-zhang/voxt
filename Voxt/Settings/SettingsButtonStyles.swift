@@ -7,9 +7,9 @@ struct SettingsSidebarItemButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 12.5, weight: .medium))
             .foregroundStyle(isActive ? Color.white : Color.primary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, SettingsUIStyle.sidebarItemHorizontalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 34)
+            .frame(height: SettingsUIStyle.sidebarItemHeight)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(

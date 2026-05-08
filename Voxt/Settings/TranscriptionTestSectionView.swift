@@ -1,5 +1,9 @@
 import SwiftUI
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 struct TranscriptionTestSectionView: View {
     @State private var currentTestCaseIndex = 0
     @State private var testInputText = ""
@@ -15,10 +19,10 @@ struct TranscriptionTestSectionView: View {
     var body: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Test")
+                Text(localized("Test"))
                     .font(.headline)
 
-                Text("Switch sample text with dots, then paste your transcription below to compare differences.")
+                Text(localized("Switch sample text with dots, then paste your transcription below to compare differences."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -66,7 +70,7 @@ struct TranscriptionTestSectionView: View {
                                 .strokeBorder(.quaternary, lineWidth: 1)
                         )
 
-                    Button("Clean") {
+                    Button(localized("Clean")) {
                         testInputText = ""
                     }
                     .controlSize(.small)

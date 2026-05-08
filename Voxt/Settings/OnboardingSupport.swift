@@ -83,7 +83,6 @@ enum OnboardingContextualPermission: Hashable {
 struct OnboardingPermissionRequirementContext {
     let selectedEngine: TranscriptionEngine
     let muteSystemAudioWhileRecording: Bool
-    let meetingNotesEnabled: Bool
 }
 
 enum OnboardingPermissionRequirementResolver {
@@ -105,14 +104,6 @@ enum OnboardingPermissionRequirementResolver {
                 permissions.append(.systemAudioCapture)
             }
             return permissions
-        case .meeting:
-            guard context.meetingNotesEnabled else { return [] }
-            return [
-                .microphone,
-                .accessibility,
-                .inputMonitoring,
-                .systemAudioCapture
-            ]
         case .language, .model, .translation, .rewrite, .appEnhancement, .finish:
             return []
         }
@@ -236,5 +227,4 @@ enum OnboardingTranslationTest {
 
 enum OnboardingVideoDemo {
     static let appEnhancementURL = URL(string: "https://storage.actnow.dev/common/voxt/voxt-app-branch-demo.mp4")!
-    static let meetingURL = URL(string: "https://storage.actnow.dev/common/voxt/voxt-meeting-record-demo.mp4")!
 }

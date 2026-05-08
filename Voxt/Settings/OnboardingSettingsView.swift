@@ -66,7 +66,6 @@ struct OnboardingSettingsView: View {
     @State var rewriteTestPrompt = OnboardingRewriteTest.defaultPrompt
     @State var rewriteTestSourceText = OnboardingRewriteTest.defaultSourceText
     @State var appEnhancementDemoPlayer: AVPlayer?
-    @State var meetingDemoPlayer: AVPlayer?
     @State var featureSettings = FeatureSettingsStore.load(defaults: .standard)
     @State private var permissionRefreshRevision = 0
     @State var permissionMonitoringKinds: Set<OnboardingContextualPermission> = []
@@ -405,7 +404,7 @@ struct OnboardingSettingsView: View {
                                 .frame(width: 12, alignment: .leading)
                                 .foregroundStyle(step == currentStep ? Color.white.opacity(0.82) : .secondary)
 
-                            Text(step.titleKey)
+                            Text(step.title)
                                 .font(.system(size: 13, weight: .medium))
                                 .lineLimit(1)
 
@@ -446,7 +445,7 @@ struct OnboardingSettingsView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 11, weight: .semibold))
-                                Text(localized("Previous"))
+                                Text(localized("Prev"))
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -498,9 +497,9 @@ struct OnboardingSettingsView: View {
 
     var onboardingHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(currentStep.titleKey)
+            Text(currentStep.title)
                 .font(.title3.weight(.semibold))
-            Text(currentStep.subtitleKey)
+            Text(currentStep.subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

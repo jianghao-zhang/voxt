@@ -1,6 +1,10 @@
 import SwiftUI
 import AppKit
 
+private func localized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 enum HistoryFilterTab: String, CaseIterable, Identifiable {
     case transcription
     case translation
@@ -13,15 +17,15 @@ enum HistoryFilterTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .transcription:
-            return String(localized: "Transcription")
+            return localized("Transcription")
         case .translation:
-            return String(localized: "Translation")
+            return localized("Translation")
         case .rewrite:
-            return String(localized: "Rewrite")
+            return localized("Rewrite")
         case .meeting:
-            return String(localized: "Meeting")
+            return localized("Meeting")
         case .note:
-            return String(localized: "Notes")
+            return localized("Notes")
         }
     }
 
@@ -51,7 +55,7 @@ struct HistoryFilterTabPicker: View {
                     selectedTab = tab
                 } label: {
                     Text(tab.title)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 4)
                 }
                 .buttonStyle(SettingsSegmentedButtonStyle(isSelected: selectedTab == tab))
             }
@@ -108,7 +112,7 @@ struct HistoryRow: View {
                     }
 
                     if !entry.dictionaryHitTerms.isEmpty {
-                        Text("\(String(localized: "Matched dictionary terms")): \(matchedTermsPreview)")
+                        Text("\(localized("Matched dictionary terms")): \(matchedTermsPreview)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -132,7 +136,7 @@ struct HistoryRow: View {
                     }
 
                     if supportsDetail {
-                        Button(String(localized: "Detail")) {
+                        Button(localized("Detail")) {
                             openDetailWindow()
                         }
                         .buttonStyle(SettingsPillButtonStyle())
@@ -145,7 +149,7 @@ struct HistoryRow: View {
                 }
 
                 if isCopied {
-                    Text(String(localized: "Copied"))
+                    Text(localized("Copied"))
                         .font(.caption)
                         .foregroundStyle(.green)
                 }
@@ -183,20 +187,20 @@ struct HistoryRow: View {
         guard let audioDuration = formattedDuration(entry.audioDurationSeconds) else {
             return dateText
         }
-        let format = NSLocalizedString("%@ · Audio: %@", comment: "")
+        let format = localized("%@ · Audio: %@")
         return String(format: format, locale: locale, dateText, audioDuration)
     }
 
     private var historyBadge: some View {
         Group {
             if entry.kind == .translation {
-                Text(String(localized: "Translation"))
+                Text(localized("Translation"))
             } else if entry.kind == .rewrite {
-                Text(String(localized: "Rewrite"))
+                Text(localized("Rewrite"))
             } else if entry.kind == .meeting {
-                Text(String(localized: "Meeting"))
+                Text(localized("Meeting"))
             } else {
-                Text(String(localized: "Transcription"))
+                Text(localized("Transcription"))
             }
         }
         .font(.system(size: 10, weight: .semibold))
@@ -379,7 +383,7 @@ struct NoteHistoryRow: View {
                 }
 
                 if isCopied {
-                    Text(String(localized: "Copied"))
+                    Text(localized("Copied"))
                         .font(.caption)
                         .foregroundStyle(.green)
                 }
