@@ -1,44 +1,53 @@
 import Foundation
 
 enum ModelDownloadStateRouting {
+    private enum OperationPhase {
+        case idle
+        case downloading
+        case paused
+    }
+
     static func isMLXOperationTarget(
         repo: String,
-        managerRepo: String
+        activeRepo: String?
     ) -> Bool {
-        MLXModelManager.canonicalModelRepo(repo) == MLXModelManager.canonicalModelRepo(managerRepo)
+        guard let activeRepo else { return false }
+        return MLXModelManager.canonicalModelRepo(repo) == MLXModelManager.canonicalModelRepo(activeRepo)
     }
 
     static func isMLXDownloading(
         repo: String,
-        managerRepo: String,
+        activeRepo: String?,
         state: MLXModelManager.ModelState
     ) -> Bool {
-        guard isMLXOperationTarget(repo: repo, managerRepo: managerRepo) else { return false }
-        if case .downloading = state {
-            return true
-        }
-        return false
+        isOperationTargetActive(
+            isTarget: isMLXOperationTarget(repo: repo, activeRepo: activeRepo),
+            phase: operationPhase(for: state),
+            expected: .downloading
+        )
     }
 
     static func isMLXPaused(
         repo: String,
-        managerRepo: String,
+        activeRepo: String?,
         state: MLXModelManager.ModelState
     ) -> Bool {
-        guard isMLXOperationTarget(repo: repo, managerRepo: managerRepo) else { return false }
-        if case .paused = state {
-            return true
-        }
-        return false
+        isOperationTargetActive(
+            isTarget: isMLXOperationTarget(repo: repo, activeRepo: activeRepo),
+            phase: operationPhase(for: state),
+            expected: .paused
+        )
     }
 
     static func isAnotherMLXDownloadActive(
         repo: String,
-        managerRepo: String,
+        activeRepo: String?,
         state: MLXModelManager.ModelState
     ) -> Bool {
-        guard case .downloading = state else { return false }
-        return !isMLXOperationTarget(repo: repo, managerRepo: managerRepo)
+        isAnotherOperationActive(
+            isTarget: isMLXOperationTarget(repo: repo, activeRepo: activeRepo),
+            phase: operationPhase(for: state)
+        )
     }
 
     static func isCustomLLMOperationTarget(
@@ -53,11 +62,11 @@ enum ModelDownloadStateRouting {
         managerRepo: String,
         state: CustomLLMModelManager.ModelState
     ) -> Bool {
-        guard isCustomLLMOperationTarget(repo: repo, managerRepo: managerRepo) else { return false }
-        if case .downloading = state {
-            return true
-        }
-        return false
+        isOperationTargetActive(
+            isTarget: isCustomLLMOperationTarget(repo: repo, managerRepo: managerRepo),
+            phase: operationPhase(for: state),
+            expected: .downloading
+        )
     }
 
     static func isCustomLLMPaused(
@@ -65,11 +74,11 @@ enum ModelDownloadStateRouting {
         managerRepo: String,
         state: CustomLLMModelManager.ModelState
     ) -> Bool {
-        guard isCustomLLMOperationTarget(repo: repo, managerRepo: managerRepo) else { return false }
-        if case .paused = state {
-            return true
-        }
-        return false
+        isOperationTargetActive(
+            isTarget: isCustomLLMOperationTarget(repo: repo, managerRepo: managerRepo),
+            phase: operationPhase(for: state),
+            expected: .paused
+        )
     }
 
     static func isAnotherCustomLLMDownloadActive(
@@ -77,7 +86,46 @@ enum ModelDownloadStateRouting {
         managerRepo: String,
         state: CustomLLMModelManager.ModelState
     ) -> Bool {
-        guard case .downloading = state else { return false }
-        return !isCustomLLMOperationTarget(repo: repo, managerRepo: managerRepo)
+        isAnotherOperationActive(
+            isTarget: isCustomLLMOperationTarget(repo: repo, managerRepo: managerRepo),
+            phase: operationPhase(for: state)
+        )
+    }
+
+    private static func operationPhase(for state: MLXModelManager.ModelState) -> OperationPhase {
+        switch state {
+        case .downloading:
+            return .downloading
+        case .paused:
+            return .paused
+        default:
+            return .idle
+        }
+    }
+
+    private static func operationPhase(for state: CustomLLMModelManager.ModelState) -> OperationPhase {
+        switch state {
+        case .downloading:
+            return .downloading
+        case .paused:
+            return .paused
+        default:
+            return .idle
+        }
+    }
+
+    private static func isOperationTargetActive(
+        isTarget: Bool,
+        phase: OperationPhase,
+        expected: OperationPhase
+    ) -> Bool {
+        isTarget && phase == expected
+    }
+
+    private static func isAnotherOperationActive(
+        isTarget: Bool,
+        phase: OperationPhase
+    ) -> Bool {
+        phase == .downloading && !isTarget
     }
 }

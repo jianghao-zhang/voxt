@@ -49,9 +49,29 @@ enum RecordingStartDecision: Equatable {
 }
 
 enum RecordingStartPlanner {
+    private enum DownloadableModelAvailability {
+        case ready
+        case notDownloaded
+        case downloadingSelectedModel
+        case unavailable
+    }
+
+    private enum DownloadStatePhase {
+        case ready
+        case notDownloaded
+        case activeDownload
+        case unavailable
+    }
+
     static func resolve(
         selectedEngine: TranscriptionEngine,
+        selectedMLXRepo: String? = nil,
+        activeMLXDownloadRepo: String? = nil,
+        isSelectedMLXModelDownloaded: Bool = false,
         mlxModelState: MLXModelManager.ModelState,
+        selectedWhisperModelID: String? = nil,
+        activeWhisperDownloadModelID: String? = nil,
+        isSelectedWhisperModelDownloaded: Bool = false,
         whisperModelState: WhisperKitModelManager.ModelState
     ) -> RecordingStartDecision {
         switch selectedEngine {
@@ -60,27 +80,171 @@ enum RecordingStartPlanner {
         case .remote:
             return .start(.remote)
         case .mlxAudio:
-            switch mlxModelState {
-            case .downloaded, .ready, .loading:
-                return .start(.mlxAudio)
-            case .notDownloaded:
-                return .blocked(.mlxModelNotInstalled)
-            case .downloading, .paused:
-                return .blocked(.mlxModelDownloading)
-            case .error:
-                return .blocked(.mlxModelUnavailable)
-            }
+            return decision(
+                engine: .mlxAudio,
+                availability: mlxAvailability(
+                    selectedRepo: selectedMLXRepo,
+                    activeDownloadRepo: activeMLXDownloadRepo,
+                    isSelectedModelDownloaded: isSelectedMLXModelDownloaded,
+                    state: mlxModelState
+                ),
+                notInstalledReason: .mlxModelNotInstalled,
+                downloadingReason: .mlxModelDownloading,
+                unavailableReason: .mlxModelUnavailable
+            )
         case .whisperKit:
-            switch whisperModelState {
-            case .downloaded, .ready, .loading:
-                return .start(.whisperKit)
-            case .notDownloaded:
-                return .blocked(.whisperModelNotInstalled)
-            case .downloading, .paused:
-                return .blocked(.whisperModelDownloading)
-            case .error:
-                return .blocked(.whisperModelUnavailable)
-            }
+            return decision(
+                engine: .whisperKit,
+                availability: whisperAvailability(
+                    selectedModelID: selectedWhisperModelID,
+                    activeDownloadModelID: activeWhisperDownloadModelID,
+                    isSelectedModelDownloaded: isSelectedWhisperModelDownloaded,
+                    state: whisperModelState
+                ),
+                notInstalledReason: .whisperModelNotInstalled,
+                downloadingReason: .whisperModelDownloading,
+                unavailableReason: .whisperModelUnavailable
+            )
         }
+    }
+
+    private static func decision(
+        engine: TranscriptionEngine,
+        availability: DownloadableModelAvailability,
+        notInstalledReason: RecordingStartBlockReason,
+        downloadingReason: RecordingStartBlockReason,
+        unavailableReason: RecordingStartBlockReason
+    ) -> RecordingStartDecision {
+        switch availability {
+        case .ready:
+            return .start(engine)
+        case .notDownloaded:
+            return .blocked(notInstalledReason)
+        case .downloadingSelectedModel:
+            return .blocked(downloadingReason)
+        case .unavailable:
+            return .blocked(unavailableReason)
+        }
+    }
+
+    private static func mlxAvailability(
+        selectedRepo: String?,
+        activeDownloadRepo: String?,
+        isSelectedModelDownloaded: Bool,
+        state: MLXModelManager.ModelState
+    ) -> DownloadableModelAvailability {
+        availability(
+            selectedIdentifier: selectedRepo,
+            activeIdentifier: activeDownloadRepo,
+            isSelectedModelDownloaded: isSelectedModelDownloaded,
+            canonicalize: MLXModelManager.canonicalModelRepo,
+            state: state
+        )
+    }
+
+    private static func whisperAvailability(
+        selectedModelID: String?,
+        activeDownloadModelID: String?,
+        isSelectedModelDownloaded: Bool,
+        state: WhisperKitModelManager.ModelState
+    ) -> DownloadableModelAvailability {
+        availability(
+            selectedIdentifier: selectedModelID,
+            activeIdentifier: activeDownloadModelID,
+            isSelectedModelDownloaded: isSelectedModelDownloaded,
+            canonicalize: WhisperKitModelManager.canonicalModelID,
+            state: state
+        )
+    }
+
+    private static func availability(
+        selectedIdentifier: String?,
+        activeIdentifier: String?,
+        isSelectedModelDownloaded: Bool,
+        canonicalize: (String) -> String,
+        state: MLXModelManager.ModelState
+    ) -> DownloadableModelAvailability {
+        availability(
+            isSelectedDownloadActive: isSelectedOperationActive(
+                selectedIdentifier: selectedIdentifier,
+                activeIdentifier: activeIdentifier,
+                canonicalize: canonicalize
+            ),
+            isSelectedModelDownloaded: isSelectedModelDownloaded,
+            phase: downloadStatePhase(for: state)
+        )
+    }
+
+    private static func availability(
+        selectedIdentifier: String?,
+        activeIdentifier: String?,
+        isSelectedModelDownloaded: Bool,
+        canonicalize: (String) -> String,
+        state: WhisperKitModelManager.ModelState
+    ) -> DownloadableModelAvailability {
+        availability(
+            isSelectedDownloadActive: isSelectedOperationActive(
+                selectedIdentifier: selectedIdentifier,
+                activeIdentifier: activeIdentifier,
+                canonicalize: canonicalize
+            ),
+            isSelectedModelDownloaded: isSelectedModelDownloaded,
+            phase: downloadStatePhase(for: state)
+        )
+    }
+
+    private static func availability(
+        isSelectedDownloadActive: Bool,
+        isSelectedModelDownloaded: Bool,
+        phase: DownloadStatePhase
+    ) -> DownloadableModelAvailability {
+        switch phase {
+        case .ready:
+            return .ready
+        case .notDownloaded:
+            return .notDownloaded
+        case .activeDownload:
+            if isSelectedDownloadActive {
+                return .downloadingSelectedModel
+            }
+            return isSelectedModelDownloaded ? .ready : .notDownloaded
+        case .unavailable:
+            return .unavailable
+        }
+    }
+
+    private static func downloadStatePhase(for state: MLXModelManager.ModelState) -> DownloadStatePhase {
+        switch state {
+        case .downloaded, .ready, .loading:
+            return .ready
+        case .notDownloaded:
+            return .notDownloaded
+        case .downloading, .paused:
+            return .activeDownload
+        case .error:
+            return .unavailable
+        }
+    }
+
+    private static func downloadStatePhase(for state: WhisperKitModelManager.ModelState) -> DownloadStatePhase {
+        switch state {
+        case .downloaded, .ready, .loading:
+            return .ready
+        case .notDownloaded:
+            return .notDownloaded
+        case .downloading, .paused:
+            return .activeDownload
+        case .error:
+            return .unavailable
+        }
+    }
+
+    private static func isSelectedOperationActive(
+        selectedIdentifier: String?,
+        activeIdentifier: String?,
+        canonicalize: (String) -> String
+    ) -> Bool {
+        guard let selectedIdentifier, let activeIdentifier else { return false }
+        return canonicalize(selectedIdentifier) == canonicalize(activeIdentifier)
     }
 }
