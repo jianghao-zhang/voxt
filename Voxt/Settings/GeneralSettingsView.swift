@@ -19,6 +19,7 @@ struct GeneralSettingsView: View {
     @AppStorage(AppPreferenceKey.meetingNotesBetaEnabled) private var meetingNotesBetaEnabled = false
     @AppStorage(AppPreferenceKey.hideMeetingOverlayFromScreenSharing) private var hideMeetingOverlayFromScreenSharing = false
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) private var autoCopyWhenNoFocusedInput = false
+    @AppStorage(AppPreferenceKey.realtimeTextDisplayEnabled) private var realtimeTextDisplayEnabled = true
     @AppStorage(AppPreferenceKey.customPasteHotkeyEnabled) private var customPasteHotkeyEnabled = false
     @AppStorage(AppPreferenceKey.customPasteHotkeyKeyCode) private var customPasteHotkeyKeyCode = Int(HotkeyPreference.defaultCustomPasteKeyCode)
     @AppStorage(AppPreferenceKey.customPasteHotkeyModifiers) private var customPasteHotkeyModifiers = Int(HotkeyPreference.defaultCustomPasteModifiers.rawValue)
@@ -85,33 +86,22 @@ struct GeneralSettingsView: View {
     }
 
     private var userMainLanguageSummary: String {
-        let codes = selectedUserMainLanguageCodes
-        guard let primaryCode = codes.first,
-              let primaryOption = UserMainLanguageOption.option(for: primaryCode)
-        else {
-            return UserMainLanguageOption.fallbackOption().title()
-        }
-
-        if codes.count == 1 {
-            return primaryOption.title()
-        }
-
-        let format = AppLocalization.localizedString("%@ + %d more")
-        return String(format: format, primaryOption.title(), codes.count - 1)
+        GeneralSettingsData.userMainLanguageSummary(selectedCodes: selectedUserMainLanguageCodes)
     }
 
     private var currentCustomPasteHotkey: HotkeyPreference.Hotkey {
-        let modifiers = NSEvent.ModifierFlags(rawValue: UInt(customPasteHotkeyModifiers)).intersection(.hotkeyRelevant)
-        return HotkeyPreference.Hotkey(
-            keyCode: UInt16(customPasteHotkeyKeyCode),
-            modifiers: modifiers,
-            sidedModifiers: SidedModifierFlags(rawValue: customPasteHotkeySidedModifiers).filtered(by: modifiers)
+        GeneralSettingsData.customPasteHotkey(
+            keyCode: customPasteHotkeyKeyCode,
+            modifiersRawValue: customPasteHotkeyModifiers,
+            sidedModifiersRawValue: customPasteHotkeySidedModifiers
         )
     }
 
     private var currentCustomPasteHotkeyDisplayString: String {
-        HotkeyPreference.displayString(
-            for: currentCustomPasteHotkey,
+        GeneralSettingsData.customPasteHotkeyDisplayString(
+            keyCode: customPasteHotkeyKeyCode,
+            modifiersRawValue: customPasteHotkeyModifiers,
+            sidedModifiersRawValue: customPasteHotkeySidedModifiers,
             distinguishModifierSides: hotkeyDistinguishModifierSides
         )
     }
@@ -157,6 +147,7 @@ struct GeneralSettingsView: View {
 
             GeneralOutputCard(
                 autoCopyWhenNoFocusedInput: $autoCopyWhenNoFocusedInput,
+                realtimeTextDisplayEnabled: $realtimeTextDisplayEnabled,
                 customPasteHotkeyEnabled: $customPasteHotkeyEnabled,
                 customPasteHotkeyDisplayString: currentCustomPasteHotkeyDisplayString
             )
@@ -253,15 +244,18 @@ struct GeneralSettingsView: View {
             postOverlayAppearanceDidChange()
         }
         .onChange(of: overlayCardOpacity) { _, newValue in
-            overlayCardOpacity = min(max(newValue, 0), 100)
+            overlayCardOpacity = GeneralSettingsData.clampedOverlayOpacity(newValue)
             postOverlayAppearanceDidChange()
         }
         .onChange(of: overlayCardCornerRadius) { _, newValue in
-            overlayCardCornerRadius = min(max(newValue, 0), 40)
+            overlayCardCornerRadius = GeneralSettingsData.clampedOverlayCornerRadius(newValue)
+            postOverlayAppearanceDidChange()
+        }
+        .onChange(of: realtimeTextDisplayEnabled) { _, _ in
             postOverlayAppearanceDidChange()
         }
         .onChange(of: overlayScreenEdgeInset) { _, newValue in
-            overlayScreenEdgeInset = min(max(newValue, 0), 120)
+            overlayScreenEdgeInset = GeneralSettingsData.clampedOverlayScreenEdgeInset(newValue)
             postOverlayAppearanceDidChange()
         }
         .onChange(of: customProxyUsername) { _, _ in

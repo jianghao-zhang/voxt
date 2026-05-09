@@ -21,8 +21,9 @@ extension ModelSettingsView {
         if UserDefaults.standard.object(forKey: AppPreferenceKey.whisperRealtimeEnabled) == nil {
             whisperRealtimeEnabled = false
         }
-        if UserDefaults.standard.object(forKey: AppPreferenceKey.whisperKeepResidentLoaded) == nil {
-            whisperKeepResidentLoaded = true
+        if UserDefaults.standard.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) == nil {
+            let legacyKeepResident = UserDefaults.standard.object(forKey: AppPreferenceKey.whisperKeepResidentLoaded) as? Bool
+            localModelMemoryOptimizationEnabled = legacyKeepResident.map { !$0 } ?? true
         }
 
         if customLLMRepo.isEmpty {
@@ -63,7 +64,9 @@ extension ModelSettingsView {
         ensureTranslationModelSelectionConsistency()
         ensureRewriteModelSelectionConsistency()
         updateMirrorSetting()
-        whisperModelManager.refreshResidencyPolicy()
+        mlxModelManager.refreshMemoryOptimizationPolicy()
+        customLLMManager.refreshMemoryOptimizationPolicy()
+        whisperModelManager.refreshMemoryOptimizationPolicy()
         DispatchQueue.main.async {
             refreshModelInstallStateIfNeeded()
         }

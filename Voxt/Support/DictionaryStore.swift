@@ -256,6 +256,14 @@ struct DictionaryCorrectionResult {
     let text: String
     let candidates: [DictionaryMatchCandidate]
     let correctedTerms: [String]
+    let correctionSnapshots: [DictionaryCorrectionSnapshot]
+}
+
+struct DictionaryCorrectionSnapshot: Codable, Hashable {
+    let originalText: String
+    let correctedText: String
+    let finalLocation: Int
+    let finalLength: Int
 }
 
 struct DictionaryImportResult: Equatable {
@@ -295,15 +303,36 @@ private struct DictionaryPreparedEntryInput {
 final class DictionaryStore: ObservableObject {
     @Published private(set) var entries: [DictionaryEntry] = []
 
-    private let defaults = UserDefaults.standard
-    private let fileManager = FileManager.default
+    private let defaults: UserDefaults
+    private let fileManager: FileManager
     private var reloadGeneration = 0
-    private let persistenceCoordinator = AsyncJSONPersistenceCoordinator(
-        label: "com.voxt.dictionary.persistence"
-    )
+    private var filteredEntriesCache: [DictionaryFilter: [DictionaryEntry]] = [:]
+    private let persistenceCoordinator: AsyncJSONPersistenceCoordinator
 
-    init() {
-        reload()
+    convenience init() {
+        self.init(
+            defaults: .standard,
+            fileManager: .default,
+            persistenceCoordinator: AsyncJSONPersistenceCoordinator(
+                label: "com.voxt.dictionary.persistence"
+            )
+        )
+    }
+
+    init(
+        defaults: UserDefaults,
+        fileManager: FileManager,
+        persistenceCoordinator: AsyncJSONPersistenceCoordinator,
+        initialEntries: [DictionaryEntry]? = nil
+    ) {
+        self.defaults = defaults
+        self.fileManager = fileManager
+        self.persistenceCoordinator = persistenceCoordinator
+        if let initialEntries {
+            applyReloadedEntries(initialEntries)
+        } else {
+            reload()
+        }
     }
 
     func reload() {
@@ -354,14 +383,20 @@ final class DictionaryStore: ObservableObject {
     }
 
     func filteredEntries(for filter: DictionaryFilter) -> [DictionaryEntry] {
-        switch filter {
-        case .all:
-            return entries
-        case .autoAdded:
-            return entries.filter { $0.source == .auto }
-        case .manualAdded:
-            return entries.filter { $0.source == .manual }
-        }
+        filteredEntriesCache[filter] ?? entries
+    }
+
+    func promptBiasTermsText(
+        activeGroupID: UUID?,
+        maxCount: Int = 24,
+        maxCharacters: Int = 320
+    ) -> String {
+        DictionaryEntryCollection.promptBiasTermsText(
+            from: entries,
+            activeGroupID: activeGroupID,
+            maxCount: maxCount,
+            maxCharacters: maxCharacters
+        )
     }
 
     func createManualEntry(
@@ -417,8 +452,9 @@ final class DictionaryStore: ObservableObject {
             updatedAt: now,
             replacementTerms: prepared.replacementTerms
         )
-        entries.insert(entry, at: 0)
-        entries = sortEntries(entries)
+        var updatedEntries = entries
+        updatedEntries.insert(entry, at: 0)
+        replaceEntries(updatedEntries)
         persist()
     }
 
@@ -445,17 +481,17 @@ final class DictionaryStore: ObservableObject {
 
         let reservedKeys = Set([prepared.normalized] + prepared.replacementTerms.map(\.normalizedText))
         entries[index].observedVariants.removeAll { reservedKeys.contains($0.normalizedText) }
-        entries = sortEntries(entries)
+        replaceEntries(entries)
         persist()
     }
 
     func delete(id: UUID) {
-        entries.removeAll { $0.id == id }
+        replaceEntries(entries.filter { $0.id != id }, sort: false)
         persist()
     }
 
     func clearAll() {
-        entries = []
+        replaceEntries([], sort: false)
         persist()
     }
 
@@ -469,7 +505,6 @@ final class DictionaryStore: ObservableObject {
     }
 
     func makeMatcherIfEnabled(activeGroupID: UUID?) -> DictionaryMatcher? {
-        guard defaults.bool(forKey: AppPreferenceKey.dictionaryRecognitionEnabled) else { return nil }
         let configuration = matcherConfiguration(for: activeGroupID)
         guard !configuration.entries.isEmpty else { return nil }
         return DictionaryMatcher(
@@ -490,7 +525,12 @@ final class DictionaryStore: ObservableObject {
         guard let matcher = makeMatcherIfEnabled(activeGroupID: activeGroupID) else { return nil }
         let candidates = matcher.recallCandidates(in: text)
         guard !candidates.isEmpty else { return nil }
-        return DictionaryCorrectionResult(text: text, candidates: candidates, correctedTerms: [])
+        return DictionaryCorrectionResult(
+            text: text,
+            candidates: candidates,
+            correctedTerms: [],
+            correctionSnapshots: []
+        )
     }
 
     func glossaryContext(for text: String, activeGroupID: UUID?) -> DictionaryPromptContext? {
@@ -510,19 +550,17 @@ final class DictionaryStore: ObservableObject {
     }
 
     func activeEntriesForRemoteRequest(activeGroupID: UUID?) -> [DictionaryEntry] {
-        guard defaults.bool(forKey: AppPreferenceKey.dictionaryRecognitionEnabled) else { return [] }
-        return matcherConfiguration(for: activeGroupID).entries.filter { $0.status == .active }
+        DictionaryEntryCollection.activeEntriesForRemoteRequest(from: entries, activeGroupID: activeGroupID)
     }
 
     func activeEntriesAcrossAllScopesForRemoteSync() -> [DictionaryEntry] {
-        guard defaults.bool(forKey: AppPreferenceKey.dictionaryRecognitionEnabled) else { return [] }
         return entries.filter { $0.status == .active }
     }
 
     func recordMatches(_ candidates: [DictionaryMatchCandidate]) {
         recordCandidates(candidates)
         guard !candidates.isEmpty else { return }
-        entries = sortEntries(entries)
+        replaceEntries(entries)
         persist()
     }
 
@@ -552,14 +590,16 @@ final class DictionaryStore: ObservableObject {
     }
 
     private func matcherConfiguration(for activeGroupID: UUID?) -> (entries: [DictionaryEntry], blockedGlobalMatchKeys: Set<String>) {
-        let globals = entries.filter { $0.status == .active && $0.groupID == nil }
-        guard let activeGroupID else {
-            return (globals, [])
-        }
-
-        let scoped = entries.filter { $0.status == .active && $0.groupID == activeGroupID }
-        let blockedKeys = Set(scoped.flatMap(\.matchKeys))
-        return (scoped + globals, blockedKeys)
+        (
+            entries: DictionaryEntryCollection.activeEntriesForRemoteRequest(
+                from: entries,
+                activeGroupID: activeGroupID
+            ),
+            blockedGlobalMatchKeys: DictionaryEntryCollection.blockedGlobalMatchKeys(
+                from: entries,
+                activeGroupID: activeGroupID
+            )
+        )
     }
 
     private func prepareEntryInput(
@@ -660,7 +700,7 @@ final class DictionaryStore: ObservableObject {
             }
         }
 
-        entries = sortEntries(mergedEntries)
+        replaceEntries(mergedEntries)
         persist()
         return DictionaryImportResult(addedCount: addedCount, skippedCount: skippedCount)
     }
@@ -758,15 +798,16 @@ final class DictionaryStore: ObservableObject {
     }
 
     private func sortEntries(_ values: [DictionaryEntry]) -> [DictionaryEntry] {
-        values.sorted {
-            if $0.updatedAt == $1.updatedAt {
-                return $0.term.localizedCaseInsensitiveCompare($1.term) == .orderedAscending
-            }
-            return $0.updatedAt > $1.updatedAt
-        }
+        DictionaryEntryCollection.sortedEntries(values)
     }
 
     private func applyReloadedEntries(_ decodedEntries: [DictionaryEntry]) {
-        entries = sortEntries(decodedEntries)
+        replaceEntries(decodedEntries)
+    }
+
+    private func replaceEntries(_ values: [DictionaryEntry], sort: Bool = true) {
+        let resolvedEntries = sort ? sortEntries(values) : values
+        entries = resolvedEntries
+        filteredEntriesCache = DictionaryEntryCollection.filteredEntriesCache(for: resolvedEntries)
     }
 }

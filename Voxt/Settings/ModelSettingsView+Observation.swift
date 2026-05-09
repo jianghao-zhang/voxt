@@ -18,7 +18,7 @@ extension ModelSettingsView {
                 .onChange(of: whisperModelID) { _, newValue in
                     handleWhisperModelIDChange(newValue)
                 }
-                .onChange(of: whisperKeepResidentLoaded) { _, _ in
+                .onChange(of: localModelMemoryOptimizationEnabled) { _, _ in
                     handleWhisperResidencyTriggerChange()
                 }
                 .onChange(of: engineRaw) { _, _ in
@@ -126,8 +126,10 @@ extension ModelSettingsView {
     }
 
     func handleWhisperResidencyTriggerChange() {
-        whisperModelManager.refreshResidencyPolicy()
-        guard selectedEngine == .whisperKit, whisperKeepResidentLoaded else { return }
+        mlxModelManager.refreshMemoryOptimizationPolicy()
+        customLLMManager.refreshMemoryOptimizationPolicy()
+        whisperModelManager.refreshMemoryOptimizationPolicy()
+        guard selectedEngine == .whisperKit, !localModelMemoryOptimizationEnabled else { return }
         Task { @MainActor in
             whisperModelManager.beginActiveUse()
             defer { whisperModelManager.endActiveUse() }

@@ -29,6 +29,7 @@ extension AppDelegate {
             context.outputText = result.text
             context.dictionaryMatches = result.candidates
             context.dictionaryCorrectedTerms = result.correctedTerms
+            context.dictionaryCorrectionSnapshots = result.correctionSnapshots
         }
     }
 
@@ -79,7 +80,7 @@ extension AppDelegate {
     }
 
     private struct AppendHistoryStage: SessionFinalizeStage {
-        let append: (String, String?, TimeInterval?, [String], [String], [DictionarySuggestionSnapshot]) -> UUID?
+        let append: (String, String?, TimeInterval?, [String], [String], [DictionaryCorrectionSnapshot], [DictionarySuggestionSnapshot]) -> UUID?
 
         var name: String { "appendHistory" }
 
@@ -90,6 +91,7 @@ extension AppDelegate {
                 context.llmDurationSeconds,
                 Self.uniqueTerms(from: context.dictionaryMatches),
                 Self.deduplicatedTerms(context.dictionaryCorrectedTerms),
+                context.dictionaryCorrectionSnapshots,
                 context.dictionarySuggestions.map(\.snapshot)
             )
         }
@@ -152,11 +154,12 @@ extension AppDelegate {
             "Commit transcription prepared payload. inputChars=\(text.count), outputChars=\(context.outputText.count), hasRewritePayload=\(context.rewriteAnswerPayload != nil), dictionaryMatches=\(context.dictionaryMatches.count), dictionaryCorrections=\(context.dictionaryCorrectedTerms.count)"
         )
 
-        deliverCommittedOutput(context) { [weak self] in
+        deliverCommittedOutput(context) { [weak self] didInject in
             guard let self else { return }
             self.finalizeCommittedOutputPostDeliveryAsync(
                 deliveredContext: context,
-                outputMode: sessionOutputMode
+                outputMode: sessionOutputMode,
+                didInject: didInject
             )
             onDeliveryCompleted?()
         }
@@ -169,12 +172,22 @@ extension AppDelegate {
         automaticReplacementEnabled: Bool
     ) -> DictionaryCorrectionResult {
         guard let matcher else {
-            return DictionaryCorrectionResult(text: text, candidates: [], correctedTerms: [])
+            return DictionaryCorrectionResult(
+                text: text,
+                candidates: [],
+                correctedTerms: [],
+                correctionSnapshots: []
+            )
         }
 
         if usesConservativeEvidence {
             let candidates = matcher.recallCandidates(in: text)
-            return DictionaryCorrectionResult(text: text, candidates: candidates, correctedTerms: [])
+            return DictionaryCorrectionResult(
+                text: text,
+                candidates: candidates,
+                correctedTerms: [],
+                correctionSnapshots: []
+            )
         }
 
         return matcher.applyCorrections(
@@ -216,6 +229,7 @@ extension AppDelegate {
             llmDurationSeconds: llmDurationSeconds,
             dictionaryMatches: uniqueDictionaryMatches,
             dictionaryCorrectedTerms: dictionaryCorrection.correctedTerms,
+            dictionaryCorrectionSnapshots: dictionaryCorrection.correctionSnapshots,
             dictionarySuggestions: [],
             historyEntryID: nil,
             rewriteAnswerPayload: rewriteAnswerPayload
@@ -321,7 +335,7 @@ extension AppDelegate {
 
     private func deliverCommittedOutput(
         _ context: SessionFinalizeContext,
-        completion: (() -> Void)? = nil
+        completion: ((Bool) -> Void)? = nil
     ) {
         let delivery = resolvedOutputDelivery(for: context)
         let deliveryLabel: String
@@ -340,9 +354,9 @@ extension AppDelegate {
         switch delivery {
         case .typeText:
             beginOverlayOutputDelivery()
-            typeText(context.outputText) { [weak self] _ in
+            typeText(context.outputText) { [weak self] didInject in
                 self?.endOverlayOutputDelivery()
-                completion?()
+                completion?(didInject)
             }
         case .answerOverlay:
             if overlayState.isRewriteConversationActive, context.rewriteAnswerPayload == nil {
@@ -351,21 +365,23 @@ extension AppDelegate {
                 let payload = resolvedAnswerPayload(for: context)
                 presentRewriteAnswerOverlay(title: payload.title, content: payload.content)
             }
-            completion?()
+            completion?(false)
         case .selectedTextTranslationResultWindow:
             presentSelectedTextTranslationAnswerOverlay(content: context.outputText)
-            completion?()
+            completion?(false)
         }
     }
 
     private func finalizeCommittedOutputPostDeliveryAsync(
         deliveredContext: SessionFinalizeContext,
-        outputMode: SessionOutputMode
+        outputMode: SessionOutputMode,
+        didInject: Bool
     ) {
         let deliveredText = deliveredContext.outputText
         let displayTitle = deliveredContext.rewriteAnswerPayload?.trimmedTitle
         let dictionaryMatches = deliveredContext.dictionaryMatches
         let dictionaryCorrectedTerms = deliveredContext.dictionaryCorrectedTerms
+        let dictionaryCorrectionSnapshots = deliveredContext.dictionaryCorrectionSnapshots
         let llmDurationSeconds = deliveredContext.llmDurationSeconds
 
         Task.detached(priority: .utility) { [weak self] in
@@ -388,9 +404,16 @@ extension AppDelegate {
                     llmDurationSeconds: llmDurationSeconds,
                     dictionaryHitTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryMatches.map(\.term)),
                     dictionaryCorrectedTerms: Self.orderedUniqueDictionaryTerms(from: dictionaryCorrectedTerms),
+                    dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
                     dictionarySuggestedTerms: dictionarySuggestions.map(\.snapshot)
                 )
                 self.overlayState.latestHistoryEntryID = historyEntryID
+                self.scheduleAutomaticDictionaryLearningIfNeeded(
+                    insertedText: deliveredText,
+                    outputMode: outputMode,
+                    didInject: didInject,
+                    historyEntryID: historyEntryID
+                )
                 self.persistDictionaryEvidence(
                     candidates: dictionaryMatches,
                     suggestions: dictionarySuggestions,

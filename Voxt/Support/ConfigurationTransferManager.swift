@@ -76,6 +76,7 @@ enum ConfigurationTransferManager {
         var voiceEndCommandPreset: String
         var voiceEndCommandText: String
         var autoCopyWhenNoFocusedInput: Bool
+        var realtimeTextDisplayEnabled: Bool
         var alwaysShowRewriteAnswerCard: Bool
         var launchAtLogin: Bool
         var showInDock: Bool
@@ -120,6 +121,7 @@ enum ConfigurationTransferManager {
             case voiceEndCommandPreset
             case voiceEndCommandText
             case autoCopyWhenNoFocusedInput
+            case realtimeTextDisplayEnabled
             case alwaysShowRewriteAnswerCard
             case launchAtLogin
             case showInDock
@@ -169,6 +171,7 @@ enum ConfigurationTransferManager {
             voiceEndCommandPreset: String,
             voiceEndCommandText: String,
             autoCopyWhenNoFocusedInput: Bool,
+            realtimeTextDisplayEnabled: Bool,
             alwaysShowRewriteAnswerCard: Bool,
             launchAtLogin: Bool,
             showInDock: Bool,
@@ -213,6 +216,7 @@ enum ConfigurationTransferManager {
             self.voiceEndCommandPreset = voiceEndCommandPreset
             self.voiceEndCommandText = voiceEndCommandText
             self.autoCopyWhenNoFocusedInput = autoCopyWhenNoFocusedInput
+            self.realtimeTextDisplayEnabled = realtimeTextDisplayEnabled
             self.alwaysShowRewriteAnswerCard = alwaysShowRewriteAnswerCard
             self.launchAtLogin = launchAtLogin
             self.showInDock = showInDock
@@ -267,6 +271,7 @@ enum ConfigurationTransferManager {
             voiceEndCommandPreset = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue
             voiceEndCommandText = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandText) ?? ""
             autoCopyWhenNoFocusedInput = try container.decode(Bool.self, forKey: .autoCopyWhenNoFocusedInput)
+            realtimeTextDisplayEnabled = try container.decodeIfPresent(Bool.self, forKey: .realtimeTextDisplayEnabled) ?? true
             alwaysShowRewriteAnswerCard = try container.decodeIfPresent(Bool.self, forKey: .alwaysShowRewriteAnswerCard) ?? false
             launchAtLogin = try container.decode(Bool.self, forKey: .launchAtLogin)
             showInDock = try container.decode(Bool.self, forKey: .showInDock)
@@ -313,6 +318,7 @@ enum ConfigurationTransferManager {
             try container.encode(voiceEndCommandPreset, forKey: .voiceEndCommandPreset)
             try container.encode(voiceEndCommandText, forKey: .voiceEndCommandText)
             try container.encode(autoCopyWhenNoFocusedInput, forKey: .autoCopyWhenNoFocusedInput)
+            try container.encode(realtimeTextDisplayEnabled, forKey: .realtimeTextDisplayEnabled)
             try container.encode(alwaysShowRewriteAnswerCard, forKey: .alwaysShowRewriteAnswerCard)
             try container.encode(launchAtLogin, forKey: .launchAtLogin)
             try container.encode(showInDock, forKey: .showInDock)
@@ -347,6 +353,7 @@ enum ConfigurationTransferManager {
         var whisperVADEnabled: Bool
         var whisperTimestampsEnabled: Bool
         var whisperRealtimeEnabled: Bool
+        var localModelMemoryOptimizationEnabled: Bool
         var whisperKeepResidentLoaded: Bool
         var customLLMModelRepo: String
         var translationCustomLLMModelRepo: String
@@ -377,6 +384,7 @@ enum ConfigurationTransferManager {
             case whisperVADEnabled
             case whisperTimestampsEnabled
             case whisperRealtimeEnabled
+            case localModelMemoryOptimizationEnabled
             case whisperKeepResidentLoaded
             case customLLMModelRepo
             case translationCustomLLMModelRepo
@@ -408,7 +416,7 @@ enum ConfigurationTransferManager {
             whisperVADEnabled: Bool,
             whisperTimestampsEnabled: Bool,
             whisperRealtimeEnabled: Bool,
-            whisperKeepResidentLoaded: Bool,
+            localModelMemoryOptimizationEnabled: Bool,
             customLLMModelRepo: String,
             translationCustomLLMModelRepo: String,
             rewriteCustomLLMModelRepo: String,
@@ -437,7 +445,8 @@ enum ConfigurationTransferManager {
             self.whisperVADEnabled = whisperVADEnabled
             self.whisperTimestampsEnabled = whisperTimestampsEnabled
             self.whisperRealtimeEnabled = whisperRealtimeEnabled
-            self.whisperKeepResidentLoaded = whisperKeepResidentLoaded
+            self.localModelMemoryOptimizationEnabled = localModelMemoryOptimizationEnabled
+            self.whisperKeepResidentLoaded = !localModelMemoryOptimizationEnabled
             self.customLLMModelRepo = customLLMModelRepo
             self.translationCustomLLMModelRepo = translationCustomLLMModelRepo
             self.rewriteCustomLLMModelRepo = rewriteCustomLLMModelRepo
@@ -473,7 +482,14 @@ enum ConfigurationTransferManager {
             whisperVADEnabled = try container.decodeIfPresent(Bool.self, forKey: .whisperVADEnabled) ?? true
             whisperTimestampsEnabled = try container.decodeIfPresent(Bool.self, forKey: .whisperTimestampsEnabled) ?? false
             whisperRealtimeEnabled = try container.decodeIfPresent(Bool.self, forKey: .whisperRealtimeEnabled) ?? false
-            whisperKeepResidentLoaded = try container.decodeIfPresent(Bool.self, forKey: .whisperKeepResidentLoaded) ?? true
+            if let optimizationEnabled = try container.decodeIfPresent(Bool.self, forKey: .localModelMemoryOptimizationEnabled) {
+                localModelMemoryOptimizationEnabled = optimizationEnabled
+            } else if let legacyKeepResident = try container.decodeIfPresent(Bool.self, forKey: .whisperKeepResidentLoaded) {
+                localModelMemoryOptimizationEnabled = !legacyKeepResident
+            } else {
+                localModelMemoryOptimizationEnabled = true
+            }
+            whisperKeepResidentLoaded = !localModelMemoryOptimizationEnabled
             customLLMModelRepo = try container.decode(String.self, forKey: .customLLMModelRepo)
             translationCustomLLMModelRepo = try container.decode(String.self, forKey: .translationCustomLLMModelRepo)
             rewriteCustomLLMModelRepo = try container.decode(String.self, forKey: .rewriteCustomLLMModelRepo)
@@ -506,6 +522,7 @@ enum ConfigurationTransferManager {
     struct DictionarySettings: Codable {
         var recognitionEnabled: Bool
         var autoLearningEnabled: Bool
+        var autoLearningPrompt: String
         var highConfidenceCorrectionEnabled: Bool
         var suggestionFilterSettings: DictionarySuggestionFilterSettings
         var suggestionIngestModelOptionID: String
@@ -516,6 +533,7 @@ enum ConfigurationTransferManager {
         private enum CodingKeys: String, CodingKey {
             case recognitionEnabled
             case autoLearningEnabled
+            case autoLearningPrompt
             case highConfidenceCorrectionEnabled
             case suggestionFilterSettings
             case suggestionIngestModelOptionID
@@ -527,6 +545,7 @@ enum ConfigurationTransferManager {
         init(
             recognitionEnabled: Bool,
             autoLearningEnabled: Bool,
+            autoLearningPrompt: String,
             highConfidenceCorrectionEnabled: Bool,
             suggestionFilterSettings: DictionarySuggestionFilterSettings,
             suggestionIngestModelOptionID: String,
@@ -536,6 +555,7 @@ enum ConfigurationTransferManager {
         ) {
             self.recognitionEnabled = recognitionEnabled
             self.autoLearningEnabled = autoLearningEnabled
+            self.autoLearningPrompt = autoLearningPrompt
             self.highConfidenceCorrectionEnabled = highConfidenceCorrectionEnabled
             self.suggestionFilterSettings = suggestionFilterSettings
             self.suggestionIngestModelOptionID = suggestionIngestModelOptionID
@@ -548,6 +568,7 @@ enum ConfigurationTransferManager {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             recognitionEnabled = try container.decode(Bool.self, forKey: .recognitionEnabled)
             autoLearningEnabled = try container.decode(Bool.self, forKey: .autoLearningEnabled)
+            autoLearningPrompt = try container.decodeIfPresent(String.self, forKey: .autoLearningPrompt) ?? ""
             highConfidenceCorrectionEnabled = try container.decode(Bool.self, forKey: .highConfidenceCorrectionEnabled)
             suggestionFilterSettings = try container.decodeIfPresent(
                 DictionarySuggestionFilterSettings.self,
@@ -854,6 +875,7 @@ enum ConfigurationTransferManager {
             voiceEndCommandPreset: defaults.string(forKey: AppPreferenceKey.voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue,
             voiceEndCommandText: defaults.string(forKey: AppPreferenceKey.voiceEndCommandText) ?? "",
             autoCopyWhenNoFocusedInput: defaults.bool(forKey: AppPreferenceKey.autoCopyWhenNoFocusedInput),
+            realtimeTextDisplayEnabled: defaults.object(forKey: AppPreferenceKey.realtimeTextDisplayEnabled) as? Bool ?? true,
             alwaysShowRewriteAnswerCard: defaults.bool(forKey: AppPreferenceKey.alwaysShowRewriteAnswerCard),
             launchAtLogin: defaults.bool(forKey: AppPreferenceKey.launchAtLogin),
             showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock),
@@ -873,7 +895,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 19,
+            version: 20,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -906,7 +928,8 @@ enum ConfigurationTransferManager {
                 whisperVADEnabled: defaults.object(forKey: AppPreferenceKey.whisperVADEnabled) as? Bool ?? true,
                 whisperTimestampsEnabled: defaults.object(forKey: AppPreferenceKey.whisperTimestampsEnabled) as? Bool ?? false,
                 whisperRealtimeEnabled: defaults.object(forKey: AppPreferenceKey.whisperRealtimeEnabled) as? Bool ?? false,
-                whisperKeepResidentLoaded: defaults.object(forKey: AppPreferenceKey.whisperKeepResidentLoaded) as? Bool ?? true,
+                localModelMemoryOptimizationEnabled: defaults.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool
+                    ?? !(defaults.object(forKey: AppPreferenceKey.whisperKeepResidentLoaded) as? Bool ?? false),
                 customLLMModelRepo: defaults.string(forKey: AppPreferenceKey.customLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
                 translationCustomLLMModelRepo: defaults.string(forKey: AppPreferenceKey.translationCustomLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
                 rewriteCustomLLMModelRepo: defaults.string(forKey: AppPreferenceKey.rewriteCustomLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
@@ -925,6 +948,14 @@ enum ConfigurationTransferManager {
             dictionary: .init(
                 recognitionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryRecognitionEnabled) as? Bool ?? true,
                 autoLearningEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryAutoLearningEnabled) as? Bool ?? true,
+                autoLearningPrompt: AppPromptDefaults.canonicalStoredText(
+                    AppPromptDefaults.resolvedStoredText(
+                        defaults.string(forKey: AppPreferenceKey.dictionaryAutoLearningPrompt),
+                        kind: .dictionaryAutoLearning,
+                        defaults: defaults
+                    ),
+                    kind: .dictionaryAutoLearning
+                ),
                 highConfidenceCorrectionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) as? Bool ?? true,
                 suggestionFilterSettings: loadDictionarySuggestionFilterSettings(defaults: defaults),
                 suggestionIngestModelOptionID: defaults.string(forKey: AppPreferenceKey.dictionarySuggestionIngestModelOptionID) ?? "",
@@ -1005,6 +1036,7 @@ enum ConfigurationTransferManager {
         defaults.set(general.voiceEndCommandPreset, forKey: AppPreferenceKey.voiceEndCommandPreset)
         defaults.set(general.voiceEndCommandText, forKey: AppPreferenceKey.voiceEndCommandText)
         defaults.set(general.autoCopyWhenNoFocusedInput, forKey: AppPreferenceKey.autoCopyWhenNoFocusedInput)
+        defaults.set(general.realtimeTextDisplayEnabled, forKey: AppPreferenceKey.realtimeTextDisplayEnabled)
         defaults.set(general.alwaysShowRewriteAnswerCard, forKey: AppPreferenceKey.alwaysShowRewriteAnswerCard)
         defaults.set(general.launchAtLogin, forKey: AppPreferenceKey.launchAtLogin)
         defaults.set(general.showInDock, forKey: AppPreferenceKey.showInDock)
@@ -1039,7 +1071,8 @@ enum ConfigurationTransferManager {
         defaults.set(model.whisperVADEnabled, forKey: AppPreferenceKey.whisperVADEnabled)
         defaults.set(model.whisperTimestampsEnabled, forKey: AppPreferenceKey.whisperTimestampsEnabled)
         defaults.set(model.whisperRealtimeEnabled, forKey: AppPreferenceKey.whisperRealtimeEnabled)
-        defaults.set(model.whisperKeepResidentLoaded, forKey: AppPreferenceKey.whisperKeepResidentLoaded)
+        defaults.set(model.localModelMemoryOptimizationEnabled, forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled)
+        defaults.set(!model.localModelMemoryOptimizationEnabled, forKey: AppPreferenceKey.whisperKeepResidentLoaded)
         defaults.set(model.customLLMModelRepo, forKey: AppPreferenceKey.customLLMModelRepo)
         defaults.set(model.translationCustomLLMModelRepo, forKey: AppPreferenceKey.translationCustomLLMModelRepo)
         defaults.set(model.rewriteCustomLLMModelRepo, forKey: AppPreferenceKey.rewriteCustomLLMModelRepo)
@@ -1062,6 +1095,13 @@ enum ConfigurationTransferManager {
         if let dictionary {
             defaults.set(dictionary.recognitionEnabled, forKey: AppPreferenceKey.dictionaryRecognitionEnabled)
             defaults.set(dictionary.autoLearningEnabled, forKey: AppPreferenceKey.dictionaryAutoLearningEnabled)
+            defaults.set(
+                AppPromptDefaults.canonicalStoredText(
+                    dictionary.autoLearningPrompt,
+                    kind: .dictionaryAutoLearning
+                ),
+                forKey: AppPreferenceKey.dictionaryAutoLearningPrompt
+            )
             defaults.set(dictionary.highConfidenceCorrectionEnabled, forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled)
             defaults.set(dictionary.suggestionIngestModelOptionID, forKey: AppPreferenceKey.dictionarySuggestionIngestModelOptionID)
             if let suggestionFilterData = try? JSONEncoder().encode(dictionary.suggestionFilterSettings.sanitized()) {

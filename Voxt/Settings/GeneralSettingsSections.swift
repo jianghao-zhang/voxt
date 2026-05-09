@@ -357,6 +357,7 @@ struct GeneralModelStorageCard: View {
 
 struct GeneralOutputCard: View {
     @Binding var autoCopyWhenNoFocusedInput: Bool
+    @Binding var realtimeTextDisplayEnabled: Bool
     @Binding var customPasteHotkeyEnabled: Bool
     let customPasteHotkeyDisplayString: String
 
@@ -366,6 +367,12 @@ struct GeneralOutputCard: View {
 
     var body: some View {
         GeneralSettingsCard(title: localizedKey("Output")) {
+            GeneralToggleRow(
+                title: localizedKey("Show Realtime Text"),
+                description: localizedKey("Show live transcription text while recording. Turn this off to keep only waveform and status, which can improve ASR speed and performance."),
+                isOn: $realtimeTextDisplayEnabled
+            )
+
             GeneralToggleRow(
                 title: localizedKey("Also copy result to clipboard"),
                 description: localizedKey("When enabled, Voxt auto-pastes result text and also keeps it in clipboard."),
@@ -510,25 +517,11 @@ struct GeneralAppBehaviorCard: View {
 
 private extension GeneralAppBehaviorCard {
     var networkProxyModeTitle: String {
-        switch networkProxyMode {
-        case .system:
-            return localized("Follow System")
-        case .disabled:
-            return localized("Off")
-        case .custom:
-            return localized("Custom")
-        }
+        GeneralSettingsData.networkProxyModeTitle(networkProxyMode)
     }
 
     var customProxySchemeTitle: String {
-        switch customProxyScheme {
-        case .http:
-            return "HTTP"
-        case .https:
-            return "HTTPS"
-        case .socks5:
-            return "SOCKS5"
-        }
+        GeneralSettingsData.proxySchemeTitle(customProxyScheme)
     }
 }
 

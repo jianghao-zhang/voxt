@@ -197,7 +197,6 @@ extension ModelSettingsView {
                 whisperVADEnabled: $whisperVADEnabled,
                 whisperTimestampsEnabled: $whisperTimestampsEnabled,
                 whisperRealtimeEnabled: $whisperRealtimeEnabled,
-                whisperKeepResidentLoaded: $whisperKeepResidentLoaded,
                 userLanguageCodes: selectedUserLanguageCodes
             ) {
                 activeLocalASRConfigurationTarget = nil
@@ -415,7 +414,7 @@ private struct MLXASRConfigurationSheetView: View {
             SettingsDialogActionRow {
                 Button(localized("Reset to Default")) {
                     hintSettings = ASRHintSettingsStore.defaultSettings(for: .mlxAudio)
-                    tuningSettings = MLXLocalTuningSettings.defaults(for: .balanced)
+                    tuningSettings = MLXLocalTuningSettings.defaults(for: .balanced, family: family)
                 }
                 .buttonStyle(SettingsPillButtonStyle())
             } trailing: {
@@ -453,6 +452,12 @@ private struct WhisperASRConfigurationSheetView: View {
             tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
         )
     ]
+    private static let whisperPromptVariables = asrLanguageVariables + [
+        PromptTemplateVariableDescriptor(
+            token: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
+            tipKey: "Template tip {{DICTIONARY_TERMS}}"
+        )
+    ]
 
     @Binding var hintSettings: ASRHintSettings
     @Binding var tuningSettings: WhisperLocalTuningSettings
@@ -460,7 +465,6 @@ private struct WhisperASRConfigurationSheetView: View {
     @Binding var whisperVADEnabled: Bool
     @Binding var whisperTimestampsEnabled: Bool
     @Binding var whisperRealtimeEnabled: Bool
-    @Binding var whisperKeepResidentLoaded: Bool
     let userLanguageCodes: [String]
     let onDone: () -> Void
 
@@ -521,7 +525,7 @@ private struct WhisperASRConfigurationSheetView: View {
 
                     Text(localized("Recognition Prompt"))
                         .font(.subheadline.weight(.medium))
-                    PromptEditorView(text: $hintSettings.promptTemplate, height: 110, variables: Self.asrLanguageVariables)
+                    PromptEditorView(text: $hintSettings.promptTemplate, height: 110, variables: Self.whisperPromptVariables)
                     Text(localized("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -535,9 +539,6 @@ private struct WhisperASRConfigurationSheetView: View {
                             Toggle(localized("Live Realtime (Experimental)"), isOn: $whisperRealtimeEnabled)
                                 .toggleStyle(.switch)
                         }
-
-                        Toggle(localized("Keep Resident"), isOn: $whisperKeepResidentLoaded)
-                            .toggleStyle(.switch)
 
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
@@ -602,7 +603,6 @@ private struct WhisperASRConfigurationSheetView: View {
                     whisperVADEnabled = true
                     whisperTimestampsEnabled = false
                     whisperRealtimeEnabled = false
-                    whisperKeepResidentLoaded = true
                 }
                 .buttonStyle(SettingsPillButtonStyle())
             } trailing: {

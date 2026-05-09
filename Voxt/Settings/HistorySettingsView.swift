@@ -22,6 +22,7 @@ private enum HistoryBulkDeletionTarget: Identifiable {
 struct HistorySettingsView: View {
     private static let pageSize = 40
 
+    @Environment(\.locale) private var locale
     @AppStorage(AppPreferenceKey.historyCleanupEnabled) private var historyCleanupEnabled = true
     @AppStorage(AppPreferenceKey.historyRetentionPeriod) private var historyRetentionPeriodRaw = HistoryRetentionPeriod.ninetyDays.rawValue
     @AppStorage(AppPreferenceKey.historyAudioStorageEnabled) private var historyAudioStorageEnabled = false
@@ -41,17 +42,17 @@ struct HistorySettingsView: View {
     @State private var historyAudioExportResultMessage: String?
     @State private var historyAudioStorageStats = HistoryAudioStorageStats(storedFileCount: 0, totalBytes: 0)
     @State private var pendingBulkDeletionTarget: HistoryBulkDeletionTarget?
+    @State private var selectedHistoryInfoEntry: TranscriptionHistoryEntry?
 
     private var historyRetentionPeriod: HistoryRetentionPeriod {
         HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) ?? .ninetyDays
     }
 
-    private var allEntries: [TranscriptionHistoryEntry] {
-        historyStore.allHistoryEntries
-    }
-
     private var filteredEntries: [TranscriptionHistoryEntry] {
-        allEntries.filter { selectedFilter.matches($0) }
+        HistorySettingsData.filteredEntries(
+            for: selectedFilter,
+            allEntries: historyStore.allHistoryEntries
+        )
     }
 
     private var allNotes: [VoxtNoteItem] {
@@ -59,23 +60,32 @@ struct HistorySettingsView: View {
     }
 
     private var visibleNotes: [VoxtNoteItem] {
-        Array(allNotes.prefix(visibleItemLimit))
+        HistorySettingsData.visibleEntries(from: allNotes, visibleLimit: visibleItemLimit)
     }
 
     private var visibleEntries: [TranscriptionHistoryEntry] {
-        Array(filteredEntries.prefix(visibleItemLimit))
+        HistorySettingsData.visibleEntries(from: filteredEntries, visibleLimit: visibleItemLimit)
     }
 
     private var hasMoreFilteredEntries: Bool {
-        visibleItemLimit < filteredEntries.count
+        HistorySettingsData.hasMoreItems(in: filteredEntries, visibleLimit: visibleItemLimit)
     }
 
     private var hasMoreVisibleNotes: Bool {
-        visibleItemLimit < allNotes.count
+        HistorySettingsData.hasMoreItems(in: allNotes, visibleLimit: visibleItemLimit)
     }
 
     private var isNoteTabSelected: Bool {
         selectedFilter == .note
+    }
+
+    private var emptyState: HistoryContentEmptyState {
+        HistorySettingsData.emptyState(
+            selectedFilter: selectedFilter,
+            allEntries: historyStore.allHistoryEntries,
+            filteredEntries: filteredEntries,
+            notes: allNotes
+        )
     }
 
     var body: some View {
@@ -85,33 +95,16 @@ struct HistorySettingsView: View {
                     GroupBox {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack(alignment: .center, spacing: 12) {
-                                Toggle(localized("History Cleanup"), isOn: $historyCleanupEnabled)
-                                Spacer(minLength: 12)
-                                if historyCleanupEnabled {
-                                    Text(localized("Retention"))
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                    SettingsMenuPicker(
-                                        selection: $historyRetentionPeriodRaw,
-                                        options: HistoryRetentionPeriod.allCases.map { option in
-                                            SettingsMenuOption(value: option.rawValue, title: option.title)
-                                        },
-                                        selectedTitle: historyRetentionPeriod.title,
-                                        width: 160
-                                    )
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                    }
-                    .settingsNavigationAnchor(.historySettings)
-
-                    GroupBox {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(alignment: .center, spacing: 12) {
                                 HistoryFilterTabPicker(selectedTab: $selectedFilter)
                                 Spacer(minLength: 12)
+                                Button {
+                                    pendingBulkDeletionTarget = isNoteTabSelected ? .notes : .history
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(SettingsCompactIconButtonStyle(tone: .destructive))
+                                .help(localized("Delete All"))
+                                .disabled(isNoteTabSelected ? allNotes.isEmpty : historyStore.allHistoryEntries.isEmpty)
                                 Button {
                                     historyAudioStorageSelectionError = nil
                                     historyAudioExportResultMessage = nil
@@ -120,26 +113,10 @@ struct HistorySettingsView: View {
                                     Image(systemName: "gearshape")
                                 }
                                 .buttonStyle(SettingsCompactIconButtonStyle())
-                                Button {
-                                    pendingBulkDeletionTarget = isNoteTabSelected ? .notes : .history
-                                } label: {
-                                    Image(systemName: "trash")
-                                }
-                                .buttonStyle(SettingsCompactIconButtonStyle(tone: .destructive))
-                                .help(localized("Delete All"))
-                                .disabled(isNoteTabSelected ? allNotes.isEmpty : allEntries.isEmpty)
                             }
 
-                            if isNoteTabSelected && allNotes.isEmpty {
-                                Text(localized("No notes yet."))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else if !isNoteTabSelected && allEntries.isEmpty {
-                                Text(localized("No history yet."))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else if !isNoteTabSelected && filteredEntries.isEmpty {
-                                Text(localized("No entries in this category yet."))
+                            if let emptyStateKey = emptyState.localizedKey {
+                                Text(localized(emptyStateKey))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else if isNoteTabSelected {
@@ -193,7 +170,12 @@ struct HistorySettingsView: View {
                                                 audioURL: historyStore.audioURL(for: entry),
                                                 isCopied: copiedEntryID == entry.id,
                                                 onCopy: {
-                                                    copyStringToPasteboard(entry.text)
+                                                    copyStringToPasteboard(
+                                                        HistoryCorrectionPresentation.correctedText(
+                                                            for: entry.text,
+                                                            snapshots: entry.dictionaryCorrectionSnapshots
+                                                        )
+                                                    )
                                                     copiedEntryID = entry.id
                                                     Task {
                                                         try? await Task.sleep(for: .seconds(1.2))
@@ -201,6 +183,9 @@ struct HistorySettingsView: View {
                                                             copiedEntryID = nil
                                                         }
                                                     }
+                                                },
+                                                onShowInfo: {
+                                                    selectedHistoryInfoEntry = entry
                                                 },
                                                 onDelete: {
                                                     copiedEntryID = nil
@@ -229,6 +214,7 @@ struct HistorySettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
                     }
+                    .settingsNavigationAnchor(.historySettings)
                     .settingsNavigationAnchor(.historyEntries)
                     .frame(maxHeight: .infinity, alignment: .top)
                 }
@@ -243,7 +229,28 @@ struct HistorySettingsView: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .sheet(isPresented: $isHistoryAudioSettingsPresented) {
-            historyAudioSettingsSheet
+            HistoryAudioSettingsSheet(
+                historyCleanupEnabled: $historyCleanupEnabled,
+                historyRetentionPeriodRaw: $historyRetentionPeriodRaw,
+                historyAudioStorageEnabled: $historyAudioStorageEnabled,
+                historyAudioStorageDisplayPath: $historyAudioStorageDisplayPath,
+                historyAudioStorageSelectionError: $historyAudioStorageSelectionError,
+                historyAudioExportResultMessage: $historyAudioExportResultMessage,
+                isPresented: $isHistoryAudioSettingsPresented,
+                historyRetentionPeriod: historyRetentionPeriod,
+                historyAudioStorageStatsSummary: historyAudioStorageStatsSummary,
+                onOpenHistoryAudioStorageInFinder: openHistoryAudioStorageInFinder,
+                onChooseHistoryAudioStorageDirectory: chooseHistoryAudioStorageDirectory,
+                onExportAllHistoryAudio: exportAllHistoryAudio
+            )
+        }
+        .sheet(item: $selectedHistoryInfoEntry) { entry in
+            HistoryDetailSheetContent(
+                entry: entry,
+                audioURL: historyStore.audioURL(for: entry),
+                locale: locale
+            )
+            .frame(minWidth: 520, idealWidth: 620, minHeight: 480, idealHeight: 640)
         }
         .alert(item: $pendingBulkDeletionTarget) { target in
             Alert(
@@ -279,11 +286,19 @@ struct HistorySettingsView: View {
             resetVisibleItemLimit()
         }
         .onReceive(historyStore.$entries) { _ in
-            visibleItemLimit = min(max(visibleItemLimit, Self.pageSize), max(filteredEntries.count, Self.pageSize))
+            visibleItemLimit = HistorySettingsData.normalizedVisibleLimit(
+                currentLimit: visibleItemLimit,
+                pageSize: Self.pageSize,
+                totalCount: filteredEntries.count
+            )
             refreshHistoryAudioStorageStats()
         }
         .onReceive(noteStore.$items) { _ in
-            visibleItemLimit = min(max(visibleItemLimit, Self.pageSize), max(allNotes.count, Self.pageSize))
+            visibleItemLimit = HistorySettingsData.normalizedVisibleLimit(
+                currentLimit: visibleItemLimit,
+                pageSize: Self.pageSize,
+                totalCount: allNotes.count
+            )
         }
     }
 
@@ -339,107 +354,20 @@ struct HistorySettingsView: View {
     private func loadNextPageIfNeeded() {
         if isNoteTabSelected {
             guard hasMoreVisibleNotes else { return }
-            visibleItemLimit = min(visibleItemLimit + Self.pageSize, allNotes.count)
+            visibleItemLimit = HistorySettingsData.nextVisibleLimit(
+                currentLimit: visibleItemLimit,
+                pageSize: Self.pageSize,
+                totalCount: allNotes.count
+            )
             return
         }
 
         guard hasMoreFilteredEntries else { return }
-        visibleItemLimit = min(visibleItemLimit + Self.pageSize, filteredEntries.count)
-    }
-
-    private var historyAudioSettingsSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(localized("History Audio Settings"))
-                .font(.title3.weight(.semibold))
-
-            GeneralSettingsCard(titleText: localized("Audio Storage")) {
-                Toggle(localized("Save history audio"), isOn: $historyAudioStorageEnabled)
-
-                if historyAudioStorageEnabled {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(localized("Storage Path"))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button(action: openHistoryAudioStorageInFinder) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "folder")
-                                    .font(.caption)
-                                Text(
-                                    historyAudioStorageDisplayPath.isEmpty
-                                    ? HistoryAudioStorageDirectoryManager.defaultRootURL.path
-                                    : historyAudioStorageDisplayPath
-                                )
-                                    .underline()
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                    .multilineTextAlignment(.trailing)
-                                Image(systemName: "arrow.up.forward.square")
-                                    .font(.caption)
-                            }
-                        }
-                        .buttonStyle(SettingsInlineSelectorButtonStyle())
-                        .help(localized("Open folder"))
-
-                        Button(localized("Choose")) {
-                            chooseHistoryAudioStorageDirectory()
-                        }
-                        .buttonStyle(SettingsPillButtonStyle())
-                    }
-
-                    Text(localized("New history audio is stored here. Switching the path will not move existing audio files."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if let historyAudioStorageSelectionError, !historyAudioStorageSelectionError.isEmpty {
-                        Text(historyAudioStorageSelectionError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                } else {
-                    Text(localized("When disabled, history items will not keep audio files."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if historyAudioStorageEnabled {
-                GeneralSettingsCard(titleText: localized("Export")) {
-                    HStack(spacing: 10) {
-                        Button(localized("Export Audio")) {
-                            exportAllHistoryAudio()
-                        }
-                        .buttonStyle(SettingsPillButtonStyle())
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(historyAudioStorageStatsSummary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            Text(localized("Copies every saved history audio file into a folder you choose."))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if let historyAudioExportResultMessage, !historyAudioExportResultMessage.isEmpty {
-                        Text(historyAudioExportResultMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-
-            SettingsDialogActionRow {
-                Button(localized("Done")) {
-                    isHistoryAudioSettingsPresented = false
-                }
-                .buttonStyle(SettingsPrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-        .frame(width: 560)
+        visibleItemLimit = HistorySettingsData.nextVisibleLimit(
+            currentLimit: visibleItemLimit,
+            pageSize: Self.pageSize,
+            totalCount: filteredEntries.count
+        )
     }
 
     private func openHistoryAudioStorageInFinder() {
