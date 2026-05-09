@@ -1,9 +1,12 @@
 import XCTest
+import AVFoundation
 @testable import Voxt
 
 @MainActor
 final class WhisperLongFormReplayIntegrationTests: XCTestCase {
-    private func resolvedCandidateClipPaths() -> [String] {
+    private let minimumLongFormClipDurationSeconds = 10.0
+
+    private func rawCandidateClipPaths() -> [String] {
         let overridePathFile = "/tmp/voxt-longform-replay-clip-path.txt"
         let overridePath = try? String(contentsOfFile: overridePathFile, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -23,7 +26,7 @@ final class WhisperLongFormReplayIntegrationTests: XCTestCase {
         return candidates.filter { seen.insert($0).inserted }
     }
 
-    private func knownGoodBaselineClipPaths() -> [String] {
+    private func rawKnownGoodBaselineClipPaths() -> [String] {
         let preferred = [
             ProcessInfo.processInfo.environment["VOXT_LONGFORM_REPLAY_CLIP"],
             try? String(contentsOfFile: "/tmp/voxt-longform-replay-clip-path.txt", encoding: .utf8)
@@ -38,6 +41,24 @@ final class WhisperLongFormReplayIntegrationTests: XCTestCase {
 
         var seen = Set<String>()
         return preferred.filter { seen.insert($0).inserted }
+    }
+
+    private func clipDurationSeconds(at path: String) -> Double {
+        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+        let duration = asset.duration.seconds
+        return duration.isFinite ? duration : 0
+    }
+
+    private func longFormClipPaths(from candidates: [String]) -> [String] {
+        candidates.filter { clipDurationSeconds(at: $0) >= minimumLongFormClipDurationSeconds }
+    }
+
+    private func resolvedCandidateClipPaths() -> [String] {
+        longFormClipPaths(from: rawCandidateClipPaths())
+    }
+
+    private func knownGoodBaselineClipPaths() -> [String] {
+        longFormClipPaths(from: rawKnownGoodBaselineClipPaths())
     }
 
     private func resolvedModelIDAndHubURL() throws -> (modelID: String, hubURL: URL) {
