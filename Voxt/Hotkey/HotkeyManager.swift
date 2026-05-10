@@ -43,6 +43,7 @@ class HotkeyManager {
     private var hasRewriteModifierTapCandidate = false
     private var hasCustomPasteModifierTapCandidate = false
     private var sawNonModifierKeyDuringFunctionChord = false
+    private var sawUnexpectedModifierDuringFunctionChord = false
     private var currentSidedModifiers: SidedModifierFlags = []
     private var suppressTranscriptionTapUntil = Date.distantPast
     private var pendingTranscriptionLongPressReleaseTask: Task<Void, Never>?
@@ -570,7 +571,7 @@ class HotkeyManager {
             hasRewriteModifierTapCandidate
         let hasStaleFunctionTapState =
             flags.contains(.maskSecondaryFn) &&
-            (isKeyDown || hasTranscriptionModifierTapCandidate)
+            (isKeyDown || hasTranscriptionModifierTapCandidate || sawUnexpectedModifierDuringFunctionChord)
 
         guard hasStaleHigherPriorityState || hasStaleFunctionTapState else { return }
 
@@ -610,6 +611,7 @@ class HotkeyManager {
         hasTranslationModifierTapCandidate ||
         hasRewriteModifierTapCandidate ||
         sawNonModifierKeyDuringFunctionChord ||
+        sawUnexpectedModifierDuringFunctionChord ||
         !currentSidedModifiers.isEmpty
     }
 
@@ -895,10 +897,25 @@ class HotkeyManager {
             eventFlags: flags,
             transcriptionFlags: transcriptionFlags
         )
+        let isFnOnlyTranscriptionHotkey = transcriptionFlags == .maskSecondaryFn
         let activeRelevantFlags = flags.intersection([.maskSecondaryFn, .maskShift, .maskControl, .maskAlternate, .maskCommand])
         let hasUnexpectedModifiers = !activeRelevantFlags.subtracting(transcriptionFlags).isEmpty
 
         if triggerMode == .tap {
+            // If fn-only transcription is the active tap trigger, any extra modifier joining the chord
+            // invalidates that fn tap. This prevents retired or disabled combos such as fn+option
+            // or fn+control from falling back to plain fn transcription on release.
+            if isFnOnlyTranscriptionHotkey, flags.contains(.maskSecondaryFn), hasUnexpectedModifiers {
+                if !sawUnexpectedModifierDuringFunctionChord {
+                    VoxtLog.hotkey(
+                        "Hotkey transcription fn-only tap invalidated because additional modifiers joined the chord. flags=\(HotkeyEventSupport.debugDescription(for: flags))"
+                    )
+                }
+                sawUnexpectedModifierDuringFunctionChord = true
+                hasTranscriptionModifierTapCandidate = false
+                isKeyDown = false
+            }
+
             // Tap semantics for modifier-only transcription hotkey:
             // enter candidate state on press and confirm only on release.
             // Translation cooldown check is critical for fn/fn+shift coexistence.
@@ -911,11 +928,13 @@ class HotkeyManager {
                 }
                 if keyCode == UInt16(kVK_Function), !flags.contains(.maskSecondaryFn) {
                     sawNonModifierKeyDuringFunctionChord = false
+                    sawUnexpectedModifierDuringFunctionChord = false
                 }
                 return true
             }
             if transcriptionTriggerDown && !isKeyDown {
                 if hasUnexpectedModifiers {
+                    sawUnexpectedModifierDuringFunctionChord = true
                     VoxtLog.hotkey("Hotkey transcription tap ignored because unexpected modifiers are active.")
                     return true
                 }
@@ -923,16 +942,17 @@ class HotkeyManager {
                     VoxtLog.hotkey("Hotkey transcription tap ignored because higher-priority flags are active.")
                     return true
                 }
+                sawUnexpectedModifierDuringFunctionChord = false
                 isKeyDown = true
                 hasTranscriptionModifierTapCandidate = true
             }
-            let isFnOnlyTranscriptionHotkey = transcriptionFlags == .maskSecondaryFn
             let isFunctionReleaseEvent =
                 isFnOnlyTranscriptionHotkey &&
                 keyCode == UInt16(kVK_Function) &&
                 !flags.contains(.maskSecondaryFn)
             if isFunctionReleaseEvent && !isKeyDown {
                 if !sawNonModifierKeyDuringFunctionChord,
+                   !sawUnexpectedModifierDuringFunctionChord,
                    !hasUnexpectedModifiers,
                    !isTranslationKeyDown,
                    !isRewriteKeyDown {
@@ -940,14 +960,15 @@ class HotkeyManager {
                     emitKeyDown()
                 } else {
                     VoxtLog.hotkey(
-                        "Hotkey transcription fn-only release ignored. sawNonModifier=\(sawNonModifierKeyDuringFunctionChord), hasUnexpectedModifiers=\(hasUnexpectedModifiers), isTranslationKeyDown=\(isTranslationKeyDown), isRewriteKeyDown=\(isRewriteKeyDown)"
+                        "Hotkey transcription fn-only release ignored. sawNonModifier=\(sawNonModifierKeyDuringFunctionChord), sawUnexpectedModifier=\(sawUnexpectedModifierDuringFunctionChord), hasUnexpectedModifiers=\(hasUnexpectedModifiers), isTranslationKeyDown=\(isTranslationKeyDown), isRewriteKeyDown=\(isRewriteKeyDown)"
                     )
                 }
                 sawNonModifierKeyDuringFunctionChord = false
+                sawUnexpectedModifierDuringFunctionChord = false
                 return true
             }
             if !comboIsDown && isKeyDown {
-                if hasTranscriptionModifierTapCandidate && !hasUnexpectedModifiers {
+                if hasTranscriptionModifierTapCandidate && !hasUnexpectedModifiers && !sawUnexpectedModifierDuringFunctionChord {
                     VoxtLog.hotkey("Hotkey transcription modifier tap confirmed on release.")
                     emitKeyDown()
                 } else if hasTranscriptionModifierTapCandidate {
@@ -957,6 +978,7 @@ class HotkeyManager {
                 isKeyDown = false
                 if keyCode == UInt16(kVK_Function), !flags.contains(.maskSecondaryFn) {
                     sawNonModifierKeyDuringFunctionChord = false
+                    sawUnexpectedModifierDuringFunctionChord = false
                 }
             }
             cancelPendingTranscriptionTap(resetKeyState: false)
@@ -1149,6 +1171,7 @@ class HotkeyManager {
         hasRewriteModifierTapCandidate = false
         hasCustomPasteModifierTapCandidate = false
         sawNonModifierKeyDuringFunctionChord = false
+        sawUnexpectedModifierDuringFunctionChord = false
         currentSidedModifiers = []
         suppressTranscriptionTapUntil = .distantPast
         lastEventAt = Date()
