@@ -182,27 +182,29 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
     }
 
     func testOllamaSheetShowsJSONSchemaFieldOnlyForJSONSchemaFormat() {
-        var sheet = makeSheet(
+        let sheet = makeSheet(
             target: .llm(.ollama),
             model: "qwen3"
         )
 
-        XCTAssertFalse(sheet.shouldShowOllamaJSONSchemaField)
-        sheet.ollamaResponseFormat = OllamaResponseFormat.jsonSchema.rawValue
-        XCTAssertTrue(sheet.shouldShowOllamaJSONSchemaField)
+        XCTAssertFalse(sheet.shouldShowOllamaJSONSchemaField(for: OllamaResponseFormat.plain.rawValue))
+        XCTAssertTrue(sheet.shouldShowOllamaJSONSchemaField(for: OllamaResponseFormat.jsonSchema.rawValue))
     }
 
     func testOllamaSheetValidationRejectsInvalidJSONFields() {
-        var sheet = makeSheet(
+        let sheet = makeSheet(
             target: .llm(.ollama),
             model: "qwen3"
         )
-        sheet.ollamaResponseFormat = OllamaResponseFormat.jsonSchema.rawValue
-        sheet.ollamaJSONSchema = #"["not-an-object"]"#
-        sheet.ollamaOptionsJSON = #"{"num_ctx":4096}"#
 
         XCTAssertEqual(
-            sheet.validationMessage(),
+            sheet.validationMessageForOllamaSettings(
+                responseFormat: OllamaResponseFormat.jsonSchema.rawValue,
+                jsonSchema: #"["not-an-object"]"#,
+                optionsJSON: #"{"num_ctx":4096}"#,
+                logprobsEnabled: false,
+                topLogprobsText: ""
+            ),
             AppLocalization.format(
                 "%@ must be a JSON object.",
                 AppLocalization.localizedString("JSON Schema")
@@ -211,15 +213,19 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
     }
 
     func testOllamaSheetValidationRejectsNegativeTopLogprobs() {
-        var sheet = makeSheet(
+        let sheet = makeSheet(
             target: .llm(.ollama),
             model: "qwen3"
         )
-        sheet.ollamaLogprobsEnabled = true
-        sheet.ollamaTopLogprobsText = "-1"
 
         XCTAssertEqual(
-            sheet.validationMessage(),
+            sheet.validationMessageForOllamaSettings(
+                responseFormat: OllamaResponseFormat.plain.rawValue,
+                jsonSchema: "",
+                optionsJSON: "",
+                logprobsEnabled: true,
+                topLogprobsText: "-1"
+            ),
             AppLocalization.localizedString("Top Logprobs must be a non-negative integer.")
         )
     }

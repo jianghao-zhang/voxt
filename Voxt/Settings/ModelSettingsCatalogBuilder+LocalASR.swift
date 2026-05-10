@@ -40,7 +40,7 @@ extension ModelCatalogBuilder {
         MLXModelManager.availableModels.map { model in
             let repo = MLXModelManager.canonicalModelRepo(model.id)
             let selectionID = FeatureModelSelectionID.mlx(repo)
-            let snapshot = mlxModelManager.catalogSnapshot(for: repo)
+            let snapshot = resolvedMLXCatalogSnapshot(for: repo)
             let isInstalled = snapshot.isDownloaded
             let badge = hasIssue(.mlxModel(repo)) ? localizedModelCatalog("Needs Setup") : nil
             let status = isUninstallingModel(repo)
@@ -73,6 +73,46 @@ extension ModelCatalogBuilder {
                 secondaryActions: mlxSecondaryActions(repo: repo, snapshot: snapshot)
             )
         }
+    }
+
+    private func resolvedMLXCatalogSnapshot(for repo: String) -> MLXModelManager.CatalogSnapshot {
+        let managerSnapshot = mlxModelManager.catalogSnapshot(for: repo)
+        let downloading = isDownloadingModel(repo)
+        let paused = !downloading && isPausedModel(repo)
+
+        guard downloading || paused else {
+            return managerSnapshot
+        }
+
+        let state: MLXModelManager.ModelState
+        if downloading {
+            state = .downloading(
+                progress: 0,
+                completed: 0,
+                total: 0,
+                currentFile: nil,
+                completedFiles: 0,
+                totalFiles: 0
+            )
+        } else {
+            state = .paused(
+                progress: 0,
+                completed: 0,
+                total: 0,
+                currentFile: nil,
+                completedFiles: 0,
+                totalFiles: 0
+            )
+        }
+
+        return .init(
+            repo: managerSnapshot.repo,
+            isDownloaded: managerSnapshot.isDownloaded,
+            hasResumableDownload: paused || managerSnapshot.hasResumableDownload,
+            state: state,
+            pausedStatusMessage: managerSnapshot.pausedStatusMessage,
+            hasActiveDownloadTask: downloading || managerSnapshot.hasActiveDownloadTask
+        )
     }
 
     func whisperASREntries() -> [ModelCatalogEntry] {

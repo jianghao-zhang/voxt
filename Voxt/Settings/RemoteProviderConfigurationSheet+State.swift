@@ -79,7 +79,7 @@ extension RemoteProviderConfigurationSheet {
     }
 
     var shouldShowOllamaJSONSchemaField: Bool {
-        OllamaResponseFormat(rawValue: ollamaResponseFormat) == .jsonSchema
+        shouldShowOllamaJSONSchemaField(for: ollamaResponseFormat)
     }
 
     var ollamaThinkModeMenuOptions: [SettingsMenuOption<String>] {
@@ -343,20 +343,49 @@ extension RemoteProviderConfigurationSheet {
 
     func validationMessage() -> String? {
         guard isOllamaLLMProvider else { return nil }
+        return validationMessageForOllamaSettings(
+            responseFormat: ollamaResponseFormat,
+            jsonSchema: ollamaJSONSchema,
+            optionsJSON: ollamaOptionsJSON,
+            logprobsEnabled: ollamaLogprobsEnabled,
+            topLogprobsText: ollamaTopLogprobsText
+        )
+    }
 
-        if let topLogprobsMessage = validateOllamaTopLogprobs() {
+    func validateOllamaTopLogprobs() -> String? {
+        validateOllamaTopLogprobs(
+            enabled: ollamaLogprobsEnabled,
+            text: ollamaTopLogprobsText
+        )
+    }
+
+    func shouldShowOllamaJSONSchemaField(for responseFormat: String) -> Bool {
+        OllamaResponseFormat(rawValue: responseFormat) == .jsonSchema
+    }
+
+    func validationMessageForOllamaSettings(
+        responseFormat: String,
+        jsonSchema: String,
+        optionsJSON: String,
+        logprobsEnabled: Bool,
+        topLogprobsText: String
+    ) -> String? {
+        if let topLogprobsMessage = validateOllamaTopLogprobs(
+            enabled: logprobsEnabled,
+            text: topLogprobsText
+        ) {
             return topLogprobsMessage
         }
         if let optionsMessage = validateJSONObjectField(
-            ollamaOptionsJSON,
+            optionsJSON,
             fieldName: AppLocalization.localizedString("Options JSON"),
             requiresValue: false
         ) {
             return optionsMessage
         }
-        if shouldShowOllamaJSONSchemaField,
+        if shouldShowOllamaJSONSchemaField(for: responseFormat),
            let schemaMessage = validateJSONObjectField(
-               ollamaJSONSchema,
+               jsonSchema,
                fieldName: AppLocalization.localizedString("JSON Schema"),
                requiresValue: true
            ) {
@@ -365,9 +394,9 @@ extension RemoteProviderConfigurationSheet {
         return nil
     }
 
-    func validateOllamaTopLogprobs() -> String? {
-        guard ollamaLogprobsEnabled else { return nil }
-        let trimmed = ollamaTopLogprobsText.trimmingCharacters(in: .whitespacesAndNewlines)
+    func validateOllamaTopLogprobs(enabled: Bool, text: String) -> String? {
+        guard enabled else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         guard let value = Int(trimmed), value >= 0 else {
             return AppLocalization.localizedString("Top Logprobs must be a non-negative integer.")
