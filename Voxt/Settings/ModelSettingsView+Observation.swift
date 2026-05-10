@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 
+@MainActor
 extension ModelSettingsView {
     private var downloadLifecycleRefreshPublisher: AnyPublisher<Void, Never> {
         let mlx = Publishers.CombineLatest(
