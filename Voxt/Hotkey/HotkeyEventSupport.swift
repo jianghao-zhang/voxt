@@ -10,7 +10,7 @@ enum HotkeyEventSupport {
         triggerMode: HotkeyPreference.TriggerMode,
         transcriptionHotkey: HotkeyPreference.Hotkey,
         translationHotkey: HotkeyPreference.Hotkey,
-        rewriteHotkey: HotkeyPreference.Hotkey,
+        rewriteHotkey: HotkeyPreference.Hotkey?,
         meetingHotkey: HotkeyPreference.Hotkey?,
         isKeyDown: Bool,
         isTranslationKeyDown: Bool,
@@ -49,13 +49,13 @@ enum HotkeyEventSupport {
         triggerMode: HotkeyPreference.TriggerMode,
         transcriptionHotkey: HotkeyPreference.Hotkey,
         translationHotkey: HotkeyPreference.Hotkey,
-        rewriteHotkey: HotkeyPreference.Hotkey,
+        rewriteHotkey: HotkeyPreference.Hotkey?,
         meetingHotkey: HotkeyPreference.Hotkey?
     ) -> Bool {
         guard triggerMode == .tap else { return false }
         return HotkeyModifierInterpreter.isModifierOnly(transcriptionHotkey)
             || HotkeyModifierInterpreter.isModifierOnly(translationHotkey)
-            || HotkeyModifierInterpreter.isModifierOnly(rewriteHotkey)
+            || (rewriteHotkey.map { HotkeyModifierInterpreter.isModifierOnly($0) } ?? false)
             || (meetingHotkey.map { HotkeyModifierInterpreter.isModifierOnly($0) } ?? false)
     }
 

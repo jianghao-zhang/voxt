@@ -252,7 +252,9 @@ class HotkeyManager {
         let configuration = HotkeyRuntimeConfiguration.load()
         let transcriptionHotkey = configuration.transcriptionHotkey
         let translationHotkey = configuration.translationHotkey
-        let rewriteHotkey = configuration.rewriteHotkey
+        let rewriteHotkey = configuration.rewriteActivationMode == .dedicatedHotkey
+            ? configuration.rewriteHotkey
+            : nil
         let activeMeetingHotkey = configuration.meetingHotkey
         let activeCustomPasteHotkey = configuration.customPasteHotkey
         let distinguishModifierSides = configuration.distinguishModifierSides
@@ -263,7 +265,7 @@ class HotkeyManager {
             : currentSidedModifiers
         let transcriptionFlags = configuration.transcriptionFlags
         let translationFlags = configuration.translationFlags
-        let rewriteFlags = configuration.rewriteFlags
+        let rewriteFlags = rewriteHotkey.map { HotkeyPreference.cgFlags(from: $0.modifiers) } ?? []
         let meetingFlags = configuration.meetingFlags
         let customPasteFlags = configuration.customPasteFlags
         let wasTranslationKeyDown = isTranslationKeyDown
@@ -276,6 +278,9 @@ class HotkeyManager {
         }
         if activeCustomPasteHotkey == nil {
             clearCustomPasteTransientState()
+        }
+        if rewriteHotkey == nil {
+            clearRewriteTransientState()
         }
 
         resetTransientStateIfIdleGapSuggestsStaleState(
@@ -384,7 +389,7 @@ class HotkeyManager {
             }
         }
 
-        if HotkeyModifierInterpreter.isModifierOnly(rewriteHotkey) {
+        if let rewriteHotkey, HotkeyModifierInterpreter.isModifierOnly(rewriteHotkey) {
             if handleModifierOnlyRewriteEvent(
                 type: type,
                 keyCode: keyCode,
@@ -398,7 +403,7 @@ class HotkeyManager {
             ) {
                 return
             }
-        } else {
+        } else if let rewriteHotkey {
             let rewriteFlagsMatch = HotkeyPreference.hotkeyMatches(
                 rewriteHotkey,
                 eventFlags: flags,
@@ -985,7 +990,7 @@ class HotkeyManager {
         triggerMode: HotkeyPreference.TriggerMode,
         transcriptionHotkey: HotkeyPreference.Hotkey,
         translationHotkey: HotkeyPreference.Hotkey,
-        rewriteHotkey: HotkeyPreference.Hotkey,
+        rewriteHotkey: HotkeyPreference.Hotkey?,
         meetingHotkey: HotkeyPreference.Hotkey?,
         currentSidedModifiers: SidedModifierFlags,
         distinguishModifierSides: Bool,
@@ -1004,13 +1009,15 @@ class HotkeyManager {
                 sidedModifiers: currentSidedModifiers,
                 distinguishModifierSides: distinguishModifierSides
             ) || isTranslationKeyDown)) ||
-            (HotkeyModifierInterpreter.isModifierOnly(rewriteHotkey) &&
-            (HotkeyPreference.hotkeyMatches(
-                rewriteHotkey,
-                eventFlags: flags,
-                sidedModifiers: currentSidedModifiers,
-                distinguishModifierSides: distinguishModifierSides
-            ) || isRewriteKeyDown)) {
+            (rewriteHotkey.map {
+                HotkeyModifierInterpreter.isModifierOnly($0) &&
+                (HotkeyPreference.hotkeyMatches(
+                    $0,
+                    eventFlags: flags,
+                    sidedModifiers: currentSidedModifiers,
+                    distinguishModifierSides: distinguishModifierSides
+                ) || isRewriteKeyDown)
+            } ?? false) {
             VoxtLog.hotkey("Hotkey suppress transcription modifier path because higher-priority combo is active.")
             cancelPendingTranscriptionTap(resetKeyState: true)
             return true
@@ -1289,6 +1296,13 @@ class HotkeyManager {
         activeMeetingKeyCode = nil
         hasMeetingModifierTapCandidate = false
         cancelPendingMeetingLongPressRelease()
+    }
+
+    private func clearRewriteTransientState() {
+        isRewriteKeyDown = false
+        activeRewriteKeyCode = nil
+        hasRewriteModifierTapCandidate = false
+        cancelPendingRewriteLongPressRelease()
     }
 
     private func clearCustomPasteTransientState() {

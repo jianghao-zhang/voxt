@@ -10,6 +10,7 @@ struct HotkeyRuntimeConfiguration {
     let customPasteHotkey: HotkeyPreference.Hotkey?
     let distinguishModifierSides: Bool
     let triggerMode: HotkeyPreference.TriggerMode
+    let rewriteActivationMode: HotkeyPreference.RewriteActivationMode
 
     static func load(defaults: UserDefaults = .standard) -> HotkeyRuntimeConfiguration {
         let meetingEnabled = defaults.bool(forKey: AppPreferenceKey.meetingNotesBetaEnabled)
@@ -22,7 +23,8 @@ struct HotkeyRuntimeConfiguration {
             meetingHotkey: meetingEnabled ? HotkeyPreference.loadMeeting() : nil,
             customPasteHotkey: customPasteEnabled ? HotkeyPreference.loadCustomPaste() : nil,
             distinguishModifierSides: HotkeyPreference.loadDistinguishModifierSides(),
-            triggerMode: HotkeyPreference.loadTriggerMode()
+            triggerMode: HotkeyPreference.loadTriggerMode(defaults: defaults),
+            rewriteActivationMode: HotkeyPreference.loadRewriteActivationMode(defaults: defaults)
         )
     }
 
@@ -54,6 +56,6 @@ struct HotkeyRuntimeConfiguration {
             HotkeyPreference.displayString(for: $0, distinguishModifierSides: distinguishModifierSides)
         } ?? "disabled"
 
-        return "Hotkey bindings. transcription=\(HotkeyPreference.displayString(for: transcriptionHotkey, distinguishModifierSides: distinguishModifierSides)), translation=\(HotkeyPreference.displayString(for: translationHotkey, distinguishModifierSides: distinguishModifierSides)), rewrite=\(HotkeyPreference.displayString(for: rewriteHotkey, distinguishModifierSides: distinguishModifierSides)), meeting=\(meetingDescription), customPaste=\(customPasteDescription), trigger=\(triggerMode.rawValue)"
+        return "Hotkey bindings. transcription=\(HotkeyPreference.displayString(for: transcriptionHotkey, distinguishModifierSides: distinguishModifierSides)), translation=\(HotkeyPreference.displayString(for: translationHotkey, distinguishModifierSides: distinguishModifierSides)), rewrite=\(HotkeyPreference.displayString(for: rewriteHotkey, distinguishModifierSides: distinguishModifierSides)), rewriteActivation=\(rewriteActivationMode.rawValue), meeting=\(meetingDescription), customPaste=\(customPasteDescription), trigger=\(triggerMode.rawValue)"
     }
 }

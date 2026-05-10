@@ -68,3 +68,31 @@ struct HotkeyActionResolver {
         return [.stopRecording]
     }
 }
+
+struct TranscriptionDoubleTapRewriteResolver {
+    enum Action: Equatable {
+        case useStandardHandling
+        case scheduleDelayedTranscriptionStart
+        case startRewrite
+    }
+
+    struct State {
+        let triggerMode: HotkeyPreference.TriggerMode
+        let rewriteActivationMode: HotkeyPreference.RewriteActivationMode
+        let isSessionActive: Bool
+        let isMeetingActive: Bool
+        let hasPendingTranscriptionStart: Bool
+    }
+
+    static func resolve(state: State) -> Action {
+        guard state.triggerMode == .tap,
+              state.rewriteActivationMode == .doubleTapTranscriptionHotkey,
+              !state.isSessionActive,
+              !state.isMeetingActive
+        else {
+            return .useStandardHandling
+        }
+
+        return state.hasPendingTranscriptionStart ? .startRewrite : .scheduleDelayedTranscriptionStart
+    }
+}

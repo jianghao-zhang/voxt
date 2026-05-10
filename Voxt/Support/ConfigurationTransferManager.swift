@@ -597,6 +597,7 @@ enum ConfigurationTransferManager {
         var rewriteHotkeyKeyCode: Int
         var rewriteHotkeyModifiers: Int
         var rewriteHotkeySidedModifiers: Int
+        var rewriteHotkeyActivationMode: String
         var meetingHotkeyKeyCode: Int
         var meetingHotkeyModifiers: Int
         var meetingHotkeySidedModifiers: Int
@@ -615,6 +616,7 @@ enum ConfigurationTransferManager {
             case rewriteHotkeyKeyCode
             case rewriteHotkeyModifiers
             case rewriteHotkeySidedModifiers
+            case rewriteHotkeyActivationMode
             case meetingHotkeyKeyCode
             case meetingHotkeyModifiers
             case meetingHotkeySidedModifiers
@@ -634,6 +636,7 @@ enum ConfigurationTransferManager {
             rewriteHotkeyKeyCode: Int,
             rewriteHotkeyModifiers: Int,
             rewriteHotkeySidedModifiers: Int,
+            rewriteHotkeyActivationMode: String,
             meetingHotkeyKeyCode: Int,
             meetingHotkeyModifiers: Int,
             meetingHotkeySidedModifiers: Int,
@@ -651,6 +654,7 @@ enum ConfigurationTransferManager {
             self.rewriteHotkeyKeyCode = rewriteHotkeyKeyCode
             self.rewriteHotkeyModifiers = rewriteHotkeyModifiers
             self.rewriteHotkeySidedModifiers = rewriteHotkeySidedModifiers
+            self.rewriteHotkeyActivationMode = rewriteHotkeyActivationMode
             self.meetingHotkeyKeyCode = meetingHotkeyKeyCode
             self.meetingHotkeyModifiers = meetingHotkeyModifiers
             self.meetingHotkeySidedModifiers = meetingHotkeySidedModifiers
@@ -671,6 +675,10 @@ enum ConfigurationTransferManager {
             rewriteHotkeyKeyCode = try container.decode(Int.self, forKey: .rewriteHotkeyKeyCode)
             rewriteHotkeyModifiers = try container.decode(Int.self, forKey: .rewriteHotkeyModifiers)
             rewriteHotkeySidedModifiers = try container.decode(Int.self, forKey: .rewriteHotkeySidedModifiers)
+            rewriteHotkeyActivationMode = try container.decodeIfPresent(
+                String.self,
+                forKey: .rewriteHotkeyActivationMode
+            ) ?? HotkeyPreference.defaultRewriteActivationMode.rawValue
             meetingHotkeyKeyCode = try container.decodeIfPresent(Int.self, forKey: .meetingHotkeyKeyCode) ?? Int(HotkeyPreference.defaultMeetingKeyCode)
             meetingHotkeyModifiers = try container.decodeIfPresent(Int.self, forKey: .meetingHotkeyModifiers) ?? Int(HotkeyPreference.defaultMeetingModifiers.rawValue)
             meetingHotkeySidedModifiers = try container.decodeIfPresent(Int.self, forKey: .meetingHotkeySidedModifiers) ?? 0
@@ -979,10 +987,11 @@ enum ConfigurationTransferManager {
                 rewriteHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyKeyCode),
                 rewriteHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyModifiers),
                 rewriteHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeySidedModifiers),
+                rewriteHotkeyActivationMode: HotkeyPreference.loadRewriteActivationMode(defaults: defaults).rawValue,
                 meetingHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.meetingHotkeyKeyCode),
                 meetingHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.meetingHotkeyModifiers),
                 meetingHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.meetingHotkeySidedModifiers),
-                hotkeyTriggerMode: defaults.string(forKey: AppPreferenceKey.hotkeyTriggerMode) ?? HotkeyPreference.defaultTriggerMode.rawValue,
+                hotkeyTriggerMode: HotkeyPreference.loadTriggerMode(defaults: defaults).rawValue,
                 hotkeyDistinguishModifierSides: defaults.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? HotkeyPreference.defaultDistinguishModifierSides,
                 hotkeyPreset: defaults.string(forKey: AppPreferenceKey.hotkeyPreset) ?? HotkeyPreference.defaultPreset.rawValue,
                 escapeKeyCancelsOverlaySession: defaults.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true
@@ -1141,10 +1150,16 @@ enum ConfigurationTransferManager {
         defaults.set(hotkey.rewriteHotkeyKeyCode, forKey: AppPreferenceKey.rewriteHotkeyKeyCode)
         defaults.set(hotkey.rewriteHotkeyModifiers, forKey: AppPreferenceKey.rewriteHotkeyModifiers)
         defaults.set(hotkey.rewriteHotkeySidedModifiers, forKey: AppPreferenceKey.rewriteHotkeySidedModifiers)
+        let rewriteActivationMode = HotkeyPreference.RewriteActivationMode(
+            rawValue: hotkey.rewriteHotkeyActivationMode
+        ) ?? HotkeyPreference.defaultRewriteActivationMode
+        HotkeyPreference.saveRewriteActivationMode(rewriteActivationMode, defaults: defaults)
         defaults.set(hotkey.meetingHotkeyKeyCode, forKey: AppPreferenceKey.meetingHotkeyKeyCode)
         defaults.set(hotkey.meetingHotkeyModifiers, forKey: AppPreferenceKey.meetingHotkeyModifiers)
         defaults.set(hotkey.meetingHotkeySidedModifiers, forKey: AppPreferenceKey.meetingHotkeySidedModifiers)
-        defaults.set(hotkey.hotkeyTriggerMode, forKey: AppPreferenceKey.hotkeyTriggerMode)
+        let triggerMode = HotkeyPreference.TriggerMode(rawValue: hotkey.hotkeyTriggerMode)
+            ?? HotkeyPreference.defaultTriggerMode
+        HotkeyPreference.saveTriggerMode(triggerMode, defaults: defaults)
         defaults.set(hotkey.hotkeyDistinguishModifierSides, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
         defaults.set(hotkey.hotkeyPreset, forKey: AppPreferenceKey.hotkeyPreset)
         defaults.set(hotkey.escapeKeyCancelsOverlaySession, forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession)

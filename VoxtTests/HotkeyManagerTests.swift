@@ -18,6 +18,7 @@ final class HotkeyManagerTests: XCTestCase {
         AppPreferenceKey.rewriteHotkeyKeyCode,
         AppPreferenceKey.rewriteHotkeyModifiers,
         AppPreferenceKey.rewriteHotkeySidedModifiers,
+        AppPreferenceKey.rewriteHotkeyActivationMode,
         AppPreferenceKey.meetingHotkeyKeyCode,
         AppPreferenceKey.meetingHotkeyModifiers,
         AppPreferenceKey.meetingHotkeySidedModifiers,
@@ -572,6 +573,48 @@ final class HotkeyManagerTests: XCTestCase {
 
         XCTAssertEqual(transcriptionDownCount, 0)
         XCTAssertEqual(rewriteDownCount, 1)
+    }
+
+    func testRewriteDedicatedHotkeyDoesNotEmitWhenDoubleTapWakeIsEnabled() {
+        UserDefaults.standard.set(
+            HotkeyPreference.RewriteActivationMode.doubleTapTranscriptionHotkey.rawValue,
+            forKey: AppPreferenceKey.rewriteHotkeyActivationMode
+        )
+
+        let manager = makeManager()
+        var rewriteDownCount = 0
+        manager.onRewriteKeyDown = { rewriteDownCount += 1 }
+
+        XCTAssertFalse(
+            manager.testingHandleEvent(
+                type: .flagsChanged,
+                keyCode: UInt16(kVK_Control),
+                flags: .maskControl
+            )
+        )
+        XCTAssertFalse(
+            manager.testingHandleEvent(
+                type: .flagsChanged,
+                keyCode: UInt16(kVK_Function),
+                flags: combinedFlags(.maskControl, .maskSecondaryFn)
+            )
+        )
+        XCTAssertFalse(
+            manager.testingHandleEvent(
+                type: .flagsChanged,
+                keyCode: UInt16(kVK_Function),
+                flags: .maskControl
+            )
+        )
+        XCTAssertFalse(
+            manager.testingHandleEvent(
+                type: .flagsChanged,
+                keyCode: UInt16(kVK_Control),
+                flags: []
+            )
+        )
+
+        XCTAssertEqual(rewriteDownCount, 0)
     }
 
     func testDefaultMeetingModifierTapEmitsDedicatedCallback() async {

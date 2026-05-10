@@ -6,25 +6,6 @@ private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
 }
 
-private struct HotkeyConflictRule {
-    let keyCode: UInt16
-    let modifiers: NSEvent.ModifierFlags
-    let messageKey: String
-}
-
-private let hotkeyConflictRules: [HotkeyConflictRule] = [
-    HotkeyConflictRule(keyCode: UInt16(kVK_Space), modifiers: [.function], messageKey: "May conflict with Globe / input source switching (fn Space). Disable or remap the macOS shortcut if needed."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_Space), modifiers: [.command], messageKey: "Conflicts with Spotlight (⌘Space)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_Space), modifiers: [.command, .option], messageKey: "Conflicts with Finder search (⌥⌘Space)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_Tab), modifiers: [.command], messageKey: "Conflicts with App Switcher (⌘Tab)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_Grave), modifiers: [.command], messageKey: "Conflicts with window switcher (⌘`)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_Q), modifiers: [.command], messageKey: "Conflicts with Quit (⌘Q)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_H), modifiers: [.command], messageKey: "Conflicts with Hide (⌘H)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_M), modifiers: [.command], messageKey: "Conflicts with Minimise (⌘M)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_W), modifiers: [.command], messageKey: "Conflicts with Close (⌘W)."),
-    HotkeyConflictRule(keyCode: UInt16(kVK_ANSI_V), modifiers: [.command], messageKey: "Conflicts with Paste (⌘V).")
-]
-
 enum HotkeyShortcutKind: String, CaseIterable {
     case transcription
     case translation
@@ -71,6 +52,7 @@ struct HotkeySettingsView: View {
     @AppStorage(AppPreferenceKey.rewriteHotkeyKeyCode) private var rewriteHotkeyKeyCode = Int(HotkeyPreference.defaultRewriteKeyCode)
     @AppStorage(AppPreferenceKey.rewriteHotkeyModifiers) private var rewriteHotkeyModifiers = Int(HotkeyPreference.defaultRewriteModifiers.rawValue)
     @AppStorage(AppPreferenceKey.rewriteHotkeySidedModifiers) private var rewriteHotkeySidedModifiers = 0
+    @AppStorage(AppPreferenceKey.rewriteHotkeyActivationMode) private var rewriteHotkeyActivationMode = HotkeyPreference.defaultRewriteActivationMode.rawValue
     @AppStorage(AppPreferenceKey.meetingHotkeyKeyCode) private var meetingHotkeyKeyCode = Int(HotkeyPreference.defaultMeetingKeyCode)
     @AppStorage(AppPreferenceKey.meetingHotkeyModifiers) private var meetingHotkeyModifiers = Int(HotkeyPreference.defaultMeetingModifiers.rawValue)
     @AppStorage(AppPreferenceKey.meetingHotkeySidedModifiers) private var meetingHotkeySidedModifiers = 0
@@ -280,8 +262,42 @@ struct HotkeySettingsView: View {
 
     private var triggerModeBinding: Binding<HotkeyPreference.TriggerMode> {
         Binding(
-            get: { HotkeyPreference.TriggerMode(rawValue: hotkeyTriggerMode) ?? HotkeyPreference.defaultTriggerMode },
-            set: { hotkeyTriggerMode = $0.rawValue }
+            get: {
+                rewriteActivationState.enforcedTriggerMode(
+                    from: HotkeyPreference.TriggerMode(rawValue: hotkeyTriggerMode) ?? HotkeyPreference.defaultTriggerMode
+                )
+            },
+            set: {
+                hotkeyTriggerMode = rewriteActivationState.enforcedTriggerMode(from: $0).rawValue
+            }
+        )
+    }
+
+    private var rewriteActivationState: HotkeyRewriteActivationState {
+        HotkeyRewriteActivationState(rawValue: rewriteHotkeyActivationMode)
+    }
+
+    private var isRewriteDoubleTapWakeEnabled: Bool {
+        rewriteActivationState.isDoubleTapWakeEnabled
+    }
+
+    private var rewriteDoubleTapDisplayText: String {
+        rewriteActivationState.displayText(
+            for: currentHotkey,
+            distinguishModifierSides: distinguishModifierSides
+        )
+    }
+
+    private var validationMessages: [HotkeySettingsValidation.Message] {
+        HotkeySettingsValidation.messages(
+            for: .init(
+                transcriptionHotkey: currentHotkey,
+                translationHotkey: currentTranslationHotkey,
+                rewriteHotkey: currentRewriteHotkey,
+                shouldValidateRewriteHotkey: !isRewriteDoubleTapWakeEnabled,
+                meetingHotkey: meetingEnabled ? currentMeetingHotkey : nil,
+                customPasteHotkey: customPasteHotkeyEnabled ? currentCustomPasteHotkey : nil
+            )
         )
     }
 
@@ -377,6 +393,11 @@ struct HotkeySettingsView: View {
                         isRecording: recordingField == .rewrite,
                         isPendingConfirmation: isPendingConfirmation(for: .rewrite),
                         distinguishModifierSides: distinguishModifierSides,
+                        displayTextOverride: isRewriteDoubleTapWakeEnabled ? rewriteDoubleTapDisplayText : nil,
+                        isReadOnly: isRewriteDoubleTapWakeEnabled,
+                        modeButtonTitle: "Double-tap Wake",
+                        isModeButtonSelected: isRewriteDoubleTapWakeEnabled,
+                        onModeButtonToggle: toggleRewriteDoubleTapWake,
                         onFocus: { beginRecording(.rewrite) },
                         onReset: {
                             rewriteHotkeyBinding.wrappedValue = HotkeyPreference.defaultRewriteKeyCode
@@ -441,92 +462,8 @@ struct HotkeySettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    if let conflict = hotkeyConflictMessage(for: currentHotkey) {
-                        Text(localizedString("Transcription shortcut: %@", conflict))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if let conflict = hotkeyConflictMessage(for: currentTranslationHotkey) {
-                        Text(localizedString("Translation shortcut: %@", conflict))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if let conflict = hotkeyConflictMessage(for: currentRewriteHotkey) {
-                        Text(localizedString("Content rewrite shortcut: %@", conflict))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if meetingEnabled, let conflict = hotkeyConflictMessage(for: currentMeetingHotkey) {
-                        Text(localizedString("Meeting notes shortcut: %@", conflict))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if customPasteHotkeyEnabled, let conflict = hotkeyConflictMessage(for: currentCustomPasteHotkey) {
-                        Text(localizedString("Custom paste shortcut: %@", conflict))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if currentHotkey == currentTranslationHotkey {
-                        Text(localized("Transcription and translation shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if currentHotkey == currentRewriteHotkey {
-                        Text(localized("Transcription and content rewrite shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if currentTranslationHotkey == currentRewriteHotkey {
-                        Text(localized("Translation and content rewrite shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if meetingEnabled, currentHotkey == currentMeetingHotkey {
-                        Text(localized("Transcription and meeting notes shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if meetingEnabled, currentTranslationHotkey == currentMeetingHotkey {
-                        Text(localized("Translation and meeting notes shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if meetingEnabled, currentRewriteHotkey == currentMeetingHotkey {
-                        Text(localized("Content rewrite and meeting notes shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if customPasteHotkeyEnabled, currentHotkey == currentCustomPasteHotkey {
-                        Text(localized("Transcription and custom paste shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if customPasteHotkeyEnabled, currentTranslationHotkey == currentCustomPasteHotkey {
-                        Text(localized("Translation and custom paste shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if customPasteHotkeyEnabled, currentRewriteHotkey == currentCustomPasteHotkey {
-                        Text(localized("Content rewrite and custom paste shortcuts should be different."))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    if customPasteHotkeyEnabled, meetingEnabled, currentMeetingHotkey == currentCustomPasteHotkey {
-                        Text(localized("Meeting notes and custom paste shortcuts should be different."))
+                    ForEach(validationMessages) { message in
+                        Text(message.text)
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
@@ -563,6 +500,7 @@ struct HotkeySettingsView: View {
                             selectedTitle: triggerModeBinding.wrappedValue.title,
                             width: 220
                         )
+                        .disabled(isRewriteDoubleTapWakeEnabled)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -627,16 +565,14 @@ struct HotkeySettingsView: View {
                 discardPendingCapture()
             }
         }
-    }
-
-    private func hotkeyConflictMessage(for hotkey: HotkeyPreference.Hotkey) -> String? {
-        return hotkeyConflictRules.first {
-            hotkey.keyCode == $0.keyCode && hotkey.modifiers == $0.modifiers
-        }.map { AppLocalization.localizedString($0.messageKey) }
-    }
-
-    private func localizedString(_ formatKey: String, _ argument: String) -> String {
-        AppLocalization.format(formatKey, argument)
+        .onChange(of: rewriteHotkeyActivationMode) { _, _ in
+            if isRewriteDoubleTapWakeEnabled {
+                hotkeyTriggerMode = HotkeyPreference.TriggerMode.tap.rawValue
+                if recordingField == .rewrite || pendingCapturedField == .rewrite {
+                    discardPendingCapture()
+                }
+            }
+        }
     }
 
     private func applyPreset(_ preset: HotkeyPreference.Preset) {
@@ -650,6 +586,18 @@ struct HotkeySettingsView: View {
         pendingCapturedField = nil
         pendingCapturedHotkey = nil
         recordingField = field
+    }
+
+    private func toggleRewriteDoubleTapWake() {
+        discardPendingCapture()
+        let nextState = HotkeyRewriteActivationState(
+            rawValue: rewriteActivationState.toggledMode.rawValue
+        )
+        rewriteHotkeyActivationMode = nextState.mode.rawValue
+        hotkeyTriggerMode = nextState.enforcedTriggerMode(
+            from: HotkeyPreference.TriggerMode(rawValue: hotkeyTriggerMode)
+                ?? HotkeyPreference.defaultTriggerMode
+        ).rawValue
     }
 
     private func isPendingConfirmation(for field: RecordingField) -> Bool {

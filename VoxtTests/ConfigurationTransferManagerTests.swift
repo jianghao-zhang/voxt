@@ -37,6 +37,10 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         sourceDefaults.set(true, forKey: AppPreferenceKey.whisperTimestampsEnabled)
         sourceDefaults.set(false, forKey: AppPreferenceKey.whisperRealtimeEnabled)
         sourceDefaults.set(
+            HotkeyPreference.RewriteActivationMode.doubleTapTranscriptionHotkey.rawValue,
+            forKey: AppPreferenceKey.rewriteHotkeyActivationMode
+        )
+        sourceDefaults.set(
             WhisperLocalTuningSettingsStore.storageValue(
                 for: WhisperLocalTuningSettings(
                     preset: .accuracyFirst,
@@ -172,6 +176,10 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         )
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.translationFallbackModelProvider), TranslationModelProvider.customLLM.rawValue)
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.meetingRealtimeTranslationTargetLanguage), TranslationTargetLanguage.japanese.rawValue)
+        XCTAssertEqual(
+            targetDefaults.string(forKey: AppPreferenceKey.rewriteHotkeyActivationMode),
+            HotkeyPreference.RewriteActivationMode.doubleTapTranscriptionHotkey.rawValue
+        )
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.customProxyUsername) ?? "", "")
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.customProxyPassword) ?? "", "")
         XCTAssertEqual(VoxtNetworkSession.proxyCredentials(defaults: targetDefaults).password, "")
@@ -231,6 +239,33 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         XCTAssertEqual(restored?.ollamaLogprobsEnabled, true)
         XCTAssertEqual(restored?.ollamaTopLogprobs, 2)
         XCTAssertEqual(restored?.ollamaOptionsJSON, #"{"num_ctx":4096}"#)
+    }
+
+    func testImportNormalizesTriggerModeForRewriteDoubleTapWake() throws {
+        let sourceDefaults = TestDoubles.makeUserDefaults()
+        sourceDefaults.set(
+            HotkeyPreference.RewriteActivationMode.doubleTapTranscriptionHotkey.rawValue,
+            forKey: AppPreferenceKey.rewriteHotkeyActivationMode
+        )
+        sourceDefaults.set(
+            HotkeyPreference.TriggerMode.longPress.rawValue,
+            forKey: AppPreferenceKey.hotkeyTriggerMode
+        )
+
+        let exported = try ConfigurationTransferManager.exportJSONString(defaults: sourceDefaults)
+        let targetDefaults = TestDoubles.makeUserDefaults()
+
+        try ConfigurationTransferManager.importConfiguration(from: exported, defaults: targetDefaults)
+
+        XCTAssertEqual(
+            targetDefaults.string(forKey: AppPreferenceKey.rewriteHotkeyActivationMode),
+            HotkeyPreference.RewriteActivationMode.doubleTapTranscriptionHotkey.rawValue
+        )
+        XCTAssertEqual(
+            targetDefaults.string(forKey: AppPreferenceKey.hotkeyTriggerMode),
+            HotkeyPreference.TriggerMode.tap.rawValue
+        )
+        XCTAssertEqual(HotkeyPreference.loadTriggerMode(defaults: targetDefaults), .tap)
     }
 
     func testGeneralSettingsDecoderBackfillsNewFields() throws {

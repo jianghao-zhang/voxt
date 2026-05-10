@@ -171,6 +171,13 @@ struct HotkeyPreference {
         }
     }
 
+    enum RewriteActivationMode: String, CaseIterable, Identifiable {
+        case dedicatedHotkey
+        case doubleTapTranscriptionHotkey
+
+        var id: String { rawValue }
+    }
+
     enum Preset: String, CaseIterable, Identifiable {
         case fnCombo
         case commandCombo
@@ -217,6 +224,7 @@ struct HotkeyPreference {
     static let defaultCustomPasteKeyCode: UInt16 = UInt16(kVK_ANSI_V)
     static let defaultCustomPasteModifiers: NSEvent.ModifierFlags = [.control, .command]
     static let defaultTriggerMode: TriggerMode = .tap
+    static let defaultRewriteActivationMode: RewriteActivationMode = .dedicatedHotkey
     static let defaultDistinguishModifierSides = false
     static let defaultPreset: Preset = .fnCombo
 
@@ -238,6 +246,7 @@ struct HotkeyPreference {
             AppPreferenceKey.customPasteHotkeyModifiers: Int(defaultCustomPasteModifiers.rawValue),
             AppPreferenceKey.customPasteHotkeySidedModifiers: 0,
             AppPreferenceKey.hotkeyTriggerMode: defaultTriggerMode.rawValue,
+            AppPreferenceKey.rewriteHotkeyActivationMode: defaultRewriteActivationMode.rawValue,
             AppPreferenceKey.hotkeyDistinguishModifierSides: defaultDistinguishModifierSides,
             AppPreferenceKey.hotkeyPreset: defaultPreset.rawValue
         ])
@@ -357,13 +366,35 @@ struct HotkeyPreference {
         UserDefaults.standard.set(sidedModifiers.rawValue, forKey: AppPreferenceKey.customPasteHotkeySidedModifiers)
     }
 
-    static func loadTriggerMode() -> TriggerMode {
-        let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.hotkeyTriggerMode)
-        return TriggerMode(rawValue: raw ?? "") ?? defaultTriggerMode
+    static func loadTriggerMode(defaults: UserDefaults = .standard) -> TriggerMode {
+        let raw = defaults.string(forKey: AppPreferenceKey.hotkeyTriggerMode)
+        let requestedMode = TriggerMode(rawValue: raw ?? "") ?? defaultTriggerMode
+        return enforcedTriggerMode(requestedMode, rewriteActivationMode: loadRewriteActivationMode(defaults: defaults))
     }
 
-    static func saveTriggerMode(_ mode: TriggerMode) {
-        UserDefaults.standard.set(mode.rawValue, forKey: AppPreferenceKey.hotkeyTriggerMode)
+    static func saveTriggerMode(_ mode: TriggerMode, defaults: UserDefaults = .standard) {
+        let enforcedMode = enforcedTriggerMode(mode, rewriteActivationMode: loadRewriteActivationMode(defaults: defaults))
+        defaults.set(enforcedMode.rawValue, forKey: AppPreferenceKey.hotkeyTriggerMode)
+    }
+
+    static func loadRewriteActivationMode(defaults: UserDefaults = .standard) -> RewriteActivationMode {
+        let raw = defaults.string(forKey: AppPreferenceKey.rewriteHotkeyActivationMode)
+        return RewriteActivationMode(rawValue: raw ?? "") ?? defaultRewriteActivationMode
+    }
+
+    static func saveRewriteActivationMode(_ mode: RewriteActivationMode, defaults: UserDefaults = .standard) {
+        defaults.set(mode.rawValue, forKey: AppPreferenceKey.rewriteHotkeyActivationMode)
+        let currentTriggerMode = TriggerMode(
+            rawValue: defaults.string(forKey: AppPreferenceKey.hotkeyTriggerMode) ?? ""
+        ) ?? defaultTriggerMode
+        saveTriggerMode(currentTriggerMode, defaults: defaults)
+    }
+
+    static func enforcedTriggerMode(
+        _ mode: TriggerMode,
+        rewriteActivationMode: RewriteActivationMode
+    ) -> TriggerMode {
+        rewriteActivationMode == .doubleTapTranscriptionHotkey ? .tap : mode
     }
 
     static func loadDistinguishModifierSides() -> Bool {

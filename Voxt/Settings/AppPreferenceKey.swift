@@ -39,6 +39,7 @@ enum AppPreferenceKey {
     static let rewriteHotkeyKeyCode = "rewriteHotkeyKeyCode"
     static let rewriteHotkeyModifiers = "rewriteHotkeyModifiers"
     static let rewriteHotkeySidedModifiers = "rewriteHotkeySidedModifiers"
+    static let rewriteHotkeyActivationMode = "rewriteHotkeyActivationMode"
     static let meetingHotkeyKeyCode = "meetingHotkeyKeyCode"
     static let meetingHotkeyModifiers = "meetingHotkeyModifiers"
     static let meetingHotkeySidedModifiers = "meetingHotkeySidedModifiers"

@@ -220,6 +220,11 @@ struct SettingsShortcutCaptureField: View {
     let isRecording: Bool
     let isPendingConfirmation: Bool
     let distinguishModifierSides: Bool
+    var displayTextOverride: String? = nil
+    var isReadOnly: Bool = false
+    var modeButtonTitle: String? = nil
+    var isModeButtonSelected = false
+    var onModeButtonToggle: (() -> Void)? = nil
     let onFocus: () -> Void
     let onReset: () -> Void
     let onCancelPending: () -> Void
@@ -233,10 +238,26 @@ struct SettingsShortcutCaptureField: View {
             Spacer()
 
             HStack(spacing: 8) {
+                if let modeButtonTitle, let onModeButtonToggle {
+                    Button(action: onModeButtonToggle) {
+                        Text(featureSettingsLocalized(modeButtonTitle))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(isModeButtonSelected ? .white : .secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(isModeButtonSelected ? Color.accentColor : Color.secondary.opacity(0.10))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Text(
-                    isRecording && !isPendingConfirmation
+                    displayTextOverride
+                    ?? (isRecording && !isPendingConfirmation
                         ? featureSettingsLocalized("Listening...")
-                        : HotkeyPreference.displayString(for: hotkey, distinguishModifierSides: distinguishModifierSides)
+                        : HotkeyPreference.displayString(for: hotkey, distinguishModifierSides: distinguishModifierSides))
                 )
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(.primary)
@@ -279,7 +300,7 @@ struct SettingsShortcutCaptureField: View {
                             RoundedRectangle(cornerRadius: 7, style: .continuous)
                                 .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
                         )
-                } else {
+                } else if !isReadOnly {
                     Button(action: onReset) {
                         Image(systemName: "arrow.counterclockwise")
                             .foregroundStyle(.secondary)
@@ -300,7 +321,10 @@ struct SettingsShortcutCaptureField: View {
                     .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
             )
             .contentShape(Rectangle())
-            .onTapGesture(perform: onFocus)
+            .onTapGesture {
+                guard !isReadOnly else { return }
+                onFocus()
+            }
             .frame(width: 320, alignment: .trailing)
         }
     }

@@ -227,6 +227,32 @@ extension AppDelegate {
         VoxtLog.hotkey(
             "Hotkey callback transcriptionDown. mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
         )
+        let doubleTapRewriteAction = TranscriptionDoubleTapRewriteResolver.resolve(
+            state: TranscriptionDoubleTapRewriteResolver.State(
+                triggerMode: triggerMode,
+                rewriteActivationMode: HotkeyPreference.loadRewriteActivationMode(),
+                isSessionActive: isSessionActive,
+                isMeetingActive: meetingSessionCoordinator.isActive,
+                hasPendingTranscriptionStart: pendingTranscriptionStartTask != nil
+            )
+        )
+        switch doubleTapRewriteAction {
+        case .useStandardHandling:
+            break
+        case .scheduleDelayedTranscriptionStart:
+            let delay = NSEvent.doubleClickInterval
+            VoxtLog.hotkey("Transcription tap entering double-tap rewrite wait window. delaySec=\(delay)")
+            schedulePendingTranscriptionStart(
+                delay: delay,
+                reason: "doubleTapRewriteWait"
+            )
+            return
+        case .startRewrite:
+            VoxtLog.hotkey("Transcription second tap detected; starting rewrite instead of transcription.")
+            cancelPendingTranscriptionStart()
+            beginRecording(outputMode: .rewrite)
+            return
+        }
         let actions = HotkeyActionResolver.resolveTranscriptionDown(
             state: HotkeyActionResolver.State(
                 triggerMode: triggerMode,
@@ -391,18 +417,33 @@ extension AppDelegate {
     }
 
     func schedulePendingTranscriptionStart() {
-        VoxtLog.hotkey("Scheduling pending transcription start. delaySec=\(transcriptionStartDebounceInterval)")
+        schedulePendingTranscriptionStart(
+            delay: transcriptionStartDebounceInterval,
+            reason: "longPressDebounce"
+        )
+    }
+
+    func schedulePendingTranscriptionStart(
+        delay: TimeInterval,
+        reason: String
+    ) {
+        VoxtLog.hotkey("Scheduling pending transcription start. delaySec=\(delay), reason=\(reason)")
         pendingTranscriptionStartTask?.cancel()
         pendingTranscriptionStartTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await Task.sleep(for: .seconds(self.transcriptionStartDebounceInterval))
+                try await Task.sleep(for: .seconds(delay))
             } catch {
                 return
             }
             guard !Task.isCancelled else { return }
             guard !self.isSessionActive else {
                 VoxtLog.hotkey("Pending transcription start dropped: session already active.")
+                self.pendingTranscriptionStartTask = nil
+                return
+            }
+            guard !self.meetingSessionCoordinator.isActive else {
+                VoxtLog.hotkey("Pending transcription start dropped: meeting session is active.")
                 self.pendingTranscriptionStartTask = nil
                 return
             }
