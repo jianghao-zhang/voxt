@@ -554,13 +554,6 @@ struct CustomLLMModelCatalog {
             releaseStatus: .new
         ),
         Option(
-            id: "mlx-community/Phi-3.5-MoE-instruct-4bit",
-            title: "Phi 3.5 MoE Instruct (4bit)",
-            description: "Phi 3.5 MoE model with stronger quality when more memory is available.",
-            visibility: .visible,
-            releaseStatus: .new
-        ),
-        Option(
             id: "mlx-community/internlm2_5-7b-chat-4bit",
             title: "InternLM2.5 7B Chat (4bit)",
             description: "Chinese-friendly 7B chat model that adds a strong new bilingual option for home Macs.",
@@ -651,7 +644,6 @@ struct CustomLLMModelCatalog {
         "mlx-community/gemma-4-e2b-it-4bit": PresentationMetadata(ratingText: "4.3", tagKeys: ["Fast"]),
         "mlx-community/gemma-4-e4b-it-4bit": PresentationMetadata(ratingText: "4.6", tagKeys: ["Balanced"]),
         "mlx-community/Phi-3.5-mini-instruct-4bit": PresentationMetadata(ratingText: "4.2", tagKeys: ["Fast"]),
-        "mlx-community/Phi-3.5-MoE-instruct-4bit": PresentationMetadata(ratingText: "4.7", tagKeys: ["Accurate"]),
         "mlx-community/internlm2_5-7b-chat-4bit": PresentationMetadata(ratingText: "4.7", tagKeys: ["Accurate"]),
         "mlx-community/MiniCPM4-8B-4bit": PresentationMetadata(ratingText: "4.8", tagKeys: ["Accurate"]),
         "mlx-community/granite-3.3-2b-instruct-4bit": PresentationMetadata(ratingText: "4.1", tagKeys: ["Fast"]),
