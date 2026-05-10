@@ -6,6 +6,53 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-05-10
+
+### English
+
+#### Added
+- Added automatic corrected-term learning, so Voxt can watch quick manual fixes after text insertion and save confirmed terms to the dictionary automatically.
+- Added a double-tap wake mode for Content Rewrite, so you can trigger rewrite directly from the transcription shortcut.
+
+#### Changed
+- Expanded dictionary and history correction tools with one-click ingest actions, richer correction details, and cleaner settings flows.
+- Model settings now allow multiple MLX local model downloads at the same time, with clearer per-model progress and refresh behavior.
+- Added advanced Ollama options in remote model settings, including response format, think mode, keep-alive, logprobs, and custom native options.
+
+#### Fixed
+- Fixed model settings refresh and download badges so local model state updates more reliably while downloads are running or storage paths change.
+- Fixed Ollama connectivity and request handling so endpoint validation, structured output, and newer option combinations behave more reliably.
+
+### 简体中文
+
+#### 新增
+- 新增自动学习纠正词条功能，Voxt 会在插入文本后短暂观察你的手动修正，并将确认后的词条自动写入词典。
+- 为内容改写新增双击唤醒模式，现在可以通过双击转录快捷键直接触发改写。
+
+#### 改进
+- 扩展了词典与历史纠错工具，加入一键录入入口、更完整的纠错详情，以及更顺手的设置流程。
+- Model 设置现在支持同时下载多个 MLX 本地模型，并提供更清晰的逐模型进度与刷新反馈。
+- 远端模型设置新增了更完整的 Ollama 高级选项，包括响应格式、思考模式、保活时间、logprobs 和原生自定义选项。
+
+#### 修复
+- 修复了模型设置页的刷新与下载徽标状态问题，现在下载进行中或模型存储路径变化时，本地模型状态会更稳定地更新。
+- 修复了 Ollama 的连通性检测与请求处理问题，现在端点校验、结构化输出和较新的参数组合表现更稳定。
+
+### 日本語
+
+#### 追加
+- 自動修正語彙学習を追加し、Voxt がテキスト挿入後の短い手動修正を監視して、確定した語彙を辞書へ自動登録できるようになりました。
+- Content Rewrite 向けのダブルタップ起動モードを追加し、文字起こしショートカットのダブルタップで直接リライトを開始できるようになりました。
+
+#### 変更
+- 辞書と履歴修正まわりを拡張し、ワンクリック取り込み、より詳しい修正表示、より整理された設定フローを追加しました。
+- Model 設定で複数の MLX ローカルモデルを同時にダウンロードできるようにし、モデルごとの進捗表示と更新挙動もわかりやすくしました。
+- リモートモデル設定に Ollama の詳細オプションを追加し、レスポンス形式、Think モード、keep-alive、logprobs、ネイティブオプションを設定できるようにしました。
+
+#### 修正
+- モデル設定の更新処理とダウンロードバッジを修正し、ダウンロード中や保存先変更時でもローカルモデル状態がより確実に反映されるようにしました。
+- Ollama の接続確認とリクエスト処理を修正し、エンドポイント検証、構造化出力、新しいオプション組み合わせでも安定して動作するようにしました。
+
 ## [1.11.0] - 2026-05-08
 
 ### English
