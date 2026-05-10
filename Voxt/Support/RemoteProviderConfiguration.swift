@@ -44,6 +44,22 @@ enum OllamaThinkMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum OMLXResponseFormat: String, CaseIterable, Identifiable {
+    case plain
+    case jsonSchema
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .plain:
+            return AppLocalization.localizedString("Plain Text")
+        case .jsonSchema:
+            return AppLocalization.localizedString("JSON Schema")
+        }
+    }
+}
+
 struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     let providerID: String
     var model: String
@@ -63,6 +79,10 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     var ollamaLogprobsEnabled: Bool
     var ollamaTopLogprobs: Int?
     var ollamaOptionsJSON: String
+    var omlxResponseFormat: String
+    var omlxJSONSchema: String
+    var omlxIncludeUsageStreamOptions: Bool
+    var omlxExtraBodyJSON: String
 
     var id: String { providerID }
 
@@ -92,6 +112,10 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         OllamaThinkMode(rawValue: ollamaThinkMode) ?? .off
     }
 
+    var omlxResponseFormatValue: OMLXResponseFormat {
+        OMLXResponseFormat(rawValue: omlxResponseFormat) ?? .plain
+    }
+
     init(
         providerID: String,
         model: String,
@@ -110,7 +134,11 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         ollamaKeepAlive: String = "",
         ollamaLogprobsEnabled: Bool = false,
         ollamaTopLogprobs: Int? = nil,
-        ollamaOptionsJSON: String = ""
+        ollamaOptionsJSON: String = "",
+        omlxResponseFormat: String = OMLXResponseFormat.plain.rawValue,
+        omlxJSONSchema: String = "",
+        omlxIncludeUsageStreamOptions: Bool = false,
+        omlxExtraBodyJSON: String = ""
     ) {
         self.providerID = providerID
         self.model = model
@@ -130,6 +158,10 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         self.ollamaLogprobsEnabled = ollamaLogprobsEnabled
         self.ollamaTopLogprobs = ollamaTopLogprobs
         self.ollamaOptionsJSON = ollamaOptionsJSON
+        self.omlxResponseFormat = omlxResponseFormat
+        self.omlxJSONSchema = omlxJSONSchema
+        self.omlxIncludeUsageStreamOptions = omlxIncludeUsageStreamOptions
+        self.omlxExtraBodyJSON = omlxExtraBodyJSON
     }
 
     enum CodingKeys: String, CodingKey {
@@ -151,6 +183,10 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         case ollamaLogprobsEnabled
         case ollamaTopLogprobs
         case ollamaOptionsJSON
+        case omlxResponseFormat
+        case omlxJSONSchema
+        case omlxIncludeUsageStreamOptions
+        case omlxExtraBodyJSON
     }
 
     init(from decoder: Decoder) throws {
@@ -174,6 +210,10 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         ollamaLogprobsEnabled = try container.decodeIfPresent(Bool.self, forKey: .ollamaLogprobsEnabled) ?? false
         ollamaTopLogprobs = try container.decodeIfPresent(Int.self, forKey: .ollamaTopLogprobs)
         ollamaOptionsJSON = try container.decodeIfPresent(String.self, forKey: .ollamaOptionsJSON) ?? ""
+        omlxResponseFormat = try container.decodeIfPresent(String.self, forKey: .omlxResponseFormat) ?? OMLXResponseFormat.plain.rawValue
+        omlxJSONSchema = try container.decodeIfPresent(String.self, forKey: .omlxJSONSchema) ?? ""
+        omlxIncludeUsageStreamOptions = try container.decodeIfPresent(Bool.self, forKey: .omlxIncludeUsageStreamOptions) ?? false
+        omlxExtraBodyJSON = try container.decodeIfPresent(String.self, forKey: .omlxExtraBodyJSON) ?? ""
     }
 
     nonisolated var withoutSensitiveValues: RemoteProviderConfiguration {
@@ -314,6 +354,15 @@ enum RemoteModelConfigurationStore {
             apiKey: "",
             searchEnabled: provider.defaultSearchEnabled
         )
+    }
+
+    static func isStoredLLMConfigurationConfigured(
+        provider: RemoteLLMProvider,
+        stored: [String: RemoteProviderConfiguration]
+    ) -> Bool {
+        guard stored[provider.rawValue] != nil else { return false }
+        let configuration = resolvedLLMConfiguration(provider: provider, stored: stored)
+        return configuration.isConfigured && configuration.hasUsableModel
     }
 
     private static func migrateLegacyStoredSecrets(defaultsKey: String, defaults: UserDefaults) {

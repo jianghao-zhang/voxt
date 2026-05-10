@@ -187,11 +187,16 @@ extension AppDelegate {
             guard customLLMManager.isModelDownloaded(repo: repo) else { return nil }
             return .customLLM(repo: repo)
         case .remoteLLM(let provider):
+            guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLMConfigurations
+            ) else {
+                return nil
+            }
             let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
                 provider: provider,
                 stored: remoteLLMConfigurations
             )
-            guard configuration.isConfigured, configuration.hasUsableModel else { return nil }
             return .remoteLLM(provider: provider, configuration: configuration)
         case .none:
             return nil

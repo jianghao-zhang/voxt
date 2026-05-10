@@ -337,8 +337,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var remoteEnhancementModelAvailable: Bool {
-        let configuration = resolvedRemoteLLMContext(forTranslation: false).configuration
-        return configuration.isConfigured && configuration.hasUsableModel
+        RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+            provider: remoteLLMSelectedProvider,
+            stored: remoteLLMConfigurations
+        )
     }
 
     private var isRunningUnitTests: Bool {

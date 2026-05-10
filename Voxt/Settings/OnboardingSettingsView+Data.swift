@@ -331,11 +331,14 @@ extension OnboardingSettingsView {
         case .localLLM(let repo):
             return customLLMManager.displayTitle(for: repo)
         case .remoteLLM(let provider):
-            let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(provider: provider, stored: remoteLLMConfigurations)
-            if configuration.hasUsableModel {
-                return "\(provider.title) · \(configuration.model)"
+            guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLMConfigurations
+            ) else {
+                return "\(provider.title) · \(AppLocalization.localizedString("Needs Setup"))"
             }
-            return "\(provider.title) · \(AppLocalization.localizedString("Needs Setup"))"
+            let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(provider: provider, stored: remoteLLMConfigurations)
+            return "\(provider.title) · \(configuration.model)"
         case .none:
             return AppLocalization.localizedString("Not selected")
         }
@@ -365,13 +368,16 @@ extension OnboardingSettingsView {
     }
 
     func remoteLLMStatusText(for provider: RemoteLLMProvider) -> String {
+        guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+            provider: provider,
+            stored: remoteLLMConfigurations
+        ) else {
+            return localized("Not configured")
+        }
         let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
             provider: provider,
             stored: remoteLLMConfigurations
         )
-        guard configuration.isConfigured else {
-            return localized("Not configured")
-        }
         return AppLocalization.format("Configured model: %@", configuration.model)
     }
 

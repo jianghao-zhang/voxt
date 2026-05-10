@@ -178,11 +178,10 @@ struct ModelSettingsView: View {
     }
 
     var remoteEnhancementModelAvailable: Bool {
-        let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
+        RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
             provider: selectedRemoteLLMProvider,
             stored: remoteLLMConfigurations
         )
-        return configuration.isConfigured && configuration.hasUsableModel
     }
 
     private var featureSettings: FeatureSettings {

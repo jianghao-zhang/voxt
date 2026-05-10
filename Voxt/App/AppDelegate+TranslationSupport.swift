@@ -1,6 +1,13 @@
 import Foundation
 
 extension AppDelegate {
+    func isStoredRemoteLLMConfigured(_ provider: RemoteLLMProvider) -> Bool {
+        RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+            provider: provider,
+            stored: remoteLLMConfigurations
+        )
+    }
+
     func resolvedRemoteLLMContext(forTranslation: Bool) -> (provider: RemoteLLMProvider, configuration: RemoteProviderConfiguration) {
         let provider: RemoteLLMProvider
         if forTranslation, let translationProvider = translationRemoteLLMProvider {
@@ -66,7 +73,7 @@ extension AppDelegate {
             )
         case .remoteLLM:
             let context = resolvedRemoteLLMContext(forTranslation: true)
-            guard context.configuration.hasUsableModel else {
+            guard isStoredRemoteLLMConfigured(context.provider) else {
                 VoxtLog.warning("Translation provider remoteLLM unavailable: no configured model.")
                 showOverlayStatus(
                     String(localized: "No configured remote LLM model yet. Configure a provider in Settings > Model."),
@@ -169,7 +176,7 @@ extension AppDelegate {
             )
         case .remoteLLM:
             let context = remoteContext ?? resolvedRemoteLLMContext(forRewrite: true)
-            guard context.configuration.hasUsableModel else {
+            guard isStoredRemoteLLMConfigured(context.provider) else {
                 VoxtLog.warning("Rewrite provider remoteLLM unavailable: no configured model.")
                 showOverlayStatus(
                     String(localized: "No configured remote LLM model yet. Configure a provider in Settings > Model."),
@@ -225,7 +232,7 @@ extension AppDelegate {
             )
         case .remoteLLM:
             let context = resolvedRemoteLLMContext(forTranslation: true)
-            guard context.configuration.hasUsableModel else {
+            guard isStoredRemoteLLMConfigured(context.provider) else {
                 return text
             }
             return try await RemoteLLMRuntimeClient().translate(

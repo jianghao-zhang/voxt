@@ -5,6 +5,14 @@ extension RemoteProviderConfigurationSheet {
         llmProviderForPicker == .ollama
     }
 
+    var isOMLXLLMProvider: Bool {
+        llmProviderForPicker == .omlx
+    }
+
+    var showsLargeAdvancedProviderSection: Bool {
+        isOllamaLLMProvider || isOMLXLLMProvider
+    }
+
     var apiKeyFieldTitle: String {
         (llmProviderForPicker?.apiKeyIsOptional == true)
             ? AppLocalization.localizedString("API Key (Optional)")
@@ -82,6 +90,21 @@ extension RemoteProviderConfigurationSheet {
             ?? OllamaThinkMode.off.title
     }
 
+    var omlxResponseFormatMenuOptions: [SettingsMenuOption<String>] {
+        OMLXResponseFormat.allCases.map { option in
+            SettingsMenuOption(value: option.rawValue, title: option.title)
+        }
+    }
+
+    var omlxResponseFormatSelectedTitle: String {
+        OMLXResponseFormat(rawValue: omlxResponseFormat)?.title
+            ?? OMLXResponseFormat.plain.title
+    }
+
+    var shouldShowOMLXJSONSchemaField: Bool {
+        shouldShowOMLXJSONSchemaField(for: omlxResponseFormat)
+    }
+
     var currentConfigurationSnapshot: RemoteProviderConfiguration {
         RemoteProviderConfiguration(
             providerID: configuration.providerID,
@@ -101,7 +124,11 @@ extension RemoteProviderConfigurationSheet {
             ollamaKeepAlive: ollamaKeepAlive.trimmingCharacters(in: .whitespacesAndNewlines),
             ollamaLogprobsEnabled: ollamaLogprobsEnabled,
             ollamaTopLogprobs: parsedOllamaTopLogprobsValue(),
-            ollamaOptionsJSON: ollamaOptionsJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+            ollamaOptionsJSON: ollamaOptionsJSON.trimmingCharacters(in: .whitespacesAndNewlines),
+            omlxResponseFormat: omlxResponseFormat,
+            omlxJSONSchema: omlxJSONSchema.trimmingCharacters(in: .whitespacesAndNewlines),
+            omlxIncludeUsageStreamOptions: omlxIncludeUsageStreamOptions,
+            omlxExtraBodyJSON: omlxExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 
@@ -252,14 +279,23 @@ extension RemoteProviderConfigurationSheet {
     }
 
     func validationMessage() -> String? {
-        guard isOllamaLLMProvider else { return nil }
-        return validationMessageForOllamaSettings(
-            responseFormat: ollamaResponseFormat,
-            jsonSchema: ollamaJSONSchema,
-            optionsJSON: ollamaOptionsJSON,
-            logprobsEnabled: ollamaLogprobsEnabled,
-            topLogprobsText: ollamaTopLogprobsText
-        )
+        if isOllamaLLMProvider {
+            return validationMessageForOllamaSettings(
+                responseFormat: ollamaResponseFormat,
+                jsonSchema: ollamaJSONSchema,
+                optionsJSON: ollamaOptionsJSON,
+                logprobsEnabled: ollamaLogprobsEnabled,
+                topLogprobsText: ollamaTopLogprobsText
+            )
+        }
+        if isOMLXLLMProvider {
+            return validationMessageForOMLXSettings(
+                responseFormat: omlxResponseFormat,
+                jsonSchema: omlxJSONSchema,
+                extraBodyJSON: omlxExtraBodyJSON
+            )
+        }
+        return nil
     }
 
     func validateOllamaTopLogprobs() -> String? {
@@ -271,6 +307,10 @@ extension RemoteProviderConfigurationSheet {
 
     func shouldShowOllamaJSONSchemaField(for responseFormat: String) -> Bool {
         OllamaResponseFormat(rawValue: responseFormat) == .jsonSchema
+    }
+
+    func shouldShowOMLXJSONSchemaField(for responseFormat: String) -> Bool {
+        OMLXResponseFormat(rawValue: responseFormat) == .jsonSchema
     }
 
     func validationMessageForOllamaSettings(
@@ -294,6 +334,29 @@ extension RemoteProviderConfigurationSheet {
             return optionsMessage
         }
         if shouldShowOllamaJSONSchemaField(for: responseFormat),
+           let schemaMessage = validateJSONObjectField(
+               jsonSchema,
+               fieldName: AppLocalization.localizedString("JSON Schema"),
+               requiresValue: true
+           ) {
+            return schemaMessage
+        }
+        return nil
+    }
+
+    func validationMessageForOMLXSettings(
+        responseFormat: String,
+        jsonSchema: String,
+        extraBodyJSON: String
+    ) -> String? {
+        if let extraBodyMessage = validateJSONObjectField(
+            extraBodyJSON,
+            fieldName: AppLocalization.localizedString("Extra Body JSON"),
+            requiresValue: false
+        ) {
+            return extraBodyMessage
+        }
+        if shouldShowOMLXJSONSchemaField(for: responseFormat),
            let schemaMessage = validateJSONObjectField(
                jsonSchema,
                fieldName: AppLocalization.localizedString("JSON Schema"),

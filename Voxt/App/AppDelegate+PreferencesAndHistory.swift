@@ -637,6 +637,18 @@ extension AppDelegate {
         provider: RemoteLLMProvider,
         modeTitle: String
     ) -> HistoryTextModelMetadata {
+        guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+            provider: provider,
+            stored: remoteLLMConfigurations
+        ) else {
+            return HistoryTextModelMetadata(
+                modeTitle: modeTitle,
+                modelTitle: provider.title,
+                remoteProviderTitle: provider.title,
+                remoteModelTitle: nil,
+                remoteEndpoint: nil
+            )
+        }
         let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
             provider: provider,
             stored: remoteLLMConfigurations

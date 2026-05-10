@@ -19,6 +19,10 @@ struct SanitizedRemoteProviderConfiguration: Codable {
     var ollamaLogprobsEnabled: Bool
     var ollamaTopLogprobs: Int?
     var ollamaOptionsJSON: String
+    var omlxResponseFormat: String
+    var omlxJSONSchema: String
+    var omlxIncludeUsageStreamOptions: Bool
+    var omlxExtraBodyJSON: String
 
     enum CodingKeys: String, CodingKey {
         case providerID
@@ -39,6 +43,10 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         case ollamaLogprobsEnabled
         case ollamaTopLogprobs
         case ollamaOptionsJSON
+        case omlxResponseFormat
+        case omlxJSONSchema
+        case omlxIncludeUsageStreamOptions
+        case omlxExtraBodyJSON
     }
 
     init(
@@ -59,7 +67,11 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         ollamaKeepAlive: String,
         ollamaLogprobsEnabled: Bool,
         ollamaTopLogprobs: Int?,
-        ollamaOptionsJSON: String
+        ollamaOptionsJSON: String,
+        omlxResponseFormat: String,
+        omlxJSONSchema: String,
+        omlxIncludeUsageStreamOptions: Bool,
+        omlxExtraBodyJSON: String
     ) {
         self.providerID = providerID
         self.model = model
@@ -79,6 +91,10 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         self.ollamaLogprobsEnabled = ollamaLogprobsEnabled
         self.ollamaTopLogprobs = ollamaTopLogprobs
         self.ollamaOptionsJSON = ollamaOptionsJSON
+        self.omlxResponseFormat = omlxResponseFormat
+        self.omlxJSONSchema = omlxJSONSchema
+        self.omlxIncludeUsageStreamOptions = omlxIncludeUsageStreamOptions
+        self.omlxExtraBodyJSON = omlxExtraBodyJSON
     }
 
     init(from decoder: Decoder) throws {
@@ -102,6 +118,10 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         ollamaLogprobsEnabled = try container.decodeIfPresent(Bool.self, forKey: .ollamaLogprobsEnabled) ?? false
         ollamaTopLogprobs = try container.decodeIfPresent(Int.self, forKey: .ollamaTopLogprobs)
         ollamaOptionsJSON = try container.decodeIfPresent(String.self, forKey: .ollamaOptionsJSON) ?? ""
+        omlxResponseFormat = try container.decodeIfPresent(String.self, forKey: .omlxResponseFormat) ?? OMLXResponseFormat.plain.rawValue
+        omlxJSONSchema = try container.decodeIfPresent(String.self, forKey: .omlxJSONSchema) ?? ""
+        omlxIncludeUsageStreamOptions = try container.decodeIfPresent(Bool.self, forKey: .omlxIncludeUsageStreamOptions) ?? false
+        omlxExtraBodyJSON = try container.decodeIfPresent(String.self, forKey: .omlxExtraBodyJSON) ?? ""
     }
 }
 
@@ -127,7 +147,11 @@ extension ConfigurationTransferManager {
                 ollamaKeepAlive: $0.ollamaKeepAlive,
                 ollamaLogprobsEnabled: $0.ollamaLogprobsEnabled,
                 ollamaTopLogprobs: $0.ollamaTopLogprobs,
-                ollamaOptionsJSON: $0.ollamaOptionsJSON
+                ollamaOptionsJSON: $0.ollamaOptionsJSON,
+                omlxResponseFormat: $0.omlxResponseFormat,
+                omlxJSONSchema: $0.omlxJSONSchema,
+                omlxIncludeUsageStreamOptions: $0.omlxIncludeUsageStreamOptions,
+                omlxExtraBodyJSON: $0.omlxExtraBodyJSON
             )
         }
     }
@@ -154,7 +178,11 @@ extension ConfigurationTransferManager {
                     ollamaKeepAlive: item.ollamaKeepAlive,
                     ollamaLogprobsEnabled: item.ollamaLogprobsEnabled,
                     ollamaTopLogprobs: item.ollamaTopLogprobs,
-                    ollamaOptionsJSON: item.ollamaOptionsJSON
+                    ollamaOptionsJSON: item.ollamaOptionsJSON,
+                    omlxResponseFormat: item.omlxResponseFormat,
+                    omlxJSONSchema: item.omlxJSONSchema,
+                    omlxIncludeUsageStreamOptions: item.omlxIncludeUsageStreamOptions,
+                    omlxExtraBodyJSON: item.omlxExtraBodyJSON
                 )
             )
         })

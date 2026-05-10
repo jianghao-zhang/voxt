@@ -43,8 +43,10 @@ extension ConfigurationTransferManager {
                 issues.append(.init(scope: .customLLMModel(repo), message: AppLocalization.localizedString("Model needs to be installed.")))
             }
         case .remoteLLM(let provider):
-            let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(provider: provider, stored: remoteLLM)
-            if !configuration.isConfigured || !configuration.hasUsableModel {
+            if !RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLM
+            ) {
                 issues.append(.init(scope: .remoteLLMProvider(provider), message: AppLocalization.localizedString("Configuration required.")))
             }
         }
@@ -64,8 +66,10 @@ extension ConfigurationTransferManager {
                 issues.append(.init(scope: .translationCustomLLM(repo), message: AppLocalization.localizedString("Model needs to be installed.")))
             }
         case .remoteLLM(let provider):
-            let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(provider: provider, stored: remoteLLM)
-            if !configuration.isConfigured || !configuration.hasUsableModel {
+            if !RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLM
+            ) {
                 issues.append(.init(scope: .translationRemoteLLM(provider), message: AppLocalization.localizedString("Configuration required.")))
             }
         }

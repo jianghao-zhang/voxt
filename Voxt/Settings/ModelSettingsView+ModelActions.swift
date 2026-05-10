@@ -65,11 +65,15 @@ extension ModelSettingsView {
 
     var remoteLLMRows: [ModelTableRow] {
         RemoteLLMProvider.allCases.map { provider in
+            let isConfigured = RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLMConfigurations
+            )
             let config = RemoteModelConfigurationStore.resolvedLLMConfiguration(
                 provider: provider,
                 stored: remoteLLMConfigurations
             )
-            let status = config.isConfigured
+            let status = isConfigured
                 ? AppLocalization.format("Configured model: %@", config.model)
                 : AppLocalization.localizedString("Not configured")
             return ModelTableRow(
@@ -671,11 +675,6 @@ extension ModelSettingsView {
 
     func useRemoteLLMProvider(_ provider: RemoteLLMProvider) {
         remoteLLMSelectedProviderRaw = provider.rawValue
-        let resolved = RemoteModelConfigurationStore.resolvedLLMConfiguration(
-            provider: provider,
-            stored: RemoteModelConfigurationStore.loadConfigurations(from: remoteLLMProviderConfigurationsRaw)
-        )
-        saveRemoteLLMConfiguration(resolved)
     }
 
     func saveRemoteLLMConfiguration(_ configuration: RemoteProviderConfiguration) {

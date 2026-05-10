@@ -31,20 +31,24 @@ struct RemoteProviderConfigurationSheet: View {
     @State var ollamaLogprobsEnabled = false
     @State var ollamaTopLogprobsText = ""
     @State var ollamaOptionsJSON = ""
+    @State var omlxResponseFormat = OMLXResponseFormat.plain.rawValue
+    @State var omlxJSONSchema = ""
+    @State var omlxIncludeUsageStreamOptions = false
+    @State var omlxExtraBodyJSON = ""
     @State var isTestingConnection = false
     @State var testResultMessage: String?
     @State var testResultIsSuccess = false
 
     private var dialogWidth: CGFloat {
-        isOllamaLLMProvider ? 520 : 440
+        showsLargeAdvancedProviderSection ? 520 : 440
     }
 
     private var dialogMaxHeight: CGFloat {
-        isOllamaLLMProvider ? 720 : 560
+        showsLargeAdvancedProviderSection ? 720 : 560
     }
 
     private var scrollContentMaxHeight: CGFloat {
-        isOllamaLLMProvider ? 600 : 440
+        showsLargeAdvancedProviderSection ? 600 : 440
     }
 
     var body: some View {
@@ -66,6 +70,10 @@ struct RemoteProviderConfigurationSheet: View {
 
                     if isOllamaLLMProvider {
                         ollamaConfigurationSection
+                    }
+
+                    if isOMLXLLMProvider {
+                        omlxConfigurationSection
                     }
 
                     if showsDoubaoFields {
@@ -126,6 +134,10 @@ struct RemoteProviderConfigurationSheet: View {
             ollamaLogprobsEnabled = configuration.ollamaLogprobsEnabled
             ollamaTopLogprobsText = configuration.ollamaTopLogprobs.map(String.init) ?? ""
             ollamaOptionsJSON = configuration.ollamaOptionsJSON
+            omlxResponseFormat = configuration.omlxResponseFormat
+            omlxJSONSchema = configuration.omlxJSONSchema
+            omlxIncludeUsageStreamOptions = configuration.omlxIncludeUsageStreamOptions
+            omlxExtraBodyJSON = configuration.omlxExtraBodyJSON
         }
     }
 }

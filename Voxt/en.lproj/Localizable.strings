@@ -218,6 +218,13 @@
 "Customise how Apple Intelligence enhances your transcriptions." = "Customise how Apple Intelligence enhances your transcriptions.";
 "Apple Intelligence is not available on this Mac, so system prompt enhancement cannot be used." = "Apple Intelligence is not available on this Mac, so system prompt enhancement cannot be used.";
 "Custom LLM downloading: %d%% • %@" = "Custom LLM downloading: %d%% • %@";
+"oMLX Options" = "oMLX Options";
+"Include Usage In Stream Events" = "Include Usage In Stream Events";
+"Adds stream_options.include_usage for OpenAI-compatible streaming responses." = "Adds stream_options.include_usage for OpenAI-compatible streaming responses.";
+"Extra Body JSON" = "Extra Body JSON";
+"Merged into the OpenAI-compatible request after Voxt defaults, so matching keys here override generated values." = "Merged into the OpenAI-compatible request after Voxt defaults, so matching keys here override generated values.";
+"oMLX JSON Schema" = "oMLX JSON Schema";
+"oMLX Extra Body JSON" = "oMLX Extra Body JSON";
 "Custom LLM paused: %d%% • %@" = "Custom LLM paused: %d%% • %@";
 "Models" = "Models";
 "Custom LLM Models" = "Custom LLM Models";

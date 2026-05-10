@@ -150,11 +150,16 @@ extension AppDelegate {
         }
 
         for provider in RemoteLLMProvider.allCases {
+            guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLMConfigurations
+            ) else {
+                continue
+            }
             let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
                 provider: provider,
                 stored: remoteLLMConfigurations
             )
-            guard configuration.isConfigured else { continue }
             options.append(
                 DictionaryHistoryScanModelOption(
                     id: "remote:\(provider.rawValue)",
@@ -398,7 +403,7 @@ extension AppDelegate {
 
     private func remoteDictionaryHistoryScanModel() -> DictionaryHistoryScanModel? {
         let context = resolvedRemoteLLMContext(forTranslation: false)
-        guard context.configuration.isConfigured else { return nil }
+        guard isStoredRemoteLLMConfigured(context.provider) else { return nil }
         return .remoteLLM(provider: context.provider, configuration: context.configuration)
     }
 
@@ -428,7 +433,10 @@ extension AppDelegate {
                 provider: provider,
                 stored: remoteLLMConfigurations
             )
-            guard configuration.isConfigured else {
+            guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLMConfigurations
+            ) else {
                 throw NSError(
                     domain: "Voxt.DictionaryHistoryScan",
                     code: -7,

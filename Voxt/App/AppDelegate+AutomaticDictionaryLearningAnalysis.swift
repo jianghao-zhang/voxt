@@ -411,7 +411,10 @@ extension AppDelegate {
                 provider: provider,
                 stored: remoteLLMConfigurations
             )
-            guard configuration.isConfigured else {
+            guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLMConfigurations
+            ) else {
                 throw NSError(
                     domain: "Voxt.AutomaticDictionaryLearning",
                     code: -6,

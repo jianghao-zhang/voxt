@@ -60,8 +60,14 @@ struct FeatureModelCatalogBuilder {
                 from: remoteLLMProviderConfigurationsRaw,
                 sensitiveValueLoading: .metadataOnly
             )
+            guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: configurations
+            ) else {
+                return provider.title
+            }
             let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(provider: provider, stored: configurations)
-            return configuration.hasUsableModel ? "\(provider.title) · \(configuration.model)" : provider.title
+            return "\(provider.title) · \(configuration.model)"
         case .none:
             return localized("Not selected")
         }
@@ -279,16 +285,19 @@ struct FeatureModelCatalogBuilder {
         )
         entries.append(contentsOf: RemoteLLMProvider.allCases.map { provider in
             let selectionID = FeatureModelSelectionID.remoteLLM(provider)
+            let isConfigured = RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteConfigurations
+            )
             let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
                 provider: provider,
                 stored: remoteConfigurations
             )
-            let isConfigured = configuration.isConfigured && configuration.hasUsableModel
             return FeatureModelSelectorEntry(
                 selectionID: selectionID,
                 title: provider.title,
                 engine: localized("Remote LLM"),
-                sizeText: configuration.hasUsableModel ? configuration.model : localized("Cloud"),
+                sizeText: isConfigured ? configuration.model : localized("Cloud"),
                 ratingText: "4.5",
                 filterTags: featureFilterTags(
                     base: [localized("Remote")] + remoteLLMTags(for: provider),

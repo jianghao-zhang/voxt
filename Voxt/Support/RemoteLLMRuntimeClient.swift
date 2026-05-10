@@ -902,6 +902,11 @@ struct RemoteLLMRuntimeClient {
                     to: &payload,
                     configuration: configuration
                 )
+            } else if provider == .omlx {
+                try applyOMLXCompatibleConfiguration(
+                    to: &payload,
+                    configuration: configuration
+                )
             }
             applyOpenAICompatibleSearchConfiguration(
                 to: &payload,
@@ -1130,6 +1135,40 @@ struct RemoteLLMRuntimeClient {
         }
         if let maxTokens = intValue(from: customOptions["max_tokens"] ?? customOptions["num_predict"]) {
             payload["max_tokens"] = maxTokens
+        }
+    }
+
+    func applyOMLXCompatibleConfiguration(
+        to payload: inout [String: Any],
+        configuration: RemoteProviderConfiguration
+    ) throws {
+        if configuration.omlxResponseFormatValue == .jsonSchema {
+            payload["response_format"] = [
+                "type": "json_schema",
+                "json_schema": [
+                    "name": "voxt_output",
+                    "schema": try requiredJSONObject(
+                        source: configuration.omlxJSONSchema,
+                        fieldName: AppLocalization.localizedString("oMLX JSON Schema")
+                    )
+                ]
+            ]
+        }
+
+        if configuration.omlxIncludeUsageStreamOptions,
+           payload["stream"] as? Bool == true {
+            var streamOptions = payload["stream_options"] as? [String: Any] ?? [:]
+            streamOptions["include_usage"] = true
+            payload["stream_options"] = streamOptions
+        }
+
+        if let extraBody = try optionalJSONObject(
+            source: configuration.omlxExtraBodyJSON,
+            fieldName: AppLocalization.localizedString("oMLX Extra Body JSON")
+        ) {
+            for (key, value) in extraBody {
+                payload[key] = value
+            }
         }
     }
 

@@ -133,9 +133,16 @@ extension AppDelegate {
             }
         case .remoteLLM:
             let context = resolvedRemoteLLMContext(forTranslation: false)
-                VoxtLog.llm(
-                    "Remote LLM enhancement request. provider=\(context.provider.rawValue), model=\(context.configuration.model)"
-                )
+            guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: context.provider,
+                stored: remoteLLMConfigurations
+            ) else {
+                VoxtLog.warning("Enhancement provider remoteLLM unavailable: no configured model.")
+                return text
+            }
+            VoxtLog.llm(
+                "Remote LLM enhancement request. provider=\(context.provider.rawValue), model=\(context.configuration.model)"
+            )
             switch promptResolution.delivery {
             case .systemPrompt:
                 return try await RemoteLLMRuntimeClient().enhance(

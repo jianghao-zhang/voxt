@@ -218,6 +218,13 @@
 "Customise how Apple Intelligence enhances your transcriptions." = "自定义 Apple Intelligence 如何增强你的转录文本。";
 "Apple Intelligence is not available on this Mac, so system prompt enhancement cannot be used." = "当前 Mac 不支持 Apple Intelligence，无法使用系统提示词增强。";
 "Custom LLM downloading: %d%% • %@" = "自定义 LLM 下载中：%d%% • %@";
+"oMLX Options" = "oMLX 选项";
+"Include Usage In Stream Events" = "在流式事件中包含用量";
+"Adds stream_options.include_usage for OpenAI-compatible streaming responses." = "为 OpenAI 兼容的流式响应添加 stream_options.include_usage。";
+"Extra Body JSON" = "额外请求体 JSON";
+"Merged into the OpenAI-compatible request after Voxt defaults, so matching keys here override generated values." = "会在 Voxt 默认参数之后合并进 OpenAI 兼容请求体，因此同名键会覆盖自动生成的值。";
+"oMLX JSON Schema" = "oMLX JSON Schema";
+"oMLX Extra Body JSON" = "oMLX 额外请求体 JSON";
 "Custom LLM paused: %d%% • %@" = "自定义 LLM 已暂停：%d%% • %@";
 "Models" = "模型列表";
 "Custom LLM Models" = "自定义 LLM 模型";

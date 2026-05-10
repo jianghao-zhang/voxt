@@ -517,6 +517,11 @@ struct RemoteProviderConnectivityTester {
                 to: &payload,
                 configuration: configuration
             )
+        } else if provider == .omlx {
+            try runtimeClient.applyOMLXCompatibleConfiguration(
+                to: &payload,
+                configuration: configuration
+            )
         }
         return payload
     }

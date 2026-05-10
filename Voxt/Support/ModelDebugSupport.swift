@@ -222,11 +222,16 @@ enum ModelDebugCatalog {
         options.append(contentsOf: local)
 
         let remote = RemoteLLMProvider.allCases.compactMap { provider -> LLMDebugModelOption? in
+            guard RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLMConfigurations
+            ) else {
+                return nil
+            }
             let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
                 provider: provider,
                 stored: remoteLLMConfigurations
             )
-            guard configuration.isConfigured, configuration.hasUsableModel else { return nil }
             return LLMDebugModelOption(
                 id: "remote-llm:\(provider.rawValue)",
                 title: "\(provider.title) · \(configuration.model)",

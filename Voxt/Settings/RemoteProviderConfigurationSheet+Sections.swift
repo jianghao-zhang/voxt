@@ -24,6 +24,27 @@ extension RemoteProviderConfigurationSheet {
         """
     }
 
+    private var omlxJSONSchemaPlaceholder: String {
+        """
+        {
+          "type": "object",
+          "properties": {
+            "answer": { "type": "string" }
+          },
+          "required": ["answer"]
+        }
+        """
+    }
+
+    private var omlxExtraBodyJSONPlaceholder: String {
+        """
+        {
+          "top_k": 40,
+          "min_p": 0.05
+        }
+        """
+    }
+
     var modelSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(AppLocalization.localizedString("Model"))
@@ -232,6 +253,63 @@ extension RemoteProviderConfigurationSheet {
                     height: 112
                 )
                 Text(AppLocalization.localizedString("Merged into Ollama native options after Voxt defaults, so matching keys here override temperature, top_p, and num_predict."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    var omlxConfigurationSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(AppLocalization.localizedString("oMLX Options"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(AppLocalization.localizedString("Response Format"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                SettingsMenuPicker(
+                    selection: $omlxResponseFormat,
+                    options: omlxResponseFormatMenuOptions,
+                    selectedTitle: omlxResponseFormatSelectedTitle,
+                    width: 240
+                )
+            }
+
+            if shouldShowOMLXJSONSchemaField {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(AppLocalization.localizedString("JSON Schema"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    placeholderPromptEditor(
+                        text: $omlxJSONSchema,
+                        placeholder: omlxJSONSchemaPlaceholder,
+                        height: 96
+                    )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(AppLocalization.localizedString("Include Usage In Stream Events"), isOn: $omlxIncludeUsageStreamOptions)
+                    .toggleStyle(.switch)
+                Text(AppLocalization.localizedString("Adds stream_options.include_usage for OpenAI-compatible streaming responses."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(AppLocalization.localizedString("Extra Body JSON"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                placeholderPromptEditor(
+                    text: $omlxExtraBodyJSON,
+                    placeholder: omlxExtraBodyJSONPlaceholder,
+                    height: 112
+                )
+                Text(AppLocalization.localizedString("Merged into the OpenAI-compatible request after Voxt defaults, so matching keys here override generated values."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

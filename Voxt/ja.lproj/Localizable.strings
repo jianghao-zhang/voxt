@@ -218,6 +218,13 @@
 "Custom LLM downloading: %d%% • %@" = "カスタム LLM ダウンロード中: %d%% • %@";
 "Custom LLM paused: %d%% • %@" = "カスタム LLM 一時停止中: %d%% • %@";
 "Models" = "モデル一覧";
+"oMLX Options" = "oMLX オプション";
+"Include Usage In Stream Events" = "ストリームイベントに使用量を含める";
+"Adds stream_options.include_usage for OpenAI-compatible streaming responses." = "OpenAI 互換のストリーミング応答に stream_options.include_usage を追加します。";
+"Extra Body JSON" = "追加リクエスト JSON";
+"Merged into the OpenAI-compatible request after Voxt defaults, so matching keys here override generated values." = "Voxt のデフォルト値の後に OpenAI 互換リクエストへマージされるため、同名キーがある場合は生成値を上書きします。";
+"oMLX JSON Schema" = "oMLX JSON Schema";
+"oMLX Extra Body JSON" = "oMLX 追加リクエスト JSON";
 "Custom LLM Models" = "カスタム LLM モデル";
 "Actions" = "操作";
 "Cancel" = "キャンセル";

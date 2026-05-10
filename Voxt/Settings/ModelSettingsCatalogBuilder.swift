@@ -178,18 +178,21 @@ struct ModelCatalogBuilder {
 
         entries.append(contentsOf: RemoteLLMProvider.allCases.map { provider in
             let selectionID = FeatureModelSelectionID.remoteLLM(provider)
+            let configured = RemoteModelConfigurationStore.isStoredLLMConfigurationConfigured(
+                provider: provider,
+                stored: remoteLLMConfigurations
+            )
             let configuration = RemoteModelConfigurationStore.resolvedLLMConfiguration(
                 provider: provider,
                 stored: remoteLLMConfigurations
             )
-            let configured = configuration.isConfigured && configuration.hasUsableModel
             let status = configured ? "" : localizedModelCatalog("Not configured")
 
             return ModelCatalogEntry(
                 id: "remote-llm:\(provider.rawValue)",
                 title: provider.title,
                 engine: localizedModelCatalog("Remote LLM"),
-                sizeText: configuration.hasUsableModel ? configuration.model : localizedModelCatalog("Cloud"),
+                sizeText: configured ? configuration.model : localizedModelCatalog("Cloud"),
                 ratingText: "4.5",
                 filterTags: catalogFilterTags(
                     base: [localizedModelCatalog("Remote")] + remoteLLMCatalogTags(for: provider),
