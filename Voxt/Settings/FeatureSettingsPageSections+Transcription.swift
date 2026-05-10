@@ -33,16 +33,6 @@ extension FeatureSettingsView {
                 )
 
                 FeatureToggleRow(
-                    title: featureSettingsLocalized("Enable Meeting"),
-                    badgeText: featureSettingsLocalized("即将删除"),
-                    detail: featureSettingsLocalized("Turn on the dedicated meeting workflow, shortcut, overlay, and meeting-specific model settings."),
-                    isOn: binding(
-                        get: { featureSettings.meeting.enabled },
-                        set: { featureSettings.meeting.enabled = $0 }
-                    )
-                )
-
-                FeatureToggleRow(
                     title: featureSettingsLocalized("Enable Notes"),
                     detail: featureSettingsLocalized("Add segmented notes during transcription. Once enabled, Notes appears in the Feature menu and supports a dedicated trigger key."),
                     isOn: binding(

@@ -5,10 +5,6 @@ extension AppDelegate {
         synchronizeRuntimeASRState(for: asrSelectionID(for: outputMode))
     }
 
-    func synchronizeRuntimeASRStateForMeeting() {
-        synchronizeRuntimeASRState(for: meetingFeatureSettings.asrSelectionID)
-    }
-
     private func asrSelectionID(for outputMode: SessionOutputMode) -> FeatureModelSelectionID {
         switch outputMode {
         case .transcription:

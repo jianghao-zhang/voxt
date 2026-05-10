@@ -6,13 +6,13 @@ extension RemoteProviderConfigurationSheet {
     }
 
     var apiKeyFieldTitle: String {
-        isOllamaLLMProvider
+        (llmProviderForPicker?.apiKeyIsOptional == true)
             ? AppLocalization.localizedString("API Key (Optional)")
             : AppLocalization.localizedString("API Key")
     }
 
     var apiKeyFieldPlaceholder: String {
-        isOllamaLLMProvider
+        (llmProviderForPicker?.apiKeyIsOptional == true)
             ? AppLocalization.localizedString("Paste API key (optional)")
             : AppLocalization.localizedString("Paste API key")
     }
@@ -56,17 +56,6 @@ extension RemoteProviderConfigurationSheet {
         return AppLocalization.localizedString("e.g. doubao-seed-2-0-pro-260215")
     }
 
-    var meetingModelMenuOptions: [SettingsMenuOption<String>] {
-        meetingModelOptions.map { SettingsMenuOption(value: $0.id, title: $0.title) } + [
-            SettingsMenuOption(value: customModelOptionID, title: AppLocalization.localizedString("Custom..."))
-        ]
-    }
-
-    var meetingModelSelectedTitle: String {
-        meetingModelMenuOptions.first(where: { $0.value == resolvedMeetingSelectionForPicker })?.title
-            ?? AppLocalization.localizedString("Custom...")
-    }
-
     var ollamaResponseFormatMenuOptions: [SettingsMenuOption<String>] {
         OllamaResponseFormat.allCases.map { option in
             SettingsMenuOption(value: option.rawValue, title: option.title)
@@ -97,7 +86,6 @@ extension RemoteProviderConfigurationSheet {
         RemoteProviderConfiguration(
             providerID: configuration.providerID,
             model: resolvedModelValue(),
-            meetingModel: resolvedMeetingModelValue(),
             endpoint: isDoubaoASRTest ? "" : endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
             apiKey: isDoubaoASRTest ? "" : apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
             appID: appID.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -133,15 +121,12 @@ extension RemoteProviderConfigurationSheet {
         if case .asr(let provider) = testTarget {
             return provider
         }
-        if case .meetingASR(let provider) = testTarget {
-            return provider
-        }
         return nil
     }
 
     var activeProviderNotice: String? {
         switch testTarget {
-        case .asr(let provider), .meetingASR(let provider):
+        case .asr(let provider):
             let active = RemoteASRProvider(rawValue: selectedRemoteASRProviderRaw) ?? .openAIWhisper
             guard active != provider else { return nil }
             return AppLocalization.format(
@@ -158,16 +143,6 @@ extension RemoteProviderConfigurationSheet {
                 provider.title
             )
         }
-    }
-
-    var showsMeetingASRSection: Bool {
-        guard let provider = asrProviderForSheet else { return false }
-        return RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(provider, configuration: configuration)
-    }
-
-    var meetingModelOptions: [RemoteModelOption] {
-        guard let provider = asrProviderForSheet else { return [] }
-        return RemoteASRMeetingConfiguration.meetingModelOptions(for: provider)
     }
 
     var providerModelOptions: [RemoteModelOption] {
@@ -227,67 +202,12 @@ extension RemoteProviderConfigurationSheet {
         )
     }
 
-    func configureMeetingModelSelection() {
-        let trimmed = configuration.meetingModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let optionIDs = Set(meetingModelOptions.map(\.id))
-        if optionIDs.contains(trimmed) {
-            selectedMeetingModel = trimmed
-            return
-        }
-        if let provider = asrProviderForSheet {
-            let suggested = RemoteASRMeetingConfiguration.suggestedMeetingModel(for: provider)
-            if optionIDs.contains(suggested) {
-                selectedMeetingModel = suggested
-                return
-            }
-        }
-        selectedMeetingModel = customModelOptionID
-    }
-
     func resolvedModelValue() -> String {
         RemoteProviderConfigurationPolicy.resolvedModelValue(
             target: testTarget,
             resolvedSelection: resolvedSelectionForPicker,
             customModelID: customModelID
         )
-    }
-
-    var resolvedMeetingSelectionForPicker: String {
-        RemoteProviderConfigurationPolicy.resolvedMeetingSelection(
-            selectedMeetingModel: selectedMeetingModel,
-            configuredMeetingModel: configuration.meetingModel,
-            meetingOptionIDs: meetingModelOptions.map(\.id)
-        )
-    }
-
-    var meetingModelSelectionBinding: Binding<String> {
-        Binding(
-            get: { resolvedMeetingSelectionForPicker },
-            set: {
-                handleMeetingModelSelectionChange($0)
-            }
-        )
-    }
-
-    func handleMeetingModelSelectionChange(_ newValue: String) {
-        let previousModel = resolvedMeetingModelValue()
-        selectedMeetingModel = newValue
-        customMeetingModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
-            previousResolvedModel: previousModel,
-            newSelection: newValue,
-            currentCustomModelID: customMeetingModelID,
-            supportsCustomSelection: true
-        )
-    }
-
-    func resolvedMeetingModelValue() -> String {
-        guard showsMeetingASRSection else {
-            return configuration.meetingModel
-        }
-        if resolvedMeetingSelectionForPicker == customModelOptionID {
-            return customMeetingModelID.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return resolvedMeetingSelectionForPicker
     }
 
     var endpointPresets: [RemoteEndpointPreset] {
@@ -314,16 +234,6 @@ extension RemoteProviderConfigurationSheet {
     func testConnection() {
         guard let snapshot = validatedCurrentConfigurationSnapshot() else { return }
         runConnectionTest(for: testTarget, modelForLog: snapshot.model, snapshot: snapshot)
-    }
-
-    func testMeetingConnection() {
-        guard let provider = asrProviderForSheet else { return }
-        guard let snapshot = validatedCurrentConfigurationSnapshot() else { return }
-        runConnectionTest(
-            for: .meetingASR(provider),
-            modelForLog: snapshot.meetingModel,
-            snapshot: snapshot
-        )
     }
 
     func saveConfiguration() {
@@ -436,7 +346,7 @@ extension RemoteProviderConfigurationSheet {
         testResultMessage = nil
         testResultIsSuccess = false
         VoxtLog.info(
-            "Remote provider test started. target=\(RemoteProviderConfigurationPolicy.testTargetLogName(target)), provider=\(configuration.providerID), model=\(modelForLog), meetingModel=\(snapshot.meetingModel), endpoint=\(sanitizedEndpointForLog(snapshot.endpoint)), proxyMode=\(VoxtNetworkSession.modeDescription), hasAPIKey=\(!snapshot.apiKey.isEmpty), hasAppID=\(!snapshot.appID.isEmpty), hasAccessToken=\(!snapshot.accessToken.isEmpty)"
+            "Remote provider test started. target=\(RemoteProviderConfigurationPolicy.testTargetLogName(target)), provider=\(configuration.providerID), model=\(modelForLog), endpoint=\(sanitizedEndpointForLog(snapshot.endpoint)), proxyMode=\(VoxtNetworkSession.modeDescription), hasAPIKey=\(!snapshot.apiKey.isEmpty), hasAppID=\(!snapshot.appID.isEmpty), hasAccessToken=\(!snapshot.accessToken.isEmpty)"
         )
 
         Task {

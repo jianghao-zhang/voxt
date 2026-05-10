@@ -104,7 +104,7 @@ struct FeatureModelSelectionID: RawRepresentable, Codable, Hashable, Sendable, I
         return value.isEmpty ? nil : value
     }
 
-    static func fromLegacyMeetingSummarySelection(_ rawValue: String?) -> Self? {
+    static func fromLegacyTranscriptSummarySelection(_ rawValue: String?) -> Self? {
         let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !trimmed.isEmpty else { return nil }
         if trimmed == appleIntelligence.rawValue {
@@ -359,57 +359,18 @@ struct RewriteFeatureSettings: Codable, Hashable, Sendable {
     }
 }
 
-struct MeetingFeatureSettings: Codable, Hashable, Sendable {
-    var enabled: Bool
-    var asrSelectionID: FeatureModelSelectionID
-    var summaryModelSelectionID: FeatureModelSelectionID
-    var summaryPrompt: String
-    var summaryAutoGenerate: Bool
-    var realtimeTranslateEnabled: Bool
-    var realtimeTargetLanguageRawValue: String
-    var showOverlayInScreenShare: Bool
-
-    init(
-        enabled: Bool,
-        asrSelectionID: FeatureModelSelectionID,
-        summaryModelSelectionID: FeatureModelSelectionID,
-        summaryPrompt: String,
-        summaryAutoGenerate: Bool,
-        realtimeTranslateEnabled: Bool,
-        realtimeTargetLanguageRawValue: String,
-        showOverlayInScreenShare: Bool
-    ) {
-        self.enabled = enabled
-        self.asrSelectionID = asrSelectionID
-        self.summaryModelSelectionID = summaryModelSelectionID
-        self.summaryPrompt = summaryPrompt
-        self.summaryAutoGenerate = summaryAutoGenerate
-        self.realtimeTranslateEnabled = realtimeTranslateEnabled
-        self.realtimeTargetLanguageRawValue = realtimeTargetLanguageRawValue
-        self.showOverlayInScreenShare = showOverlayInScreenShare
-    }
-
-    var realtimeTargetLanguage: TranslationTargetLanguage? {
-        guard !realtimeTargetLanguageRawValue.isEmpty else { return nil }
-        return TranslationTargetLanguage(rawValue: realtimeTargetLanguageRawValue)
-    }
-}
-
 struct FeatureSettings: Codable, Hashable, Sendable {
     var transcription: TranscriptionFeatureSettings
     var translation: TranslationFeatureSettings
     var rewrite: RewriteFeatureSettings
-    var meeting: MeetingFeatureSettings
 
     init(
         transcription: TranscriptionFeatureSettings,
         translation: TranslationFeatureSettings,
-        rewrite: RewriteFeatureSettings,
-        meeting: MeetingFeatureSettings
+        rewrite: RewriteFeatureSettings
     ) {
         self.transcription = transcription
         self.translation = translation
         self.rewrite = rewrite
-        self.meeting = meeting
     }
 }

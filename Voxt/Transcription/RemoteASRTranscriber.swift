@@ -476,48 +476,6 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         return RemoteModelConfigurationStore.resolvedASRConfiguration(provider: provider, stored: all)
     }
 
-    func currentMeetingConfiguration() -> (provider: RemoteASRProvider, configuration: RemoteProviderConfiguration) {
-        let provider = selectedProvider
-        let configuration = selectedProviderConfiguration(for: provider)
-        return (
-            provider,
-            RemoteASRMeetingConfiguration.resolvedMeetingConfiguration(
-                provider: provider,
-                configuration: configuration
-            )
-        )
-    }
-
-    func transcribeMeetingAudioFile(_ fileURL: URL) async throws -> String {
-        let currentMeeting = currentMeetingConfiguration()
-        let provider = currentMeeting.provider
-        let configuration = currentMeeting.configuration
-        guard configuration.isConfigured else {
-            throw NSError(
-                domain: "Voxt.RemoteASR",
-                code: -101,
-                userInfo: [NSLocalizedDescriptionKey: "Remote ASR is not configured yet."]
-            )
-        }
-        guard RemoteASRMeetingConfiguration.hasValidMeetingModel(
-            provider: provider,
-            configuration: configuration
-        ) else {
-            throw NSError(
-                domain: "Voxt.RemoteASR",
-                code: -102,
-                userInfo: [NSLocalizedDescriptionKey: RemoteASRMeetingConfiguration.startBlockedMessage(for: provider, configuration: configuration)]
-            )
-        }
-        let hintPayload = resolvedHintPayload(for: provider, configuration: configuration)
-        return try await transcribeAudioFile(
-            fileURL: fileURL,
-            provider: provider,
-            configuration: configuration,
-            hintPayload: hintPayload
-        )
-    }
-
     func transcribeDebugAudioFile(
         _ fileURL: URL,
         provider: RemoteASRProvider,
@@ -718,13 +676,13 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         guard !appID.isEmpty else {
             throw NSError(domain: "Voxt.RemoteASR", code: -4, userInfo: [NSLocalizedDescriptionKey: "Doubao App ID is empty."])
         }
-        if DoubaoASRConfiguration.isMeetingFlashModel(resourceID) {
-            return try await transcribeDoubaoMeetingFlash(
+        if DoubaoASRConfiguration.isFlashRecognitionModel(resourceID) {
+            return try await transcribeDoubaoFlashRecognition(
                 fileURL: fileURL,
                 appID: appID,
                 accessToken: accessToken,
                 resourceID: resourceID,
-                endpoint: DoubaoASRConfiguration.resolvedMeetingFlashEndpoint(configuration.endpoint),
+                endpoint: DoubaoASRConfiguration.resolvedFlashRecognitionEndpoint(configuration.endpoint),
                 hintPayload: hintPayload,
                 configuration: configuration
             )
@@ -740,7 +698,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         )
     }
 
-    private func transcribeDoubaoMeetingFlash(
+    private func transcribeDoubaoFlashRecognition(
         fileURL: URL,
         appID: String,
         accessToken: String,
@@ -750,7 +708,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         configuration: RemoteProviderConfiguration
     ) async throws -> String {
         guard let url = URL(string: endpoint) else {
-            throw NSError(domain: "Voxt.RemoteASR", code: -34, userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao meeting endpoint URL."])
+            throw NSError(domain: "Voxt.RemoteASR", code: -34, userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao ASR endpoint URL."])
         }
 
         let audioData = try Data(contentsOf: fileURL)
@@ -758,7 +716,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             configuration: configuration,
             hintPayload: hintPayload,
             requestID: UUID().uuidString.lowercased(),
-            userID: "voxt-meeting",
+            userID: "voxt-transcript",
             audioFormat: DoubaoASRConfiguration.requestAudioFormat
         )
         body["audio"] = ["data": audioData.base64EncodedString()]
@@ -776,14 +734,14 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
         let (data, response) = try await VoxtNetworkSession.active.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw NSError(domain: "Voxt.RemoteASR", code: -35, userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao meeting HTTP response."])
+            throw NSError(domain: "Voxt.RemoteASR", code: -35, userInfo: [NSLocalizedDescriptionKey: "Invalid Doubao ASR HTTP response."])
         }
         guard (200...299).contains(http.statusCode) else {
             let payload = String(data: data.prefix(500), encoding: .utf8) ?? ""
             throw NSError(
                 domain: "Voxt.RemoteASR",
                 code: http.statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "Doubao meeting ASR request failed (HTTP \(http.statusCode)): \(payload)"]
+                userInfo: [NSLocalizedDescriptionKey: "Doubao ASR request failed (HTTP \(http.statusCode)): \(payload)"]
             )
         }
 
@@ -804,7 +762,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         guard RemoteASREndpointSupport.isAliyunFunRealtimeModel(model)
                 || RemoteASREndpointSupport.aliyunQwenRealtimeSessionKind(for: model) != nil
                 || RemoteASREndpointSupport.isAliyunFileTranscriptionModel(model)
-                || AliyunMeetingASRConfiguration.routing(for: model) == .compatibleShortAudio
+                || AliyunRemoteASRConfiguration.routing(for: model) == .compatibleShortAudio
         else {
             throw NSError(
                 domain: "Voxt.RemoteASR",
@@ -835,18 +793,18 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                 hintPayload: resolvedHintPayload(for: .aliyunBailianASR, configuration: configuration)
             )
         }
-        if let validationError = AliyunMeetingASRConfiguration.validationError(model: model, endpoint: configuration.endpoint) {
+        if let validationError = AliyunRemoteASRConfiguration.validationError(model: model, endpoint: configuration.endpoint) {
             throw NSError(domain: "Voxt.RemoteASR", code: -36, userInfo: [NSLocalizedDescriptionKey: validationError])
         }
         if RemoteASREndpointSupport.isAliyunFileTranscriptionModel(model) {
-            return try await AliyunMeetingASRClient.transcribe(
+            return try await AliyunRemoteASRClient.transcribe(
                 fileURL: fileURL,
                 apiKey: token,
                 model: model,
                 endpoint: configuration.endpoint
             )
         }
-        let endpoint = URL(string: AliyunMeetingASRConfiguration.resolvedCompatibleEndpoint(configuration.endpoint, model: model))!
+        let endpoint = URL(string: AliyunRemoteASRConfiguration.resolvedCompatibleEndpoint(configuration.endpoint, model: model))!
         let fileData = try Data(contentsOf: fileURL)
         let dataURI = "data:\(RemoteASREndpointSupport.audioMIMEType(for: fileURL));base64,\(fileData.base64EncodedString())"
 
@@ -891,7 +849,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
 
         let object = try JSONSerialization.jsonObject(with: data)
-        if let text = AliyunMeetingASRClient.extractText(from: object), !text.isEmpty {
+        if let text = AliyunRemoteASRClient.extractText(from: object), !text.isEmpty {
             return text
         }
         throw NSError(domain: "Voxt.RemoteASR", code: -32, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian ASR returned no text content."])
@@ -921,7 +879,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         let ws = managedSocket.task
         ws.resume()
 
-        let taskID = AliyunMeetingASRConfiguration.makeRealtimeTaskID()
+        let taskID = AliyunRemoteASRConfiguration.makeRealtimeTaskID()
         let responseState = AliyunFunResponseState { [weak self] error in
             Task { @MainActor [weak self] in
                 self?.notifyRuntimeFailure(error)
@@ -1003,11 +961,11 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
               let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return
         }
-        let event = AliyunMeetingASRConfiguration.realtimeSocketEvent(from: object)
+        let event = AliyunRemoteASRConfiguration.realtimeSocketEvent(from: object)
         let payload = object["payload"] as? [String: Any] ?? [:]
 
         if event == "task-failed" || event == "error" {
-            let errorText = AliyunMeetingASRConfiguration.realtimeSocketErrorMessage(from: object)
+            let errorText = AliyunRemoteASRConfiguration.realtimeSocketErrorMessage(from: object)
                 ?? "Aliyun fun ASR task failed."
             throw NSError(domain: "Voxt.RemoteASR", code: -42, userInfo: [NSLocalizedDescriptionKey: errorText])
         }
@@ -1093,7 +1051,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         parameters: [String: Any]? = nil,
         onError: @escaping (Error?) -> Void
     ) {
-        let payload = AliyunMeetingASRConfiguration.funRealtimeControlPayload(
+        let payload = AliyunRemoteASRConfiguration.funRealtimeControlPayload(
             action: action,
             taskID: taskID,
             model: model,

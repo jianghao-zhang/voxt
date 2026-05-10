@@ -181,6 +181,17 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
         XCTAssertEqual(sheet.apiKeyFieldPlaceholder, AppLocalization.localizedString("Paste API key (optional)"))
     }
 
+    func testOMLXSheetUsesOptionalAPIKey() {
+        let sheet = makeSheet(
+            target: .llm(.omlx),
+            model: "qwen3"
+        )
+
+        XCTAssertFalse(sheet.isOllamaLLMProvider)
+        XCTAssertEqual(sheet.apiKeyFieldTitle, AppLocalization.localizedString("API Key (Optional)"))
+        XCTAssertEqual(sheet.apiKeyFieldPlaceholder, AppLocalization.localizedString("Paste API key (optional)"))
+    }
+
     func testOllamaSheetShowsJSONSchemaFieldOnlyForJSONSchemaFormat() {
         let sheet = makeSheet(
             target: .llm(.ollama),

@@ -135,6 +135,31 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         )
     }
 
+    func testResolvedLLMEndpointBuildsOMLXChatCompletionsFromBaseURL() {
+        let client = RemoteLLMRuntimeClient()
+
+        XCTAssertEqual(
+            client.providerDefaultEndpoint(.omlx),
+            "http://localhost:8000/v1"
+        )
+        XCTAssertEqual(
+            client.resolvedLLMEndpoint(
+                provider: .omlx,
+                endpoint: "",
+                model: "qwen3"
+            ),
+            "http://localhost:8000/v1/chat/completions"
+        )
+        XCTAssertEqual(
+            client.resolvedLLMEndpoint(
+                provider: .omlx,
+                endpoint: "http://localhost:8000/v1/models",
+                model: "qwen3"
+            ),
+            "http://localhost:8000/v1/chat/completions"
+        )
+    }
+
     func testResolvedOllamaRequestEndpointSelectsNativeRouteFromBaseEndpoint() {
         let client = RemoteLLMRuntimeClient()
 

@@ -79,12 +79,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let overlayIconMatch: OverlayEnhancementIconMatch?
     }
 
-    enum MeetingSessionCompletionDisposition {
-        case discard
-        case save
-        case saveAndOpenDetail
-    }
-
     let speechTranscriber = SpeechTranscriber()
     var mlxTranscriber: MLXTranscriber?
     var whisperTranscriber: WhisperKitTranscriber?
@@ -104,8 +98,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     let hotkeyManager = HotkeyManager()
     let overlayWindow = RecordingOverlayWindow()
-    let meetingOverlayWindow = MeetingOverlayWindow()
-    let meetingDetailWindowManager = MeetingDetailWindowManager.shared
     let overlayState = OverlayState()
     lazy var noteWindowManager = VoxtNoteWindowManager(store: noteStore)
     lazy var noteObsidianSyncCoordinator = VoxtObsidianSyncCoordinator(
@@ -121,20 +113,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.noteFeatureSettings.remindersSync ?? .init()
         },
         exportStore: noteRemindersExportStore
-    )
-    lazy var meetingSessionCoordinator = MeetingSessionCoordinator(
-        whisperModelManager: whisperModelManager,
-        mlxModelManager: mlxModelManager,
-        preferredInputDeviceIDProvider: { [weak self] in
-            self?.selectedInputDeviceID
-        },
-        realtimeTranslationTargetLanguageProvider: { [weak self] in
-            self?.meetingRealtimeTranslationTargetLanguage
-        },
-        realtimeTranslationHandler: { [weak self] text, targetLanguage in
-            guard let self else { return text }
-            return try await self.translateMeetingRealtimeText(text, targetLanguage: targetLanguage)
-        }
     )
     var statusItem: NSStatusItem?
 
@@ -164,7 +142,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var silenceMonitorTask: Task<Void, Never>?
     var pauseLLMTask: Task<Void, Never>?
     var pendingWhisperStartupTask: Task<Void, Never>?
-    var pendingMeetingStartupTask: Task<Void, Never>?
     var pendingDictionaryHistoryScanTask: Task<Void, Never>?
     var pendingAutomaticDictionaryLearningTask: Task<Void, Never>?
     var whisperWarmupTask: Task<Void, Never>?
@@ -207,7 +184,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var sessionTranslationTargetLanguageOverride: TranslationTargetLanguage?
     var selectedTextTranslationRefreshID = UUID()
     var activeSessionTranslationProviderResolution: TranslationProviderResolution?
-    var pendingMeetingSessionCompletionDisposition: MeetingSessionCompletionDisposition = .save
     let tapStopGuardInterval: TimeInterval = 0.35
     let transcriptionStartDebounceInterval: TimeInterval = 0.08
     var mainWindowPresentationState = MainWindowPresentationState()
@@ -245,16 +221,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.translateSelectedTextOnTranslationHotkey: true,
             AppPreferenceKey.showSelectedTextTranslationResultWindow: true,
             AppPreferenceKey.customPasteHotkeyEnabled: false,
-            AppPreferenceKey.meetingNotesBetaEnabled: false,
-            AppPreferenceKey.hideMeetingOverlayFromScreenSharing: false,
-            AppPreferenceKey.meetingOverlayCollapsed: false,
-            AppPreferenceKey.meetingRealtimeTranslateEnabled: false,
-            AppPreferenceKey.meetingRealtimeTranslationTargetLanguage: "",
-            AppPreferenceKey.meetingSummaryAutoGenerate: true,
-            AppPreferenceKey.meetingSummaryLength: "",
-            AppPreferenceKey.meetingSummaryStyle: "",
-            AppPreferenceKey.meetingSummaryPromptTemplate: "",
-            AppPreferenceKey.meetingSummaryModelSelection: "",
             AppPreferenceKey.voiceEndCommandEnabled: false,
             AppPreferenceKey.voiceEndCommandPreset: VoiceEndCommandPreset.over.rawValue,
             AppPreferenceKey.voiceEndCommandText: "",
@@ -526,62 +492,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.dismissSessionTranslationTargetPicker()
             }
         }
-        meetingOverlayWindow.onRequestClose = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.requestMeetingSessionCloseConfirmation()
-            }
-        }
-        meetingOverlayWindow.onRequestCollapseToggle = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.toggleMeetingOverlayCollapse()
-            }
-        }
-        meetingOverlayWindow.onRequestPauseToggle = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.toggleMeetingPause()
-            }
-        }
-        meetingOverlayWindow.onRequestDetail = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.showLiveMeetingDetailWindow()
-            }
-        }
-        meetingOverlayWindow.onRequestRealtimeTranslateToggle = { [weak self] isEnabled in
-            Task { @MainActor [weak self] in
-                self?.handleMeetingRealtimeTranslationToggle(isEnabled)
-            }
-        }
-        meetingOverlayWindow.onRequestRealtimeTranslationLanguageConfirm = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.confirmMeetingRealtimeTranslationLanguageSelection()
-            }
-        }
-        meetingOverlayWindow.onRequestRealtimeTranslationLanguageCancel = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.cancelMeetingRealtimeTranslationLanguageSelection()
-            }
-        }
-        meetingOverlayWindow.onRequestCancelMeeting = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.cancelMeetingSessionWithoutSaving()
-            }
-        }
-        meetingOverlayWindow.onRequestFinishMeeting = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.finishMeetingSessionAndOpenDetail()
-            }
-        }
-        meetingOverlayWindow.onRequestDismissCloseConfirmation = { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.dismissMeetingSessionCloseConfirmation()
-            }
-        }
-        meetingOverlayWindow.onRequestCopySegment = { [weak self] segment in
-            Task { @MainActor [weak self] in
-                self?.copyMeetingSegment(segment)
-            }
-        }
-
         presentMainWindowOnLaunchIfNeeded()
         scheduleWhisperIdleWarmupIfNeeded()
         VoxtLog.info("Voxt launch completed. engine=\(transcriptionEngine.rawValue), enhancement=\(enhancementMode.rawValue)")
@@ -594,11 +504,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if meetingSessionCoordinator.isActive {
-            meetingSessionCoordinator.stop()
-        }
-        pendingMeetingStartupTask?.cancel()
-        meetingDetailWindowManager.closeLiveWindow()
         noteWindowManager.hide()
         systemAudioMuteController.restoreSystemAudioIfNeeded()
     }
@@ -636,7 +541,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSEvent.removeMonitor(localEscapeKeyMonitor)
         }
         inputDevicesRefreshTask?.cancel()
-        pendingMeetingStartupTask?.cancel()
         whisperWarmupTask?.cancel()
     }
 

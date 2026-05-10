@@ -64,12 +64,7 @@ struct ModelCatalogBuilder {
                 stored: remoteASRConfigurations
             )
             let configured = configuration.isConfigured
-            let needsMeetingSetup =
-                hasIssue(.remoteASRProvider(provider)) ||
-                (featureSettings.meeting.enabled &&
-                    configured &&
-                    RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(provider, configuration: configuration) &&
-                    !RemoteASRMeetingConfiguration.hasValidMeetingModel(provider: provider, configuration: configuration))
+            let needsSetup = hasIssue(.remoteASRProvider(provider))
 
             return ModelCatalogEntry(
                 id: "remote-asr:\(provider.rawValue)",
@@ -92,7 +87,7 @@ struct ModelCatalogBuilder {
                 ),
                 statusText: remoteASRStatusText(provider, configuration),
                 usageLocations: usageLocations(for: selectionID),
-                badgeText: needsMeetingSetup ? localizedModelCatalog("Needs Setup") : nil,
+                badgeText: needsSetup ? localizedModelCatalog("Needs Setup") : nil,
                 primaryAction: ModelTableAction(title: localizedModelCatalog("Configure")) {
                     configureASRProvider(provider)
                 },
@@ -236,11 +231,6 @@ struct ModelCatalogBuilder {
             featureSettings.rewrite.llmSelectionID == selectionID {
             labels.append(localizedModelCatalog("Rewrite"))
         }
-        if featureSettings.meeting.enabled &&
-            (featureSettings.meeting.asrSelectionID == selectionID ||
-                featureSettings.meeting.summaryModelSelectionID == selectionID) {
-            labels.append(localizedModelCatalog("Meeting"))
-        }
         return labels
     }
 
@@ -318,7 +308,7 @@ struct ModelCatalogBuilder {
 
     private func remoteLLMCatalogTags(for provider: RemoteLLMProvider) -> [String] {
         switch provider {
-        case .lmStudio, .ollama:
+        case .lmStudio, .ollama, .omlx:
             return []
         default:
             return [localizedModelCatalog("Accurate")]

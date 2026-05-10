@@ -263,7 +263,6 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
     case translation
     case rewrite
     case appEnhancement
-    case meeting
 
     var id: String { rawValue }
 
@@ -274,7 +273,6 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
         case .translation: return "Translation"
         case .rewrite: return "Rewrite"
         case .appEnhancement: return "App Enhancement"
-        case .meeting: return "Meeting"
         }
     }
 
@@ -289,7 +287,6 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
         case .translation: return "Translation"
         case .rewrite: return "Rewrite"
         case .appEnhancement: return "App Enhancement"
-        case .meeting: return "Meeting"
         }
     }
 
@@ -300,19 +297,16 @@ enum FeatureSettingsTab: String, CaseIterable, Identifiable {
         case .translation: return "globe"
         case .rewrite: return "text.badge.star"
         case .appEnhancement: return "sparkles.rectangle.stack"
-        case .meeting: return "person.2.crop.square.stack"
         }
     }
 
-    static func visibleTabs(appEnhancementEnabled: Bool, meetingEnabled: Bool, noteEnabled: Bool) -> [FeatureSettingsTab] {
+    static func visibleTabs(appEnhancementEnabled: Bool, noteEnabled: Bool) -> [FeatureSettingsTab] {
         allCases.filter { tab in
             switch tab {
             case .note:
                 return noteEnabled
             case .appEnhancement:
                 return appEnhancementEnabled
-            case .meeting:
-                return meetingEnabled
             default:
                 return true
             }

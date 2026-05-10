@@ -33,7 +33,7 @@ extension RemoteASRTranscriber {
             managedSocket.session.invalidateAndCancel()
         }
 
-        let taskID = AliyunMeetingASRConfiguration.makeRealtimeTaskID()
+        let taskID = AliyunRemoteASRConfiguration.makeRealtimeTaskID()
         let responseState = AliyunFunResponseState()
         let startSignal = AsyncGate()
         let receiveTask = Task {
@@ -242,11 +242,11 @@ extension RemoteASRTranscriber {
               let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return
         }
-        let event = AliyunMeetingASRConfiguration.realtimeSocketEvent(from: object)
+        let event = AliyunRemoteASRConfiguration.realtimeSocketEvent(from: object)
         let payload = object["payload"] as? [String: Any] ?? [:]
 
         if event == "task-failed" || event == "error" {
-            let errorText = AliyunMeetingASRConfiguration.realtimeSocketErrorMessage(from: object)
+            let errorText = AliyunRemoteASRConfiguration.realtimeSocketErrorMessage(from: object)
                 ?? "Aliyun fun ASR task failed."
             throw NSError(domain: "Voxt.RemoteASR", code: -42, userInfo: [NSLocalizedDescriptionKey: errorText])
         }

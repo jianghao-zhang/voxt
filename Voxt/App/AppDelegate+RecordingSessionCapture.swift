@@ -286,26 +286,9 @@ extension AppDelegate {
         guard previousUID != newUID else { return }
 
         guard let currentDevice = microphoneResolvedState.activeDevice else {
-            if meetingSessionCoordinator.isActive {
-                showOverlayReminder(String(localized: "No available microphone devices."))
-                meetingSessionCoordinator.stop()
-                return
-            }
-
             if isSessionActive {
                 showOverlayReminder(String(localized: "No available microphone devices."))
                 finishSession(after: 0)
-            }
-            return
-        }
-
-        if meetingSessionCoordinator.isActive {
-            do {
-                try meetingSessionCoordinator.switchMicrophoneInput(to: currentDevice.id)
-            } catch {
-                VoxtLog.error("Meeting microphone switch failed: \(error.localizedDescription). reason=\(reason)")
-                showOverlayReminder(AppLocalization.format("Failed to switch microphone to %@.", currentDevice.name))
-                meetingSessionCoordinator.stop()
             }
             return
         }

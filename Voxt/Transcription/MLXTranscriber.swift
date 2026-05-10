@@ -955,7 +955,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         return (streamedText, finalOutput)
     }
 
-    func transcribeMeetingChunk(samples: [Float], sampleRate: Double) async -> String? {
+    func transcribeBufferedChunk(samples: [Float], sampleRate: Double) async -> String? {
         guard !samples.isEmpty else { return nil }
 
         do {
@@ -974,14 +974,14 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             return candidate.isEmpty ? nil : candidate
         } catch {
             isModelInitializing = false
-            VoxtLog.error("MLX meeting transcription failed: \(error)")
+            VoxtLog.error("MLX structured transcription failed: \(error)")
             return nil
         }
     }
 
     func transcribeAudioFile(_ fileURL: URL) async throws -> String {
         let loaded = try DebugAudioClipIO.loadMonoSamples(from: fileURL)
-        return await transcribeMeetingChunk(
+        return await transcribeBufferedChunk(
             samples: loaded.samples,
             sampleRate: loaded.sampleRate
         ) ?? ""

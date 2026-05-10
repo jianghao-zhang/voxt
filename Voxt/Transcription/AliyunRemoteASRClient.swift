@@ -1,6 +1,6 @@
 import Foundation
 
-enum AliyunMeetingASRClient {
+enum AliyunRemoteASRClient {
     static func transcribe(
         fileURL: URL,
         apiKey: String,
@@ -43,7 +43,7 @@ enum AliyunMeetingASRClient {
         throw NSError(
             domain: "Voxt.RemoteASR",
             code: -37,
-            userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian meeting ASR returned no text content."]
+            userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian ASR returned no text content."]
         )
     }
 
@@ -141,7 +141,7 @@ enum AliyunMeetingASRClient {
             throw NSError(
                 domain: "Voxt.RemoteASR",
                 code: http.statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "Aliyun meeting file upload failed (HTTP \(http.statusCode)): \(payload)"]
+                userInfo: [NSLocalizedDescriptionKey: "Aliyun file upload failed (HTTP \(http.statusCode)): \(payload)"]
             )
         }
         return "oss://\(key)"
@@ -153,7 +153,7 @@ enum AliyunMeetingASRClient {
         endpoint: String
     ) async throws -> AliyunUploadPolicy {
         guard var components = URLComponents(
-            string: AliyunMeetingASRConfiguration.resolvedUploadPolicyEndpoint(endpoint, model: model)
+            string: AliyunRemoteASRConfiguration.resolvedUploadPolicyEndpoint(endpoint, model: model)
         ) else {
             throw NSError(domain: "Voxt.RemoteASR", code: -40, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun upload policy endpoint URL."])
         }
@@ -200,8 +200,8 @@ enum AliyunMeetingASRClient {
         model: String,
         endpoint: String
     ) async throws -> String {
-        guard let url = URL(string: AliyunMeetingASRConfiguration.resolvedTranscriptionEndpoint(endpoint, model: model)) else {
-            throw NSError(domain: "Voxt.RemoteASR", code: -44, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun meeting transcription endpoint URL."])
+        guard let url = URL(string: AliyunRemoteASRConfiguration.resolvedTranscriptionEndpoint(endpoint, model: model)) else {
+            throw NSError(domain: "Voxt.RemoteASR", code: -44, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun transcription endpoint URL."])
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -212,12 +212,12 @@ enum AliyunMeetingASRClient {
         request.setValue("enable", forHTTPHeaderField: "X-DashScope-Async")
         request.setValue("enable", forHTTPHeaderField: "X-DashScope-OssResourceResolve")
         request.httpBody = try JSONSerialization.data(
-            withJSONObject: AliyunMeetingASRConfiguration.submissionBody(model: model, fileURL: ossURL)
+            withJSONObject: AliyunRemoteASRConfiguration.submissionBody(model: model, fileURL: ossURL)
         )
 
         let (data, response) = try await VoxtNetworkSession.active.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw NSError(domain: "Voxt.RemoteASR", code: -45, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun meeting transcription response."])
+            throw NSError(domain: "Voxt.RemoteASR", code: -45, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun transcription response."])
         }
         guard (200...299).contains(http.statusCode) else {
             let payload = String(data: data.prefix(300), encoding: .utf8) ?? ""
@@ -231,7 +231,7 @@ enum AliyunMeetingASRClient {
         if let taskID = extractTaskID(from: object), !taskID.isEmpty {
             return taskID
         }
-        throw NSError(domain: "Voxt.RemoteASR", code: -46, userInfo: [NSLocalizedDescriptionKey: "Aliyun meeting ASR did not return a task ID."])
+        throw NSError(domain: "Voxt.RemoteASR", code: -46, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian ASR did not return a task ID."])
     }
 
     private static func pollTaskResult(
@@ -240,14 +240,14 @@ enum AliyunMeetingASRClient {
         model: String,
         endpoint: String
     ) async throws -> Any {
-        let pollEndpoint = AliyunMeetingASRConfiguration.resolvedTaskEndpoint(endpoint, model: model, taskID: taskID)
+        let pollEndpoint = AliyunRemoteASRConfiguration.resolvedTaskEndpoint(endpoint, model: model, taskID: taskID)
         guard let url = URL(string: pollEndpoint) else {
             throw NSError(domain: "Voxt.RemoteASR", code: -47, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun task query endpoint URL."])
         }
 
         for _ in 0..<40 {
             var request = URLRequest(url: url)
-            request.httpMethod = AliyunMeetingASRConfiguration.taskQueryMethod(for: model) == .post ? "POST" : "GET"
+            request.httpMethod = AliyunRemoteASRConfiguration.taskQueryMethod(for: model) == .post ? "POST" : "GET"
             request.timeoutInterval = 30
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -262,7 +262,7 @@ enum AliyunMeetingASRClient {
                 throw NSError(
                     domain: "Voxt.RemoteASR",
                     code: http.statusCode,
-                    userInfo: [NSLocalizedDescriptionKey: "Aliyun meeting task query failed (HTTP \(http.statusCode)): \(payload)"]
+                    userInfo: [NSLocalizedDescriptionKey: "Aliyun task query failed (HTTP \(http.statusCode)): \(payload)"]
                 )
             }
 
@@ -279,14 +279,14 @@ enum AliyunMeetingASRClient {
                 throw NSError(
                     domain: "Voxt.RemoteASR",
                     code: -49,
-                    userInfo: [NSLocalizedDescriptionKey: detail.isEmpty ? "Aliyun meeting task failed." : detail]
+                    userInfo: [NSLocalizedDescriptionKey: detail.isEmpty ? "Aliyun task failed." : detail]
                 )
             default:
                 try await Task.sleep(nanoseconds: 600_000_000)
             }
         }
 
-        throw NSError(domain: "Voxt.RemoteASR", code: -50, userInfo: [NSLocalizedDescriptionKey: "Aliyun meeting ASR task timed out."])
+        throw NSError(domain: "Voxt.RemoteASR", code: -50, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian ASR task timed out."])
     }
 
     private static func fetchTranscriptionFile(from urlString: String) async throws -> Any {

@@ -47,7 +47,6 @@ enum OllamaThinkMode: String, CaseIterable, Identifiable {
 struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     let providerID: String
     var model: String
-    var meetingModel: String
     var endpoint: String
     var apiKey: String
     var appID: String
@@ -71,12 +70,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    var hasUsableMeetingModel: Bool {
-        !meetingModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     var isConfigured: Bool {
-        if RemoteLLMProvider(rawValue: providerID) == .ollama {
+        if RemoteLLMProvider(rawValue: providerID)?.apiKeyIsOptional == true {
             return hasUsableModel
         }
         return hasUsableModel && (
@@ -100,7 +95,6 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     init(
         providerID: String,
         model: String,
-        meetingModel: String = "",
         endpoint: String,
         apiKey: String,
         appID: String = "",
@@ -120,7 +114,6 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     ) {
         self.providerID = providerID
         self.model = model
-        self.meetingModel = meetingModel
         self.endpoint = endpoint
         self.apiKey = apiKey
         self.appID = appID
@@ -142,7 +135,6 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     enum CodingKeys: String, CodingKey {
         case providerID
         case model
-        case meetingModel
         case endpoint
         case apiKey
         case appID
@@ -165,7 +157,6 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         providerID = try container.decode(String.self, forKey: .providerID)
         model = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
-        meetingModel = try container.decodeIfPresent(String.self, forKey: .meetingModel) ?? ""
         endpoint = try container.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
         appID = try container.decodeIfPresent(String.self, forKey: .appID) ?? ""
@@ -295,7 +286,6 @@ enum RemoteModelConfigurationStore {
         return RemoteProviderConfiguration(
             providerID: provider.rawValue,
             model: provider.suggestedModel,
-            meetingModel: "",
             endpoint: "",
             apiKey: ""
         )
@@ -320,7 +310,6 @@ enum RemoteModelConfigurationStore {
         return RemoteProviderConfiguration(
             providerID: provider.rawValue,
             model: provider.suggestedModel,
-            meetingModel: "",
             endpoint: "",
             apiKey: "",
             searchEnabled: provider.defaultSearchEnabled

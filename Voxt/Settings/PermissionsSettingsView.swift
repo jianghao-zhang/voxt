@@ -78,10 +78,6 @@ struct PermissionsSettingsView: View {
         FeatureSettingsStore.load(defaults: .standard)
     }
 
-    private var meetingEnabled: Bool {
-        featureSettings.meeting.enabled
-    }
-
     private var permissionRequirementContext: SettingsPermissionRequirementContext {
         SettingsPermissionRequirementResolver.requirementContext(
             selectedEngine: transcriptionEngine,

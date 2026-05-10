@@ -27,6 +27,19 @@ struct ConfigurationExportDocument: FileDocument {
 
 enum ConfigurationTransferManager {
     static let sensitivePlaceholder = "__VOXT_REQUIRED__"
+    private enum LegacyRetiredTranscriptPreferenceKey {
+        static let notesBetaEnabled = "meetingNotesBetaEnabled"
+        static let hideOverlayFromScreenSharing = "hideMeetingOverlayFromScreenSharing"
+        static let overlayCollapsed = "meetingOverlayCollapsed"
+        static let realtimeTranslateEnabled = "meetingRealtimeTranslateEnabled"
+        static let realtimeTranslationTargetLanguage = "meetingRealtimeTranslationTargetLanguage"
+        static let summaryAutoGenerate = "meetingSummaryAutoGenerate"
+        static let summaryPromptTemplate = AppPreferenceKey.transcriptSummaryPromptTemplate
+        static let summaryModelSelection = AppPreferenceKey.transcriptSummaryModelSelection
+        static let hotkeyKeyCode = "meetingHotkeyKeyCode"
+        static let hotkeyModifiers = "meetingHotkeyModifiers"
+        static let hotkeySidedModifiers = "meetingHotkeySidedModifiers"
+    }
 
     struct FileEnvironment {
         let dictionaryEntriesURL: () throws -> URL
@@ -67,11 +80,6 @@ enum ConfigurationTransferManager {
         var translationTargetLanguage: String
         var userMainLanguageCodes: [String]
         var translateSelectedTextOnTranslationHotkey: Bool
-        var meetingNotesBetaEnabled: Bool
-        var hideMeetingOverlayFromScreenSharing: Bool
-        var meetingOverlayCollapsed: Bool
-        var meetingRealtimeTranslateEnabled: Bool
-        var meetingRealtimeTranslationTargetLanguage: String
         var voiceEndCommandEnabled: Bool
         var voiceEndCommandPreset: String
         var voiceEndCommandText: String
@@ -112,11 +120,6 @@ enum ConfigurationTransferManager {
             case translationTargetLanguage
             case userMainLanguageCodes
             case translateSelectedTextOnTranslationHotkey
-            case meetingNotesBetaEnabled
-            case hideMeetingOverlayFromScreenSharing
-            case meetingOverlayCollapsed
-            case meetingRealtimeTranslateEnabled
-            case meetingRealtimeTranslationTargetLanguage
             case voiceEndCommandEnabled
             case voiceEndCommandPreset
             case voiceEndCommandText
@@ -162,11 +165,6 @@ enum ConfigurationTransferManager {
             translationTargetLanguage: String,
             userMainLanguageCodes: [String],
             translateSelectedTextOnTranslationHotkey: Bool,
-            meetingNotesBetaEnabled: Bool,
-            hideMeetingOverlayFromScreenSharing: Bool,
-            meetingOverlayCollapsed: Bool,
-            meetingRealtimeTranslateEnabled: Bool,
-            meetingRealtimeTranslationTargetLanguage: String,
             voiceEndCommandEnabled: Bool,
             voiceEndCommandPreset: String,
             voiceEndCommandText: String,
@@ -207,11 +205,6 @@ enum ConfigurationTransferManager {
             self.translationTargetLanguage = translationTargetLanguage
             self.userMainLanguageCodes = UserMainLanguageOption.sanitizedSelection(userMainLanguageCodes)
             self.translateSelectedTextOnTranslationHotkey = translateSelectedTextOnTranslationHotkey
-            self.meetingNotesBetaEnabled = meetingNotesBetaEnabled
-            self.hideMeetingOverlayFromScreenSharing = hideMeetingOverlayFromScreenSharing
-            self.meetingOverlayCollapsed = meetingOverlayCollapsed
-            self.meetingRealtimeTranslateEnabled = meetingRealtimeTranslateEnabled
-            self.meetingRealtimeTranslationTargetLanguage = meetingRealtimeTranslationTargetLanguage
             self.voiceEndCommandEnabled = voiceEndCommandEnabled
             self.voiceEndCommandPreset = voiceEndCommandPreset
             self.voiceEndCommandText = voiceEndCommandText
@@ -262,11 +255,6 @@ enum ConfigurationTransferManager {
                     ?? UserMainLanguageOption.defaultSelectionCodes()
             )
             translateSelectedTextOnTranslationHotkey = try container.decode(Bool.self, forKey: .translateSelectedTextOnTranslationHotkey)
-            meetingNotesBetaEnabled = try container.decodeIfPresent(Bool.self, forKey: .meetingNotesBetaEnabled) ?? false
-            hideMeetingOverlayFromScreenSharing = try container.decodeIfPresent(Bool.self, forKey: .hideMeetingOverlayFromScreenSharing) ?? false
-            meetingOverlayCollapsed = try container.decodeIfPresent(Bool.self, forKey: .meetingOverlayCollapsed) ?? false
-            meetingRealtimeTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .meetingRealtimeTranslateEnabled) ?? false
-            meetingRealtimeTranslationTargetLanguage = try container.decodeIfPresent(String.self, forKey: .meetingRealtimeTranslationTargetLanguage) ?? ""
             voiceEndCommandEnabled = try container.decodeIfPresent(Bool.self, forKey: .voiceEndCommandEnabled) ?? false
             voiceEndCommandPreset = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue
             voiceEndCommandText = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandText) ?? ""
@@ -309,11 +297,6 @@ enum ConfigurationTransferManager {
             try container.encode(translationTargetLanguage, forKey: .translationTargetLanguage)
             try container.encode(userMainLanguageCodes, forKey: .userMainLanguageCodes)
             try container.encode(translateSelectedTextOnTranslationHotkey, forKey: .translateSelectedTextOnTranslationHotkey)
-            try container.encode(meetingNotesBetaEnabled, forKey: .meetingNotesBetaEnabled)
-            try container.encode(hideMeetingOverlayFromScreenSharing, forKey: .hideMeetingOverlayFromScreenSharing)
-            try container.encode(meetingOverlayCollapsed, forKey: .meetingOverlayCollapsed)
-            try container.encode(meetingRealtimeTranslateEnabled, forKey: .meetingRealtimeTranslateEnabled)
-            try container.encode(meetingRealtimeTranslationTargetLanguage, forKey: .meetingRealtimeTranslationTargetLanguage)
             try container.encode(voiceEndCommandEnabled, forKey: .voiceEndCommandEnabled)
             try container.encode(voiceEndCommandPreset, forKey: .voiceEndCommandPreset)
             try container.encode(voiceEndCommandText, forKey: .voiceEndCommandText)
@@ -598,9 +581,6 @@ enum ConfigurationTransferManager {
         var rewriteHotkeyModifiers: Int
         var rewriteHotkeySidedModifiers: Int
         var rewriteHotkeyActivationMode: String
-        var meetingHotkeyKeyCode: Int
-        var meetingHotkeyModifiers: Int
-        var meetingHotkeySidedModifiers: Int
         var hotkeyTriggerMode: String
         var hotkeyDistinguishModifierSides: Bool
         var hotkeyPreset: String
@@ -617,9 +597,6 @@ enum ConfigurationTransferManager {
             case rewriteHotkeyModifiers
             case rewriteHotkeySidedModifiers
             case rewriteHotkeyActivationMode
-            case meetingHotkeyKeyCode
-            case meetingHotkeyModifiers
-            case meetingHotkeySidedModifiers
             case hotkeyTriggerMode
             case hotkeyDistinguishModifierSides
             case hotkeyPreset
@@ -637,9 +614,6 @@ enum ConfigurationTransferManager {
             rewriteHotkeyModifiers: Int,
             rewriteHotkeySidedModifiers: Int,
             rewriteHotkeyActivationMode: String,
-            meetingHotkeyKeyCode: Int,
-            meetingHotkeyModifiers: Int,
-            meetingHotkeySidedModifiers: Int,
             hotkeyTriggerMode: String,
             hotkeyDistinguishModifierSides: Bool,
             hotkeyPreset: String,
@@ -655,9 +629,6 @@ enum ConfigurationTransferManager {
             self.rewriteHotkeyModifiers = rewriteHotkeyModifiers
             self.rewriteHotkeySidedModifiers = rewriteHotkeySidedModifiers
             self.rewriteHotkeyActivationMode = rewriteHotkeyActivationMode
-            self.meetingHotkeyKeyCode = meetingHotkeyKeyCode
-            self.meetingHotkeyModifiers = meetingHotkeyModifiers
-            self.meetingHotkeySidedModifiers = meetingHotkeySidedModifiers
             self.hotkeyTriggerMode = hotkeyTriggerMode
             self.hotkeyDistinguishModifierSides = hotkeyDistinguishModifierSides
             self.hotkeyPreset = hotkeyPreset
@@ -679,9 +650,6 @@ enum ConfigurationTransferManager {
                 String.self,
                 forKey: .rewriteHotkeyActivationMode
             ) ?? HotkeyPreference.defaultRewriteActivationMode.rawValue
-            meetingHotkeyKeyCode = try container.decodeIfPresent(Int.self, forKey: .meetingHotkeyKeyCode) ?? Int(HotkeyPreference.defaultMeetingKeyCode)
-            meetingHotkeyModifiers = try container.decodeIfPresent(Int.self, forKey: .meetingHotkeyModifiers) ?? Int(HotkeyPreference.defaultMeetingModifiers.rawValue)
-            meetingHotkeySidedModifiers = try container.decodeIfPresent(Int.self, forKey: .meetingHotkeySidedModifiers) ?? 0
             hotkeyTriggerMode = try container.decode(String.self, forKey: .hotkeyTriggerMode)
             hotkeyDistinguishModifierSides = try container.decode(Bool.self, forKey: .hotkeyDistinguishModifierSides)
             hotkeyPreset = try container.decode(String.self, forKey: .hotkeyPreset)
@@ -828,23 +796,6 @@ enum ConfigurationTransferManager {
             customLLMManager: customLLMManager
         )
 
-        if featureSettings.meeting.enabled {
-            appendASRIssues(
-                for: featureSettings.meeting.asrSelectionID,
-                requiresMeetingConfiguration: true,
-                issues: &issues,
-                remoteASR: remoteASR,
-                mlxModelManager: mlxModelManager,
-                whisperModelManager: whisperModelManager
-            )
-            appendTextModelIssues(
-                for: featureSettings.meeting.summaryModelSelectionID,
-                issues: &issues,
-                remoteLLM: remoteLLM,
-                customLLMManager: customLLMManager
-            )
-        }
-
         return Array(Set(issues)).sorted { $0.id < $1.id }
     }
 
@@ -874,11 +825,6 @@ enum ConfigurationTransferManager {
                 from: defaults.string(forKey: AppPreferenceKey.userMainLanguageCodes)
             ),
             translateSelectedTextOnTranslationHotkey: defaults.object(forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey) as? Bool ?? true,
-            meetingNotesBetaEnabled: defaults.object(forKey: AppPreferenceKey.meetingNotesBetaEnabled) as? Bool ?? false,
-            hideMeetingOverlayFromScreenSharing: defaults.object(forKey: AppPreferenceKey.hideMeetingOverlayFromScreenSharing) as? Bool ?? false,
-            meetingOverlayCollapsed: defaults.object(forKey: AppPreferenceKey.meetingOverlayCollapsed) as? Bool ?? false,
-            meetingRealtimeTranslateEnabled: defaults.object(forKey: AppPreferenceKey.meetingRealtimeTranslateEnabled) as? Bool ?? false,
-            meetingRealtimeTranslationTargetLanguage: defaults.string(forKey: AppPreferenceKey.meetingRealtimeTranslationTargetLanguage) ?? "",
             voiceEndCommandEnabled: defaults.object(forKey: AppPreferenceKey.voiceEndCommandEnabled) as? Bool ?? false,
             voiceEndCommandPreset: defaults.string(forKey: AppPreferenceKey.voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue,
             voiceEndCommandText: defaults.string(forKey: AppPreferenceKey.voiceEndCommandText) ?? "",
@@ -988,9 +934,6 @@ enum ConfigurationTransferManager {
                 rewriteHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyModifiers),
                 rewriteHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeySidedModifiers),
                 rewriteHotkeyActivationMode: HotkeyPreference.loadRewriteActivationMode(defaults: defaults).rawValue,
-                meetingHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.meetingHotkeyKeyCode),
-                meetingHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.meetingHotkeyModifiers),
-                meetingHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.meetingHotkeySidedModifiers),
                 hotkeyTriggerMode: HotkeyPreference.loadTriggerMode(defaults: defaults).rawValue,
                 hotkeyDistinguishModifierSides: defaults.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? HotkeyPreference.defaultDistinguishModifierSides,
                 hotkeyPreset: defaults.string(forKey: AppPreferenceKey.hotkeyPreset) ?? HotkeyPreference.defaultPreset.rawValue,
@@ -1036,11 +979,14 @@ enum ConfigurationTransferManager {
             forKey: AppPreferenceKey.userMainLanguageCodes
         )
         defaults.set(general.translateSelectedTextOnTranslationHotkey, forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
-        defaults.set(general.meetingNotesBetaEnabled, forKey: AppPreferenceKey.meetingNotesBetaEnabled)
-        defaults.set(general.hideMeetingOverlayFromScreenSharing, forKey: AppPreferenceKey.hideMeetingOverlayFromScreenSharing)
-        defaults.set(general.meetingOverlayCollapsed, forKey: AppPreferenceKey.meetingOverlayCollapsed)
-        defaults.set(general.meetingRealtimeTranslateEnabled, forKey: AppPreferenceKey.meetingRealtimeTranslateEnabled)
-        defaults.set(general.meetingRealtimeTranslationTargetLanguage, forKey: AppPreferenceKey.meetingRealtimeTranslationTargetLanguage)
+        defaults.set(false, forKey: LegacyRetiredTranscriptPreferenceKey.notesBetaEnabled)
+        defaults.set(false, forKey: LegacyRetiredTranscriptPreferenceKey.hideOverlayFromScreenSharing)
+        defaults.set(false, forKey: LegacyRetiredTranscriptPreferenceKey.overlayCollapsed)
+        defaults.set(false, forKey: LegacyRetiredTranscriptPreferenceKey.realtimeTranslateEnabled)
+        defaults.set("", forKey: LegacyRetiredTranscriptPreferenceKey.realtimeTranslationTargetLanguage)
+        defaults.set(true, forKey: LegacyRetiredTranscriptPreferenceKey.summaryAutoGenerate)
+        defaults.set("", forKey: LegacyRetiredTranscriptPreferenceKey.summaryPromptTemplate)
+        defaults.set("", forKey: LegacyRetiredTranscriptPreferenceKey.summaryModelSelection)
         defaults.set(general.voiceEndCommandEnabled, forKey: AppPreferenceKey.voiceEndCommandEnabled)
         defaults.set(general.voiceEndCommandPreset, forKey: AppPreferenceKey.voiceEndCommandPreset)
         defaults.set(general.voiceEndCommandText, forKey: AppPreferenceKey.voiceEndCommandText)
@@ -1154,9 +1100,9 @@ enum ConfigurationTransferManager {
             rawValue: hotkey.rewriteHotkeyActivationMode
         ) ?? HotkeyPreference.defaultRewriteActivationMode
         HotkeyPreference.saveRewriteActivationMode(rewriteActivationMode, defaults: defaults)
-        defaults.set(hotkey.meetingHotkeyKeyCode, forKey: AppPreferenceKey.meetingHotkeyKeyCode)
-        defaults.set(hotkey.meetingHotkeyModifiers, forKey: AppPreferenceKey.meetingHotkeyModifiers)
-        defaults.set(hotkey.meetingHotkeySidedModifiers, forKey: AppPreferenceKey.meetingHotkeySidedModifiers)
+        defaults.removeObject(forKey: LegacyRetiredTranscriptPreferenceKey.hotkeyKeyCode)
+        defaults.removeObject(forKey: LegacyRetiredTranscriptPreferenceKey.hotkeyModifiers)
+        defaults.removeObject(forKey: LegacyRetiredTranscriptPreferenceKey.hotkeySidedModifiers)
         let triggerMode = HotkeyPreference.TriggerMode(rawValue: hotkey.hotkeyTriggerMode)
             ?? HotkeyPreference.defaultTriggerMode
         HotkeyPreference.saveTriggerMode(triggerMode, defaults: defaults)

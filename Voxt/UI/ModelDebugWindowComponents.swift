@@ -5,11 +5,11 @@ import Combine
 
 struct ModelDebugWindowBackground: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: MeetingDetailUIStyle.windowCornerRadius, style: .continuous)
-            .fill(MeetingDetailUIStyle.windowFillColor)
+        RoundedRectangle(cornerRadius: DetailPanelUIStyle.windowCornerRadius, style: .continuous)
+            .fill(DetailPanelUIStyle.windowFillColor)
             .overlay(
-                RoundedRectangle(cornerRadius: MeetingDetailUIStyle.windowCornerRadius, style: .continuous)
-                    .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                RoundedRectangle(cornerRadius: DetailPanelUIStyle.windowCornerRadius, style: .continuous)
+                    .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
             )
             .ignoresSafeArea()
     }
@@ -39,11 +39,11 @@ struct ModelDebugToolbarSelectorLabel: View {
         .frame(minWidth: ModelDebugWindowStyle.selectorMinWidth, idealWidth: ModelDebugWindowStyle.selectorIdealWidth, maxWidth: .infinity, minHeight: 44, maxHeight: 44)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(MeetingDetailUIStyle.controlFillColor)
+                .fill(DetailPanelUIStyle.controlFillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
         )
     }
 }
@@ -57,11 +57,11 @@ struct ModelDebugHeaderBadge: View {
             .frame(height: 18)
             .background(
                 Capsule(style: .continuous)
-                    .fill(MeetingDetailUIStyle.controlFillColor)
+                    .fill(DetailPanelUIStyle.controlFillColor)
             )
             .overlay(
                 Capsule(style: .continuous)
-                    .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                    .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
             )
             .frame(width: 62, alignment: .leading)
             .offset(x: 1)
@@ -89,11 +89,11 @@ struct ModelDebugToast: View {
         .frame(height: 34)
         .background(
             Capsule(style: .continuous)
-                .fill(MeetingDetailUIStyle.controlFillColor)
+                .fill(DetailPanelUIStyle.controlFillColor)
         )
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.12), radius: 10, y: 4)
     }
@@ -156,12 +156,12 @@ struct ASRDebugAudioSelectorSheet: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(
                                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .fill(MeetingDetailUIStyle.controlFillColor)
+                                            .fill(DetailPanelUIStyle.controlFillColor)
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                                             .strokeBorder(
-                                                clip.id == selectedClipID ? Color.accentColor.opacity(0.35) : MeetingDetailUIStyle.borderColor,
+                                                clip.id == selectedClipID ? Color.accentColor.opacity(0.35) : DetailPanelUIStyle.borderColor,
                                                 lineWidth: 1
                                             )
                                     )
@@ -176,11 +176,11 @@ struct ASRDebugAudioSelectorSheet: View {
                                         .frame(width: 40, height: 40)
                                         .background(
                                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .fill(MeetingDetailUIStyle.controlFillColor)
+                                                .fill(DetailPanelUIStyle.controlFillColor)
                                         )
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                                                .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
                                         )
                                 }
                                 .buttonStyle(.plain)
@@ -192,7 +192,7 @@ struct ASRDebugAudioSelectorSheet: View {
         }
         .padding(18)
         .frame(width: 580, height: 470)
-        .background(MeetingDetailUIStyle.windowFillColor)
+        .background(DetailPanelUIStyle.windowFillColor)
     }
 }
 
@@ -245,12 +245,12 @@ struct LLMDebugPresetSelectorSheet: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(MeetingDetailUIStyle.controlFillColor)
+                                    .fill(DetailPanelUIStyle.controlFillColor)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .strokeBorder(
-                                        preset.id == selectedPresetID ? Color.accentColor.opacity(0.35) : MeetingDetailUIStyle.borderColor,
+                                        preset.id == selectedPresetID ? Color.accentColor.opacity(0.35) : DetailPanelUIStyle.borderColor,
                                         lineWidth: 1
                                     )
                             )
@@ -262,7 +262,7 @@ struct LLMDebugPresetSelectorSheet: View {
         }
         .padding(18)
         .frame(width: 520, height: 470)
-        .background(MeetingDetailUIStyle.windowFillColor)
+        .background(DetailPanelUIStyle.windowFillColor)
     }
 }
 
@@ -304,7 +304,7 @@ struct LLMDebugPromptSettingsSheet: View {
                     onSave(draftPrompt)
                     dismiss()
                 }
-                .buttonStyle(MeetingPrimaryButtonStyle())
+                .buttonStyle(DetailPrimaryButtonStyle())
                 Button {
                     dismiss()
                 } label: {
@@ -354,7 +354,7 @@ struct LLMDebugPromptSettingsSheet: View {
         }
         .padding(18)
         .frame(width: 720, height: 450)
-        .background(MeetingDetailUIStyle.windowFillColor)
+        .background(DetailPanelUIStyle.windowFillColor)
         .onAppear {
             draftPrompt = preset.promptTemplate
         }
@@ -369,7 +369,7 @@ struct LLMDebugVariableEditor: View {
         "{{DICTATED_PROMPT}}",
         "{{SOURCE_TEXT}}",
         AppDelegate.rawTranscriptionTemplateVariable,
-        "{{MEETING_RECORD}}"
+        TranscriptSummarySupport.transcriptRecordTemplateVariable
     ]
 
     var body: some View {
@@ -396,11 +396,11 @@ struct LLMDebugVariableEditor: View {
                                 .frame(minHeight: 96, maxHeight: 120, alignment: .topLeading)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(MeetingDetailUIStyle.panelFillColor)
+                                        .fill(DetailPanelUIStyle.panelFillColor)
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                                        .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
                                 )
                         } else {
                             TextField(
@@ -413,11 +413,11 @@ struct LLMDebugVariableEditor: View {
                             .frame(height: 32)
                             .background(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(MeetingDetailUIStyle.panelFillColor)
+                                    .fill(DetailPanelUIStyle.panelFillColor)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                                    .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
                             )
                         }
                     }
@@ -489,11 +489,11 @@ struct ASRDebugResultCard: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(MeetingDetailUIStyle.panelFillColor)
+                .fill(DetailPanelUIStyle.panelFillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(result.isError ? Color.red.opacity(0.22) : MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                .strokeBorder(result.isError ? Color.red.opacity(0.22) : DetailPanelUIStyle.borderColor, lineWidth: 1)
         )
     }
 }
@@ -549,11 +549,11 @@ struct LLMDebugResultCard: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(MeetingDetailUIStyle.panelFillColor)
+                .fill(DetailPanelUIStyle.panelFillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(result.isError ? Color.red.opacity(0.22) : MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                .strokeBorder(result.isError ? Color.red.opacity(0.22) : DetailPanelUIStyle.borderColor, lineWidth: 1)
         )
     }
 }

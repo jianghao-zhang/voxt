@@ -27,7 +27,6 @@ struct HotkeySettingsValidation {
         let translationHotkey: HotkeyPreference.Hotkey
         let rewriteHotkey: HotkeyPreference.Hotkey
         let shouldValidateRewriteHotkey: Bool
-        let meetingHotkey: HotkeyPreference.Hotkey?
         let customPasteHotkey: HotkeyPreference.Hotkey?
     }
 
@@ -59,14 +58,6 @@ struct HotkeySettingsValidation {
                 to: &messages
             )
         }
-        if let meetingHotkey = state.meetingHotkey {
-            appendConflictMessage(
-                for: meetingHotkey,
-                formatKey: "Meeting notes shortcut: %@",
-                id: "conflict.meeting",
-                to: &messages
-            )
-        }
         if let customPasteHotkey = state.customPasteHotkey {
             appendConflictMessage(
                 for: customPasteHotkey,
@@ -95,27 +86,6 @@ struct HotkeySettingsValidation {
             to: &messages
         )
 
-        if let meetingHotkey = state.meetingHotkey {
-            appendEqualityMessage(
-                state.transcriptionHotkey == meetingHotkey,
-                id: "duplicate.transcription.meeting",
-                textKey: "Transcription and meeting notes shortcuts should be different.",
-                to: &messages
-            )
-            appendEqualityMessage(
-                state.translationHotkey == meetingHotkey,
-                id: "duplicate.translation.meeting",
-                textKey: "Translation and meeting notes shortcuts should be different.",
-                to: &messages
-            )
-            appendEqualityMessage(
-                state.shouldValidateRewriteHotkey && state.rewriteHotkey == meetingHotkey,
-                id: "duplicate.rewrite.meeting",
-                textKey: "Content rewrite and meeting notes shortcuts should be different.",
-                to: &messages
-            )
-        }
-
         if let customPasteHotkey = state.customPasteHotkey {
             appendEqualityMessage(
                 state.transcriptionHotkey == customPasteHotkey,
@@ -135,15 +105,6 @@ struct HotkeySettingsValidation {
                 textKey: "Content rewrite and custom paste shortcuts should be different.",
                 to: &messages
             )
-
-            if let meetingHotkey = state.meetingHotkey {
-                appendEqualityMessage(
-                    meetingHotkey == customPasteHotkey,
-                    id: "duplicate.meeting.customPaste",
-                    textKey: "Meeting notes and custom paste shortcuts should be different.",
-                    to: &messages
-                )
-            }
         }
 
         return messages

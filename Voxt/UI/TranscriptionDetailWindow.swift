@@ -6,8 +6,8 @@ final class TranscriptionDetailWindowManager {
     static let shared = TranscriptionDetailWindowManager()
 
     typealias FollowUpStatusProvider = @MainActor (TranscriptionHistoryEntry) -> TranscriptionFollowUpProviderStatus
-    typealias FollowUpAnswerer = @MainActor (TranscriptionHistoryEntry, [MeetingSummaryChatMessage], String) async throws -> String
-    typealias FollowUpPersistence = @MainActor (UUID, [MeetingSummaryChatMessage]) -> TranscriptionHistoryEntry?
+    typealias FollowUpAnswerer = @MainActor (TranscriptionHistoryEntry, [TranscriptSummaryChatMessage], String) async throws -> String
+    typealias FollowUpPersistence = @MainActor (UUID, [TranscriptSummaryChatMessage]) -> TranscriptionHistoryEntry?
 
     private var historyControllers: [UUID: TranscriptionDetailWindowController] = [:]
 
@@ -196,11 +196,11 @@ private struct TranscriptionDetailWindowView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: MeetingDetailUIStyle.windowCornerRadius, style: .continuous)
-                .fill(MeetingDetailUIStyle.windowFillColor)
+            RoundedRectangle(cornerRadius: DetailPanelUIStyle.windowCornerRadius, style: .continuous)
+                .fill(DetailPanelUIStyle.windowFillColor)
                 .overlay(
-                    RoundedRectangle(cornerRadius: MeetingDetailUIStyle.windowCornerRadius, style: .continuous)
-                        .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: DetailPanelUIStyle.windowCornerRadius, style: .continuous)
+                        .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
                 )
 
             TranscriptionDetailConversationView(viewModel: viewModel)

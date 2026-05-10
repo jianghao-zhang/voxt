@@ -43,20 +43,12 @@ extension AppDelegate {
         featureSettings.rewrite
     }
 
-    var meetingFeatureSettings: MeetingFeatureSettings {
-        featureSettings.meeting
-    }
-
     func prepareLegacySettingsForSession(outputMode: SessionOutputMode) {
         FeatureSettingsStore.prepareLegacySession(
             from: featureSettings,
             outputMode: outputMode,
             defaults: defaults
         )
-    }
-
-    func prepareLegacySettingsForMeeting() {
-        FeatureSettingsStore.prepareLegacyMeeting(from: featureSettings, defaults: defaults)
     }
 
     var selectedInputDeviceUID: String? {
@@ -82,10 +74,6 @@ extension AppDelegate {
         defaults.bool(forKey: AppPreferenceKey.muteSystemAudioWhileRecording)
     }
 
-    var meetingNotesBetaEnabled: Bool {
-        defaults.bool(forKey: AppPreferenceKey.meetingNotesBetaEnabled)
-    }
-
     var overlayPosition: OverlayPosition {
         enumValue(forKey: AppPreferenceKey.overlayPosition, default: .bottom)
     }
@@ -100,13 +88,6 @@ extension AppDelegate {
 
     var translationTargetLanguage: TranslationTargetLanguage {
         enumValue(forKey: AppPreferenceKey.translationTargetLanguage, default: .english)
-    }
-
-    var meetingRealtimeTranslationTargetLanguage: TranslationTargetLanguage? {
-        enumValue(
-            forKey: AppPreferenceKey.meetingRealtimeTranslationTargetLanguage,
-            default: Optional<TranslationTargetLanguage>.none
-        )
     }
 
     var userMainLanguageCodes: [String] {
@@ -570,8 +551,14 @@ extension AppDelegate {
             return resolvedTranslationHistoryTextModelMetadata()
         case .rewrite:
             return resolvedHistoryTextModelMetadata(for: rewriteFeatureSettings.llmSelectionID.textSelection)
-        case .meeting:
-            return resolvedHistoryTextModelMetadata(for: meetingFeatureSettings.summaryModelSelectionID.textSelection)
+        case .transcript:
+            return HistoryTextModelMetadata(
+                modeTitle: EnhancementMode.off.title,
+                modelTitle: "None",
+                remoteProviderTitle: nil,
+                remoteModelTitle: nil,
+                remoteEndpoint: nil
+            )
         }
     }
 

@@ -185,10 +185,6 @@ struct SettingsView: View {
                 navigationRequest = nil
                 selectedFeatureTab = .transcription
             }
-            if !meetingEnabled, selectedTab == .feature, selectedFeatureTab == .meeting {
-                navigationRequest = nil
-                selectedFeatureTab = .transcription
-            }
         }
         .onChange(of: remoteASRProviderConfigurationsRaw) { _, _ in
             refreshModelConfigurationBadge()
@@ -225,7 +221,6 @@ struct SettingsView: View {
                     }
                 },
                 appEnhancementEnabled: appEnhancementEnabled,
-                meetingEnabled: meetingEnabled,
                 noteEnabled: noteEnabled,
                 hasMissingPermissions: hasMissingPermissions,
                 hasNoAvailableMicrophones: hasNoAvailableMicrophones,
@@ -293,10 +288,6 @@ struct SettingsView: View {
 
     private var featureSettings: FeatureSettings {
         FeatureSettingsStore.load(defaults: .standard)
-    }
-
-    private var meetingEnabled: Bool {
-        featureSettings.meeting.enabled
     }
 
     private var noteEnabled: Bool {
@@ -559,7 +550,6 @@ struct SettingsView: View {
         if let featureTab = target.featureTab {
             if FeatureSettingsTab.visibleTabs(
                 appEnhancementEnabled: appEnhancementEnabled,
-                meetingEnabled: meetingEnabled,
                 noteEnabled: noteEnabled
             ).contains(featureTab) {
                 selectedFeatureTab = featureTab
@@ -582,7 +572,6 @@ struct SettingsView: View {
             sidebarMode = .feature
             if !FeatureSettingsTab.visibleTabs(
                 appEnhancementEnabled: appEnhancementEnabled,
-                meetingEnabled: meetingEnabled,
                 noteEnabled: noteEnabled
             ).contains(selectedFeatureTab) {
                 selectedFeatureTab = .transcription
@@ -617,7 +606,6 @@ private struct SettingsSidebar: View {
     let onSelectFeatureTab: (FeatureSettingsTab) -> Void
     let onReturnToRoot: () -> Void
     let appEnhancementEnabled: Bool
-    let meetingEnabled: Bool
     let noteEnabled: Bool
     let hasMissingPermissions: Bool
     let hasNoAvailableMicrophones: Bool
@@ -804,7 +792,6 @@ private struct SettingsSidebar: View {
     private var visibleFeatureTabs: [FeatureSettingsTab] {
         FeatureSettingsTab.visibleTabs(
             appEnhancementEnabled: appEnhancementEnabled,
-            meetingEnabled: meetingEnabled,
             noteEnabled: noteEnabled
         )
     }

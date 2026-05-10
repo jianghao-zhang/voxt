@@ -1,19 +1,19 @@
 import Foundation
 
-enum MeetingSummaryChatRole: String, Codable, Hashable, Sendable {
+enum TranscriptSummaryChatRole: String, Codable, Hashable, Sendable {
     case user
     case assistant
 }
 
-struct MeetingSummaryChatMessage: Identifiable, Codable, Hashable, Sendable {
+struct TranscriptSummaryChatMessage: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
-    let role: MeetingSummaryChatRole
+    let role: TranscriptSummaryChatRole
     let content: String
     let createdAt: Date
 
     init(
         id: UUID = UUID(),
-        role: MeetingSummaryChatRole,
+        role: TranscriptSummaryChatRole,
         content: String,
         createdAt: Date = Date()
     ) {
@@ -24,7 +24,7 @@ struct MeetingSummaryChatMessage: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-struct MeetingSummarySettingsSnapshot: Codable, Hashable, Sendable {
+struct TranscriptSummarySettingsSnapshot: Codable, Hashable, Sendable {
     let autoGenerate: Bool
     let promptTemplate: String?
     let modelSelectionID: String?
@@ -40,40 +40,42 @@ struct MeetingSummarySettingsSnapshot: Codable, Hashable, Sendable {
     }
 }
 
-struct MeetingSummarySnapshot: Codable, Hashable, Sendable {
+struct TranscriptSummarySnapshot: Codable, Hashable, Sendable {
     let title: String
     let body: String
     let todoItems: [String]
     let generatedAt: Date
-    let settingsSnapshot: MeetingSummarySettingsSnapshot
+    let settingsSnapshot: TranscriptSummarySettingsSnapshot
 }
 
-struct MeetingSummaryProviderStatus: Equatable, Sendable {
+struct TranscriptSummaryProviderStatus: Equatable, Sendable {
     let isAvailable: Bool
     let message: String
 }
 
-struct MeetingSummaryModelOption: Identifiable, Hashable, Sendable {
+struct TranscriptSummaryModelOption: Identifiable, Hashable, Sendable {
     let id: String
     let title: String
     let subtitle: String
 }
 
-enum MeetingSummarySupport {
-    private static let meetingRecordTemplateVariable = "{{MEETING_RECORD}}"
+enum TranscriptSummarySupport {
+    static let transcriptRecordTemplateVariable = "{{TRANSCRIPT_RECORD}}"
+    private static let legacyTranscriptRecordTemplateVariable = "{{MEETING_RECORD}}"
     static let promptTemplateVariables = [
         AppPreferenceKey.asrUserMainLanguageTemplateVariable,
-        meetingRecordTemplateVariable
+        transcriptRecordTemplateVariable
     ]
 
     private struct DecodedPayload: Decodable {
-        struct MeetingSummaryBlock: Decodable {
+        struct SummaryBlock: Decodable {
             let title: String?
             let content: String?
             let body: String?
         }
 
-        let meetingSummary: MeetingSummaryBlock?
+        let transcriptSummary: SummaryBlock?
+        let legacyTranscriptSummary: SummaryBlock?
         let title: String?
         let body: String?
         let content: String?
@@ -81,7 +83,8 @@ enum MeetingSummarySupport {
         let todoItems: [String]?
 
         enum CodingKeys: String, CodingKey {
-            case meetingSummary = "meeting_summary"
+            case transcriptSummary = "transcript_summary"
+            case legacyTranscriptSummary = "meeting_summary"
             case title
             case body
             case content
@@ -92,67 +95,75 @@ enum MeetingSummarySupport {
 
     static func defaultPromptTemplate() -> String {
         """
-        Your task is to generate a clear, credible, and concise meeting summary based on the provided meeting minutes and return it in JSON structure. Please strictly follow the requirements below:
+        Your task is to generate a clear, credible, and concise transcript summary based on the provided transcript and return it in JSON structure. Please strictly follow the requirements below:
 
         User's main language:
         {{USER_MAIN_LANGUAGE}}
 
-        Meeting minutes:
-        {{MEETING_RECORD}}
+        Transcript:
+        {{TRANSCRIPT_RECORD}}
 
         When generating the summary, please adhere to the following specifications:
-        1. Regardless of the language used in the meeting minutes, the final summary must be output in the user's main language.
+        1. Regardless of the language used in the transcript, the final summary must be output in the user's main language.
         2. The main body of the summary should be within 1200 characters (for Chinese) or maintain equivalent conciseness (for non-Chinese languages), prioritizing efficiency over mere character count.
         3. Prioritize extracting the following content:
-           - Meeting background: Reasons, purpose, and participants of the meeting
-           - Key discussion points: Main topics discussed in the meeting and opinions from various parties
-           - Decisions reached: Formal decisions or consensus made during the meeting
-           - Risks/blockages: Potential risks identified or current obstacles faced during the meeting
-           - Outstanding issues: Unresolved problems or matters requiring further discussion during the meeting
-        4. If there are explicit or strongly implied to-do tasks in the meeting, include them in the "todo_list" field of the JSON.
-        5. Strictly base on the content of the meeting minutes; do not fabricate any unmentioned facts. If information is insufficient, use conservative expressions.
-        6. The title should be brief and accurately summarize the meeting theme.
+           - Context and background
+           - Key discussion points and notable viewpoints
+           - Decisions reached or clear conclusions
+           - Risks, blockers, and unresolved issues
+           - Follow-up items that still need attention
+        4. If there are explicit or strongly implied to-do tasks in the transcript, include them in the "todo_list" field of the JSON.
+        5. Strictly base on the content of the transcript; do not fabricate any unmentioned facts. If information is insufficient, use conservative expressions.
+        6. The title should be brief and accurately summarize the transcript theme.
         7. Translation rules:
-           - Non-user-main-language content in the meeting minutes must be translated into the user's main language.
+           - Non-user-main-language content in the transcript must be translated into the user's main language.
            - Proper nouns, product names, URLs, and code snippets can be kept in their original form.
         8. The content does not support markdown, only line breaks using "\\n".
 
         The output must be a valid JSON object with the following structure:
         {
-          "meeting_summary": {
-            "title": "[Fill in the brief meeting theme here]",
-            "content": "[Fill in the main body of the meeting summary here, including meeting background, key discussion points, decisions reached, risks/blockages, and outstanding issues. Use line breaks \\n in appropriate positions to make the content clearer]"
+          "transcript_summary": {
+            "title": "[Fill in the brief transcript theme here]",
+            "content": "[Fill in the main body of the transcript summary here, including context, key discussion points, decisions, risks or blockers, and unresolved issues. Use line breaks \\n in appropriate positions to make the content clearer]"
           },
           "todo_list": [
-            "[List each to-do task here, clearly specifying the responsible person and deadline (if mentioned in the meeting)]"
+            "[List each to-do task here, clearly specifying the responsible person and deadline when mentioned in the transcript]"
           ]
         }
 
-        Note: If there are no to-do tasks, the "todo_list" field should be an empty array. Ensure the JSON is properly formatted, with no trailing commas, and the content accurately reflects the meeting minutes in fluent, natural language conforming to the user's main language expression habits.
+        Note: If there are no to-do tasks, the "todo_list" field should be an empty array. Ensure the JSON is properly formatted, with no trailing commas, and the content accurately reflects the transcript in fluent, natural language conforming to the user's main language expression habits.
         """
     }
 
     static func summaryPrompt(
         transcript: String,
-        settings: MeetingSummarySettingsSnapshot,
+        settings: TranscriptSummarySettingsSnapshot,
         userMainLanguage: String
     ) -> String {
         let template = resolvedPromptTemplate(settings.promptTemplate)
         return resolvePromptTemplate(
             template: template,
             userMainLanguage: userMainLanguage,
-            meetingRecord: transcript
+            transcriptRecord: transcript
         )
     }
 
     static func resolvedPromptTemplate(_ promptTemplate: String?) -> String {
-        AppPromptDefaults.resolvedStoredText(promptTemplate, kind: .meetingSummary)
+        AppPromptDefaults.resolvedStoredText(promptTemplate, kind: .transcriptSummary)
+    }
+
+    static func transcriptRecord(from values: [String: String]) -> String {
+        let transcript = values[transcriptRecordTemplateVariable]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let transcript, transcript.isEmpty == false {
+            return transcript
+        }
+        return values[legacyTranscriptRecordTemplateVariable] ?? ""
     }
 
     private static func resolvePromptTemplate(
         template: String,
         userMainLanguage: String,
-        meetingRecord: String
+        transcriptRecord: String
     ) -> String {
         var prompt = template.trimmingCharacters(in: .whitespacesAndNewlines)
         let languageVariable = AppPreferenceKey.asrUserMainLanguageTemplateVariable
@@ -163,10 +174,12 @@ enum MeetingSummarySupport {
             prompt += "\n\nUser main language: \(userMainLanguage)"
         }
 
-        if prompt.contains(meetingRecordTemplateVariable) {
-            prompt = prompt.replacingOccurrences(of: meetingRecordTemplateVariable, with: meetingRecord)
+        if prompt.contains(transcriptRecordTemplateVariable) {
+            prompt = prompt.replacingOccurrences(of: transcriptRecordTemplateVariable, with: transcriptRecord)
+        } else if prompt.contains(legacyTranscriptRecordTemplateVariable) {
+            prompt = prompt.replacingOccurrences(of: legacyTranscriptRecordTemplateVariable, with: transcriptRecord)
         } else {
-            prompt += "\n\nMeeting record:\n\(meetingRecord)"
+            prompt += "\n\nTranscript:\n\(transcriptRecord)"
         }
 
         return prompt
@@ -174,8 +187,8 @@ enum MeetingSummarySupport {
 
     static func followUpPrompt(
         transcript: String,
-        summary: MeetingSummarySnapshot?,
-        history: [MeetingSummaryChatMessage],
+        summary: TranscriptSummarySnapshot?,
+        history: [TranscriptSummaryChatMessage],
         question: String,
         userMainLanguage: String
     ) -> String {
@@ -203,16 +216,16 @@ enum MeetingSummarySupport {
         }
 
         return """
-        You are Voxt's meeting follow-up assistant.
+        You are Voxt's transcript follow-up assistant.
 
-        Answer the user's follow-up question about the meeting.
+        Answer the user's follow-up question about the transcript.
 
         Rules:
-        1. Use the meeting transcript as the primary source of truth.
+        1. Use the transcript as the primary source of truth.
         2. Use the summary and previous chat only as compressed context; if they conflict with the transcript, trust the transcript.
         3. Reply in the user's main language.
         4. Answer directly and concisely.
-        5. Do not invent facts. If the meeting record does not contain the answer, clearly say that the meeting record does not provide enough information.
+        5. Do not invent facts. If the transcript does not contain the answer, clearly say that the transcript does not provide enough information.
         6. Return plain text only. Do not use JSON or markdown code fences.
 
         User main language: \(userMainLanguage)
@@ -223,7 +236,7 @@ enum MeetingSummarySupport {
         Previous follow-up chat:
         \(trimmedHistory.isEmpty ? "None" : trimmedHistory)
 
-        Meeting transcript:
+        Transcript:
         \(transcript)
 
         Current user question:
@@ -233,9 +246,9 @@ enum MeetingSummarySupport {
 
     static func decodeSummary(
         from text: String,
-        settings: MeetingSummarySettingsSnapshot,
+        settings: TranscriptSummarySettingsSnapshot,
         generatedAt: Date = Date()
-    ) -> MeetingSummarySnapshot? {
+    ) -> TranscriptSummarySnapshot? {
         let normalized = normalizePayload(text)
         guard let data = normalized.data(using: .utf8),
               let payload = try? JSONDecoder().decode(DecodedPayload.self, from: data)
@@ -245,22 +258,23 @@ enum MeetingSummarySupport {
         return snapshot(from: payload, settings: settings, generatedAt: generatedAt)
     }
 
-    static func fallbackSummaryTitle(for settings: MeetingSummarySettingsSnapshot) -> String {
-        String(localized: "Meeting Summary")
+    static func fallbackSummaryTitle(for settings: TranscriptSummarySettingsSnapshot) -> String {
+        String(localized: "Transcript Summary")
     }
 
     private static func snapshot(
         from payload: DecodedPayload,
-        settings: MeetingSummarySettingsSnapshot,
+        settings: TranscriptSummarySettingsSnapshot,
         generatedAt: Date
-    ) -> MeetingSummarySnapshot? {
-        let title = (payload.meetingSummary?.title ?? payload.title)?
+    ) -> TranscriptSummarySnapshot? {
+        let summaryBlock = payload.transcriptSummary ?? payload.legacyTranscriptSummary
+        let title = (summaryBlock?.title ?? payload.title)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let body = (payload.meetingSummary?.content ?? payload.meetingSummary?.body ?? payload.body ?? payload.content)?
+        let body = (summaryBlock?.content ?? summaryBlock?.body ?? payload.body ?? payload.content)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let todoItems = normalizedTodoItems(payload.todoList ?? payload.todoItems ?? [])
         guard !body.isEmpty || !todoItems.isEmpty else { return nil }
-        return MeetingSummarySnapshot(
+        return TranscriptSummarySnapshot(
             title: title.isEmpty ? fallbackSummaryTitle(for: settings) : title,
             body: body,
             todoItems: todoItems,
@@ -271,9 +285,9 @@ enum MeetingSummarySupport {
 
     private static func decodeLooseSummary(
         from text: String,
-        settings: MeetingSummarySettingsSnapshot,
+        settings: TranscriptSummarySettingsSnapshot,
         generatedAt: Date
-    ) -> MeetingSummarySnapshot? {
+    ) -> TranscriptSummarySnapshot? {
         let xmlTitle = firstMatch(
             in: text,
             patterns: [
@@ -317,7 +331,7 @@ enum MeetingSummarySupport {
                 .map { $0.replacingOccurrences(of: #"^[\-\*\d\.\)\s]+"#, with: "", options: .regularExpression) }
         )
         guard !body.isEmpty || !todoItems.isEmpty else { return nil }
-        return MeetingSummarySnapshot(
+        return TranscriptSummarySnapshot(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             body: body,
             todoItems: todoItems,

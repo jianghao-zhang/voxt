@@ -40,9 +40,6 @@ enum AppPreferenceKey {
     static let rewriteHotkeyModifiers = "rewriteHotkeyModifiers"
     static let rewriteHotkeySidedModifiers = "rewriteHotkeySidedModifiers"
     static let rewriteHotkeyActivationMode = "rewriteHotkeyActivationMode"
-    static let meetingHotkeyKeyCode = "meetingHotkeyKeyCode"
-    static let meetingHotkeyModifiers = "meetingHotkeyModifiers"
-    static let meetingHotkeySidedModifiers = "meetingHotkeySidedModifiers"
     static let hotkeyTriggerMode = "hotkeyTriggerMode"
     static let hotkeyDistinguishModifierSides = "hotkeyDistinguishModifierSides"
     static let hotkeyPreset = "hotkeyPreset"
@@ -69,16 +66,8 @@ enum AppPreferenceKey {
     static let customPasteHotkeyKeyCode = "customPasteHotkeyKeyCode"
     static let customPasteHotkeyModifiers = "customPasteHotkeyModifiers"
     static let customPasteHotkeySidedModifiers = "customPasteHotkeySidedModifiers"
-    static let meetingNotesBetaEnabled = "meetingNotesBetaEnabled"
-    static let hideMeetingOverlayFromScreenSharing = "hideMeetingOverlayFromScreenSharing"
-    static let meetingOverlayCollapsed = "meetingOverlayCollapsed"
-    static let meetingRealtimeTranslateEnabled = "meetingRealtimeTranslateEnabled"
-    static let meetingRealtimeTranslationTargetLanguage = "meetingRealtimeTranslationTargetLanguage"
-    static let meetingSummaryAutoGenerate = "meetingSummaryAutoGenerate"
-    static let meetingSummaryLength = "meetingSummaryLength"
-    static let meetingSummaryStyle = "meetingSummaryStyle"
-    static let meetingSummaryPromptTemplate = "meetingSummaryPromptTemplate"
-    static let meetingSummaryModelSelection = "meetingSummaryModelSelection"
+    static let transcriptSummaryPromptTemplate = "meetingSummaryPromptTemplate"
+    static let transcriptSummaryModelSelection = "meetingSummaryModelSelection"
     static let voiceEndCommandEnabled = "voiceEndCommandEnabled"
     static let voiceEndCommandPreset = "voiceEndCommandPreset"
     static let voiceEndCommandText = "voiceEndCommandText"
@@ -199,7 +188,7 @@ enum AppPreferenceKey {
         4. Return only the final text to insert, with no explanations, markdown, labels, or commentary.
         """
 
-    static let defaultMeetingSummaryPrompt = MeetingSummarySupport.defaultPromptTemplate()
+    static let defaultTranscriptSummaryPrompt = TranscriptSummarySupport.defaultPromptTemplate()
     static let automaticDictionaryLearningMainLanguageTemplateVariable = "{{USER_MAIN_LANGUAGE}}"
     static let automaticDictionaryLearningOtherLanguagesTemplateVariable = "{{USER_OTHER_LANGUAGES}}"
     static let automaticDictionaryLearningInsertedTextTemplateVariable = "{{INSERTED}}"

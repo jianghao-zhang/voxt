@@ -630,7 +630,7 @@ final class LLMDebugViewModel: ObservableObject {
         switch preset.kind {
         case .custom:
             LLMDebugPresetStore.saveCustomPrompt(prompt)
-        case .enhancement, .translation, .rewrite, .meetingSummary, .appGroup:
+        case .enhancement, .translation, .rewrite, .transcriptSummary, .appGroup:
             LLMDebugPresetStore.savePromptOverride(prompt, for: preset.id)
         }
         refreshOptions()
@@ -659,10 +659,10 @@ final class LLMDebugViewModel: ObservableObject {
                 AppPromptDefaults.canonicalStoredText(prompt, kind: .rewrite),
                 forKey: AppPreferenceKey.rewriteSystemPrompt
             )
-        case .meetingSummary:
+        case .transcriptSummary:
             defaults.set(
-                AppPromptDefaults.canonicalStoredText(prompt, kind: .meetingSummary),
-                forKey: AppPreferenceKey.meetingSummaryPromptTemplate
+                AppPromptDefaults.canonicalStoredText(prompt, kind: .transcriptSummary),
+                forKey: AppPreferenceKey.transcriptSummaryPromptTemplate
             )
         case .appGroup(let groupID):
             applyGroupPrompt(prompt, groupID: groupID, defaults: defaults)
@@ -857,7 +857,7 @@ final class LLMDebugViewModel: ObservableObject {
                     configuration: configuration
                 )
             }
-        case .meetingSummary:
+        case .transcriptSummary:
             let prompt = promptResolution.content
             switch model.selection {
             case .local(let repo):

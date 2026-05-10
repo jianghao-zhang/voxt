@@ -769,7 +769,7 @@ struct RemoteLLMRuntimeClient {
         if provider == .ollama {
             resolvedEndpoint = resolvedOllamaRequestEndpoint(
                 endpoint: endpointValue,
-                useGenerate: shouldUseOllamaGenerateEndpoint(messagesOverride: messagesOverride)
+                useGenerate: false
             )
         } else {
             resolvedEndpoint = streamingEndpointValue(
@@ -1041,11 +1041,6 @@ struct RemoteLLMRuntimeClient {
                 payload["top_logprobs"] = topLogprobs
             }
         }
-    }
-
-    private func shouldUseOllamaGenerateEndpoint(messagesOverride: [[String: String]]?) -> Bool {
-        guard let messagesOverride else { return true }
-        return messagesOverride.isEmpty
     }
 
     private func ollamaGeneratePromptInput(

@@ -1,27 +1,27 @@
 import Foundation
 
-enum MeetingTranscriptEvent: Sendable, Equatable {
-    case partial(MeetingTranscriptSegment)
-    case final(MeetingTranscriptSegment)
-    case failed(speaker: MeetingSpeaker, message: String)
-    case finished(speaker: MeetingSpeaker)
+enum TranscriptSegmentEvent: Sendable, Equatable {
+    case partial(TranscriptSegment)
+    case final(TranscriptSegment)
+    case failed(speaker: TranscriptSpeaker, message: String)
+    case finished(speaker: TranscriptSpeaker)
 }
 
-struct MeetingTranscriptAssemblyResult: Equatable {
-    let segments: [MeetingTranscriptSegment]
+struct TranscriptAssemblyResult: Equatable {
+    let segments: [TranscriptSegment]
     let affectedSegmentID: UUID?
     let finalizedSegmentID: UUID?
     let supersededSegmentIDs: [UUID]
 }
 
-enum MeetingTranscriptAssembler {
+enum TranscriptAssembler {
     static func apply(
-        _ event: MeetingTranscriptEvent,
-        to segments: [MeetingTranscriptSegment]
-    ) -> MeetingTranscriptAssemblyResult {
+        _ event: TranscriptSegmentEvent,
+        to segments: [TranscriptSegment]
+    ) -> TranscriptAssemblyResult {
         switch event {
         case .failed, .finished:
-            return MeetingTranscriptAssemblyResult(
+            return TranscriptAssemblyResult(
                 segments: segments,
                 affectedSegmentID: nil,
                 finalizedSegmentID: nil,
@@ -43,10 +43,10 @@ enum MeetingTranscriptAssembler {
     }
 
     private static func upsert(
-        _ segment: MeetingTranscriptSegment,
+        _ segment: TranscriptSegment,
         isFinal: Bool,
-        into existingSegments: [MeetingTranscriptSegment]
-    ) -> MeetingTranscriptAssemblyResult {
+        into existingSegments: [TranscriptSegment]
+    ) -> TranscriptAssemblyResult {
         var segments = existingSegments
 
         if let existingIndex = segments.firstIndex(where: { $0.id == segment.id }) {
@@ -56,7 +56,7 @@ enum MeetingTranscriptAssembler {
             let textChanged =
                 existing.text.trimmingCharacters(in: .whitespacesAndNewlines) !=
                 segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            segments[existingIndex] = MeetingTranscriptSegment(
+            segments[existingIndex] = TranscriptSegment(
                 id: existing.id,
                 speaker: segment.speaker,
                 startSeconds: existing.startSeconds,
@@ -78,7 +78,7 @@ enum MeetingTranscriptAssembler {
         }
 
         guard let insertedIndex = segments.firstIndex(where: { $0.id == segment.id }) else {
-            return MeetingTranscriptAssemblyResult(
+            return TranscriptAssemblyResult(
                 segments: segments,
                 affectedSegmentID: nil,
                 finalizedSegmentID: nil,
@@ -92,10 +92,10 @@ enum MeetingTranscriptAssembler {
     private static func finalizeIfNeeded(
         at index: Int,
         isFinal: Bool,
-        in segments: [MeetingTranscriptSegment]
-    ) -> MeetingTranscriptAssemblyResult {
+        in segments: [TranscriptSegment]
+    ) -> TranscriptAssemblyResult {
         guard segments.indices.contains(index) else {
-            return MeetingTranscriptAssemblyResult(
+            return TranscriptAssemblyResult(
                 segments: segments,
                 affectedSegmentID: nil,
                 finalizedSegmentID: nil,
@@ -109,7 +109,7 @@ enum MeetingTranscriptAssembler {
                 translatedText: nil,
                 isTranslationPending: false
             )
-            return MeetingTranscriptAssemblyResult(
+            return TranscriptAssemblyResult(
                 segments: updatedSegments,
                 affectedSegmentID: updatedSegments[index].id,
                 finalizedSegmentID: nil,
@@ -121,7 +121,7 @@ enum MeetingTranscriptAssembler {
         var finalizedID = updatedSegments[index].id
         var supersededIDs: [UUID] = []
         if index > 0,
-           let merged = MeetingTranscriptFormatter.mergedAdjacentSegment(
+           let merged = TranscriptFormatter.mergedAdjacentSegment(
                 previous: updatedSegments[index - 1],
                 next: updatedSegments[index]
            ) {
@@ -131,7 +131,7 @@ enum MeetingTranscriptAssembler {
             finalizedID = merged.id
         }
 
-        return MeetingTranscriptAssemblyResult(
+        return TranscriptAssemblyResult(
             segments: updatedSegments,
             affectedSegmentID: finalizedID,
             finalizedSegmentID: finalizedID,

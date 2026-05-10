@@ -85,6 +85,7 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
     case google
     case openAI
     case ollama
+    case omlx
     case deepseek
     case openrouter
     case grok
@@ -119,6 +120,15 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
         self == .aliyunBailian
     }
 
+    nonisolated var apiKeyIsOptional: Bool {
+        switch self {
+        case .ollama, .omlx:
+            return true
+        default:
+            return false
+        }
+    }
+
     var searchToggleDescription: String {
         switch self {
         case .anthropic:
@@ -144,6 +154,8 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
             return AppLocalization.localizedString("OpenAI")
         case .ollama:
             return AppLocalization.localizedString("Ollama")
+        case .omlx:
+            return "oMLX"
         case .deepseek:
             return AppLocalization.localizedString("DeepSeek")
         case .openrouter:
@@ -175,6 +187,8 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
             return "gpt-5.2"
         case .ollama:
             return "qwen2.5"
+        case .omlx:
+            return "qwen3"
         case .deepseek:
             return "deepseek-v4-flash"
         case .openrouter:
@@ -240,6 +254,13 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "gpt-oss:120b", title: "GPT-OSS 120B"),
                 RemoteModelOption(id: "qwen3-coder:480b", title: "Qwen3 Coder 480B"),
                 RemoteModelOption(id: "deepseek-r1", title: "DeepSeek R1")
+            ]
+        case .omlx:
+            return [
+                RemoteModelOption(id: "Qwen3-Coder-Next-8bit", title: "Qwen3 Coder Next 8bit"),
+                RemoteModelOption(id: "gpt-oss-120b-MXFP4-Q8", title: "GPT-OSS 120B MXFP4 Q8"),
+                RemoteModelOption(id: "Qwen3.5-122B-A10B-4bit", title: "Qwen3.5 122B A10B 4bit"),
+                RemoteModelOption(id: "Step-3.5-Flash-8bit", title: "Step 3.5 Flash 8bit")
             ]
         case .deepseek:
             return [
@@ -339,6 +360,14 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "mistral", title: "Mistral 7B"),
                 RemoteModelOption(id: "gemma2", title: "Gemma 2 9B")
             ]
+        case .omlx:
+            return [
+                RemoteModelOption(id: "qwen3", title: "Qwen3"),
+                RemoteModelOption(id: "llama3.1", title: "Llama 3.1"),
+                RemoteModelOption(id: "deepseek-r1", title: "DeepSeek R1"),
+                RemoteModelOption(id: "gemma3", title: "Gemma 3"),
+                RemoteModelOption(id: "mistral", title: "Mistral")
+            ]
         case .deepseek:
             return [RemoteModelOption(id: "deepseek-chat", title: "DeepSeek Chat (Compatibility Alias)")]
         case .openrouter:
@@ -423,6 +452,12 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
                 RemoteModelOption(id: "gpt-oss:120b", title: "GPT-OSS 120B"),
                 RemoteModelOption(id: "llama3.1:70b", title: "Llama 3.1 70B"),
                 RemoteModelOption(id: "mixtral:8x22b", title: "Mixtral 8x22B")
+            ]
+        case .omlx:
+            return [
+                RemoteModelOption(id: "Qwen3-Coder-Next-8bit", title: "Qwen3 Coder Next 8bit"),
+                RemoteModelOption(id: "gpt-oss-120b-MXFP4-Q8", title: "GPT-OSS 120B MXFP4 Q8"),
+                RemoteModelOption(id: "mixtral", title: "Mixtral")
             ]
         case .deepseek:
             return [RemoteModelOption(id: "deepseek-reasoner", title: "DeepSeek Reasoner (Compatibility Alias)")]

@@ -71,7 +71,7 @@ extension AppDelegate {
 
     func answerTranscriptionFollowUp(
         entry: TranscriptionHistoryEntry,
-        history: [MeetingSummaryChatMessage],
+        history: [TranscriptSummaryChatMessage],
         question: String
     ) async throws -> String {
         let trimmedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -153,7 +153,7 @@ extension AppDelegate {
     }
 
     @discardableResult
-    func persistTranscriptionChatMessages(_ messages: [MeetingSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
+    func persistTranscriptionChatMessages(_ messages: [TranscriptSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
         historyStore.updateTranscriptionChatMessages(messages, for: entryID)
     }
 
@@ -216,8 +216,8 @@ extension AppDelegate {
             }
         case .rewrite:
             return rewriteFeatureSettings.llmSelectionID.textSelection
-        case .meeting:
-            return meetingFeatureSettings.summaryModelSelectionID.textSelection
+        case .transcript:
+            return nil
         }
     }
 

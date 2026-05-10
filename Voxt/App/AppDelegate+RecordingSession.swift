@@ -161,19 +161,9 @@ extension AppDelegate {
 
     func beginRecording(outputMode: SessionOutputMode) {
         VoxtLog.info(
-            "Begin recording requested. output=\(RecordingSessionSupport.outputLabel(for: outputMode)), isSessionActive=\(isSessionActive), isMeetingActive=\(meetingSessionCoordinator.isActive)"
+            "Begin recording requested. output=\(RecordingSessionSupport.outputLabel(for: outputMode)), isSessionActive=\(isSessionActive)"
         )
         pendingAutomaticDictionaryLearningTask?.cancel()
-        guard !meetingSessionCoordinator.isActive else {
-            VoxtLog.info(
-                "Begin recording ignored because Meeting Notes is active. output=\(RecordingSessionSupport.outputLabel(for: outputMode))"
-            )
-            showOverlayStatus(
-                String(localized: "Meeting Notes is currently active. Close it before starting another recording."),
-                clearAfter: 2.2
-            )
-            return
-        }
         guard !isSessionActive else {
             VoxtLog.info(
                 "Begin recording ignored because a session is already active. output=\(RecordingSessionSupport.outputLabel(for: outputMode)), activeOutput=\(RecordingSessionSupport.outputLabel(for: sessionOutputMode))"

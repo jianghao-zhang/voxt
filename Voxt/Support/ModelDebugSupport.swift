@@ -31,7 +31,7 @@ enum LLMDebugPresetKind: Hashable {
     case enhancement
     case translation
     case rewrite
-    case meetingSummary
+    case transcriptSummary
     case appGroup(groupID: UUID)
 }
 
@@ -66,6 +66,9 @@ struct DebugAudioClip: Identifiable, Equatable {
 
 enum LLMDebugPresetStore {
     static let customPresetID = "custom"
+    private static let legacyPresetAliases: [String: [String]] = [
+        "builtin:transcript-summary": ["builtin:meeting-summary"]
+    ]
 
     static func customPrompt(defaults: UserDefaults = .standard) -> String {
         defaults.string(forKey: AppPreferenceKey.llmDebugCustomPrompt)?
@@ -77,7 +80,16 @@ enum LLMDebugPresetStore {
     }
 
     static func promptOverride(for presetID: String, defaults: UserDefaults = .standard) -> String? {
-        promptOverrides(defaults: defaults)[presetID]
+        let overrides = promptOverrides(defaults: defaults)
+        if let prompt = overrides[presetID] {
+            return prompt
+        }
+        for legacyID in legacyPresetAliases[presetID] ?? [] {
+            if let prompt = overrides[legacyID] {
+                return prompt
+            }
+        }
+        return nil
     }
 
     static func savePromptOverride(_ prompt: String, for presetID: String, defaults: UserDefaults = .standard) {
@@ -296,22 +308,22 @@ enum ModelDebugCatalog {
                 ]
             ),
             LLMDebugPresetOption(
-                id: "builtin:meeting-summary",
-                title: AppLocalization.localizedString("Meeting Summary"),
+                id: "builtin:transcript-summary",
+                title: AppLocalization.localizedString("Transcript Summary"),
                 subtitle: AppLocalization.localizedString("Built-in preset"),
-                kind: .meetingSummary,
-                promptTemplate: LLMDebugPresetStore.promptOverride(for: "builtin:meeting-summary", defaults: defaults)
+                kind: .transcriptSummary,
+                promptTemplate: LLMDebugPresetStore.promptOverride(for: "builtin:transcript-summary", defaults: defaults)
                     ?? AppPromptDefaults.resolvedStoredText(
-                        defaults.string(forKey: AppPreferenceKey.meetingSummaryPromptTemplate),
-                        kind: .meetingSummary,
+                        defaults.string(forKey: AppPreferenceKey.transcriptSummaryPromptTemplate),
+                        kind: .transcriptSummary,
                         defaults: defaults
                     ),
-                variables: MeetingSummarySupport.promptTemplateVariables.map {
+                variables: TranscriptSummarySupport.promptTemplateVariables.map {
                     PromptTemplateVariableDescriptor(token: $0, tipKey: "Template tip \($0)")
                 },
                 defaultValues: [
                     AppPreferenceKey.asrUserMainLanguageTemplateVariable: userMainLanguage,
-                    "{{MEETING_RECORD}}": ""
+                    TranscriptSummarySupport.transcriptRecordTemplateVariable: ""
                 ]
             )
         ]
@@ -420,10 +432,11 @@ enum ModelDebugPromptResolver {
                 content: content,
                 inputSummary: sourceText.isEmpty ? dictatedPrompt : sourceText
             )
-        case .meetingSummary:
-            let content = MeetingSummarySupport.summaryPrompt(
-                transcript: mergedValues["{{MEETING_RECORD}}"] ?? "",
-                settings: MeetingSummarySettingsSnapshot(
+        case .transcriptSummary:
+            let transcript = TranscriptSummarySupport.transcriptRecord(from: mergedValues)
+            let content = TranscriptSummarySupport.summaryPrompt(
+                transcript: transcript,
+                settings: TranscriptSummarySettingsSnapshot(
                     autoGenerate: false,
                     promptTemplate: preset.promptTemplate,
                     modelSelectionID: nil
@@ -432,7 +445,7 @@ enum ModelDebugPromptResolver {
             )
             return LLMDebugResolvedPrompt(
                 content: content,
-                inputSummary: mergedValues["{{MEETING_RECORD}}"] ?? ""
+                inputSummary: transcript
             )
         }
     }

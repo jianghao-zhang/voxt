@@ -3,7 +3,6 @@ import Foundation
 extension ConfigurationTransferManager {
     static func appendASRIssues(
         for selectionID: FeatureModelSelectionID,
-        requiresMeetingConfiguration: Bool = false,
         issues: inout [MissingConfigurationIssue],
         remoteASR: [String: RemoteProviderConfiguration],
         mlxModelManager: MLXModelManager,
@@ -26,10 +25,6 @@ extension ConfigurationTransferManager {
             let configuration = RemoteModelConfigurationStore.resolvedASRConfiguration(provider: provider, stored: remoteASR)
             if !configuration.isConfigured {
                 issues.append(.init(scope: .remoteASRProvider(provider), message: AppLocalization.localizedString("Configuration required.")))
-            } else if requiresMeetingConfiguration,
-                      RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(provider, configuration: configuration),
-                      !RemoteASRMeetingConfiguration.hasValidMeetingModel(provider: provider, configuration: configuration) {
-                issues.append(.init(scope: .remoteASRProvider(provider), message: AppLocalization.localizedString("Meeting ASR configuration required.")))
             }
         }
     }

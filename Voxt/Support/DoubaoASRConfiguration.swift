@@ -30,13 +30,13 @@ enum RemoteASRTextSanitizer {
 enum DoubaoASRConfiguration {
     static let modelV2 = "volc.seedasr.sauc.duration"
     static let modelV1 = "volc.bigasr.sauc.duration"
-    static let meetingModelTurbo = "volc.bigasr.auc_turbo"
-    static let meetingModelV2 = "volc.seedasr.auc"
-    static let meetingModelV1 = "volc.bigasr.auc"
+    static let flashRecognitionModelTurbo = "volc.bigasr.auc_turbo"
+    static let flashRecognitionModelV2 = "volc.seedasr.auc"
+    static let flashRecognitionModelV1 = "volc.bigasr.auc"
     static let defaultNostreamEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
     static let defaultStreamingEndpointV1 = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
     static let defaultStreamingEndpointV2 = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
-    static let defaultMeetingFlashEndpoint = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
+    static let defaultFlashRecognitionEndpoint = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
     static let requestAudioFormat = "wav"
     static let streamingAudioFormat = "pcm"
     static let requestAudioCodec = "raw"
@@ -103,23 +103,23 @@ enum DoubaoASRConfiguration {
         return trimmed.isEmpty ? modelV2 : trimmed
     }
 
-    static func isMeetingFlashModel(_ model: String) -> Bool {
-        resolvedResourceID(model) == meetingModelTurbo
+    static func isFlashRecognitionModel(_ model: String) -> Bool {
+        resolvedResourceID(model) == flashRecognitionModelTurbo
     }
 
-    static func canonicalMeetingModel(_ model: String) -> String {
+    static func canonicalFlashRecognitionModel(_ model: String) -> String {
         let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
         switch trimmed {
-        case "", meetingModelV1, meetingModelV2:
-            return meetingModelTurbo
+        case "", flashRecognitionModelV1, flashRecognitionModelV2:
+            return flashRecognitionModelTurbo
         default:
             return trimmed
         }
     }
 
-    static func resolvedMeetingFlashEndpoint(_ endpoint: String) -> String {
+    static func resolvedFlashRecognitionEndpoint(_ endpoint: String) -> String {
         let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return defaultMeetingFlashEndpoint }
+        guard !trimmed.isEmpty else { return defaultFlashRecognitionEndpoint }
         guard var components = URLComponents(string: trimmed) else { return trimmed }
         if components.scheme == "wss" {
             components.scheme = "https"

@@ -262,6 +262,7 @@ Common remote ASR errors / states:
 | Google | `gemini-2.5-pro` | Native Gemini | Enhancement / translation / rewrite | Integrated |
 | OpenAI | `gpt-5.2` | OpenAI-compatible | Enhancement / translation / rewrite | Integrated |
 | Ollama | `qwen2.5` | OpenAI-compatible | Local or self-hosted LLM gateway | Integrated |
+| oMLX | `qwen3` | OpenAI-compatible | Local MLX model server on Apple Silicon | Integrated |
 | DeepSeek | `deepseek-chat` | OpenAI-compatible | Enhancement / translation / rewrite | Integrated |
 | OpenRouter | `openrouter/auto` | OpenAI-compatible | Auto-routing across providers | Integrated |
 | xAI (Grok) | `grok-4` | OpenAI-compatible | Enhancement / translation / rewrite | Integrated |
@@ -276,6 +277,7 @@ Common remote LLM errors / states:
 
 - `Needs Setup`
 - Missing provider-specific API key for Anthropic / Google / MiniMax
+- Local gateways such as Ollama / oMLX can leave API key blank unless you enabled auth on the server
 - `Invalid endpoint URL` / `Invalid Google endpoint URL`
 - `Invalid server response.`
 - `Server reachable, but authentication failed (HTTP 401/403).`

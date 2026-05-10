@@ -131,8 +131,6 @@ struct GeneralTranscriptionUICard: View {
     @Binding var overlayCardOpacity: Int
     @Binding var overlayCardCornerRadius: Int
     @Binding var overlayScreenEdgeInset: Int
-    @Binding var meetingNotesBetaEnabled: Bool
-    @Binding var hideMeetingOverlayFromScreenSharing: Bool
 
     var body: some View {
         GeneralSettingsCard(title: localizedKey("Transcription UI")) {
@@ -173,14 +171,6 @@ struct GeneralTranscriptionUICard: View {
                 width: 90,
                 unit: "pt"
             )
-
-            if meetingNotesBetaEnabled {
-                GeneralToggleRow(
-                    title: localizedKey("Meeting Transcript UI Shareable"),
-                    description: localizedKey("Makes the meeting transcript overlay visible in screen sharing and screen recordings."),
-                    isOn: $hideMeetingOverlayFromScreenSharing
-                )
-            }
         }
     }
 

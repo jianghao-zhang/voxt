@@ -1,6 +1,6 @@
 import Foundation
 
-enum AliyunMeetingASRConfiguration {
+enum AliyunRemoteASRConfiguration {
     enum Routing: Equatable {
         case asyncFileTranscription
         case compatibleShortAudio
@@ -23,7 +23,7 @@ enum AliyunMeetingASRConfiguration {
     static let defaultCompatibleEndpointCN = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     static let defaultCompatibleEndpointSG = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
     static let defaultCompatibleEndpointUS = "https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions"
-    static let defaultMeetingModel = "qwen3-asr-flash-filetrans"
+    static let defaultTranscriptionModel = "qwen3-asr-flash-filetrans"
 
     static func makeRealtimeTaskID() -> String {
         UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
@@ -94,26 +94,13 @@ enum AliyunMeetingASRConfiguration {
         return object
     }
 
-    static func normalizedMeetingModel(_ model: String) -> String {
+    static func normalizedTranscriptionModel(_ model: String) -> String {
         let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? defaultMeetingModel : trimmed
-    }
-
-    static func meetingModelOptions() -> [RemoteModelOption] {
-        [
-            RemoteModelOption(id: "qwen3-asr-flash-filetrans", title: "Qwen3 ASR Flash FileTrans"),
-            RemoteModelOption(id: "qwen3-asr-flash-filetrans-2025-11-17", title: "Qwen3 ASR Flash FileTrans (2025-11-17)"),
-            RemoteModelOption(id: "qwen3-asr-flash", title: "Qwen3 ASR Flash"),
-            RemoteModelOption(id: "qwen3-asr-flash-2026-02-10", title: "Qwen3 ASR Flash (2026-02-10)"),
-            RemoteModelOption(id: "qwen3-asr-flash-us", title: "Qwen3 ASR Flash US"),
-            RemoteModelOption(id: "qwen3-asr-flash-us-2026-02-10", title: "Qwen3 ASR Flash US (2026-02-10)"),
-            RemoteModelOption(id: "fun-asr", title: "Fun ASR"),
-            RemoteModelOption(id: "paraformer-v2", title: "Paraformer V2")
-        ]
+        return trimmed.isEmpty ? defaultTranscriptionModel : trimmed
     }
 
     static func routing(for model: String) -> Routing? {
-        let normalized = normalizedMeetingModel(model).lowercased()
+        let normalized = normalizedTranscriptionModel(model).lowercased()
         if isAsyncFileTranscriptionModel(normalized) {
             return .asyncFileTranscription
         }
@@ -141,9 +128,9 @@ enum AliyunMeetingASRConfiguration {
     }
 
     static func validationError(model: String, endpoint: String) -> String? {
-        let normalized = normalizedMeetingModel(model)
+        let normalized = normalizedTranscriptionModel(model)
         guard let routing = routing(for: normalized) else {
-            return AppLocalization.format("Aliyun meeting ASR model %@ is not supported.", normalized)
+            return AppLocalization.format("Aliyun Remote ASR model %@ is not supported.", normalized)
         }
         let region = region(for: endpoint)
         guard region != .unknown else { return nil }
@@ -152,20 +139,20 @@ enum AliyunMeetingASRConfiguration {
         case .asyncFileTranscription:
             if region == .usEast1 {
                 return AppLocalization.format(
-                    "Aliyun meeting ASR model %@ is not available in US (Virginia). Use Beijing/Singapore transcription endpoint or switch to a US short-audio model.",
+                    "Aliyun Remote ASR model %@ is not available in US (Virginia). Use the Beijing/Singapore transcription endpoint or switch to a US short-audio model.",
                     normalized
                 )
             }
         case .compatibleShortAudio:
             if isUSShortAudioModel(normalized), region != .usEast1 {
                 return AppLocalization.format(
-                    "Aliyun meeting ASR model %@ requires the US (Virginia) endpoint.",
+                    "Aliyun Remote ASR model %@ requires the US (Virginia) endpoint.",
                     normalized
                 )
             }
             if !isUSShortAudioModel(normalized), region == .usEast1 {
                 return AppLocalization.format(
-                    "Aliyun meeting ASR model %@ is not available in US (Virginia). Use the Beijing/Singapore endpoint or a US-specific model.",
+                    "Aliyun Remote ASR model %@ is not available in US (Virginia). Use the Beijing/Singapore endpoint or a US-specific model.",
                     normalized
                 )
             }
@@ -179,18 +166,18 @@ enum AliyunMeetingASRConfiguration {
         switch routing {
         case .asyncFileTranscription:
             return [
-                RemoteEndpointPreset(id: "aliyun-meeting-cn-beijing", title: AppLocalization.localizedString("Meeting HTTP · Beijing"), url: defaultTranscriptionEndpointCN),
-                RemoteEndpointPreset(id: "aliyun-meeting-ap-southeast-1", title: AppLocalization.localizedString("Meeting HTTP · Singapore"), url: defaultTranscriptionEndpointSG)
+                RemoteEndpointPreset(id: "aliyun-filetrans-cn-beijing", title: AppLocalization.localizedString("Transcription HTTP · Beijing"), url: defaultTranscriptionEndpointCN),
+                RemoteEndpointPreset(id: "aliyun-filetrans-ap-southeast-1", title: AppLocalization.localizedString("Transcription HTTP · Singapore"), url: defaultTranscriptionEndpointSG)
             ]
         case .compatibleShortAudio:
             if isUSShortAudioModel(model) {
                 return [
-                    RemoteEndpointPreset(id: "aliyun-meeting-us-east-1", title: AppLocalization.localizedString("Meeting HTTP · US (Virginia)"), url: defaultCompatibleEndpointUS)
+                    RemoteEndpointPreset(id: "aliyun-compatible-us-east-1", title: AppLocalization.localizedString("Transcription HTTP · US (Virginia)"), url: defaultCompatibleEndpointUS)
                 ]
             }
             return [
-                RemoteEndpointPreset(id: "aliyun-meeting-cn-beijing", title: AppLocalization.localizedString("Meeting HTTP · Beijing"), url: defaultCompatibleEndpointCN),
-                RemoteEndpointPreset(id: "aliyun-meeting-ap-southeast-1", title: AppLocalization.localizedString("Meeting HTTP · Singapore"), url: defaultCompatibleEndpointSG)
+                RemoteEndpointPreset(id: "aliyun-compatible-cn-beijing", title: AppLocalization.localizedString("Transcription HTTP · Beijing"), url: defaultCompatibleEndpointCN),
+                RemoteEndpointPreset(id: "aliyun-compatible-ap-southeast-1", title: AppLocalization.localizedString("Transcription HTTP · Singapore"), url: defaultCompatibleEndpointSG)
             ]
         }
     }
@@ -259,7 +246,7 @@ enum AliyunMeetingASRConfiguration {
     }
 
     static func taskQueryMethod(for model: String) -> TaskQueryMethod {
-        let normalized = normalizedMeetingModel(model).lowercased()
+        let normalized = normalizedTranscriptionModel(model).lowercased()
         if normalized.hasPrefix("qwen3-asr-flash-filetrans") {
             return .get
         }
@@ -267,7 +254,7 @@ enum AliyunMeetingASRConfiguration {
     }
 
     static func submissionBody(model: String, fileURL: String) -> [String: Any] {
-        let normalized = normalizedMeetingModel(model)
+        let normalized = normalizedTranscriptionModel(model)
         if normalized.lowercased().hasPrefix("qwen3-asr-flash-filetrans") {
             return [
                 "model": normalized,

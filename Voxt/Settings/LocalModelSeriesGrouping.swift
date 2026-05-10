@@ -174,7 +174,7 @@ enum LocalModelSeriesGrouping {
             localized("Notes"),
             localized("Translation"),
             localized("Rewrite"),
-            localized("Meeting")
+            localized("Transcript")
         ]
         let prioritized = priority.filter { unique.contains($0) }
         let remainder = unique.filter { !priority.contains($0) }

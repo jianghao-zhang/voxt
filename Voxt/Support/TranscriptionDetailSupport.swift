@@ -14,14 +14,14 @@ enum TranscriptionDetailSupport {
             return String(localized: "Translation Details")
         case .rewrite:
             return String(localized: "Rewrite Details")
-        case .meeting:
-            return String(localized: "Meeting Details")
+        case .transcript:
+            return String(localized: "Transcript Details")
         }
     }
 
     static func followUpPrompt(
         entry: TranscriptionHistoryEntry,
-        history: [MeetingSummaryChatMessage],
+        history: [TranscriptSummaryChatMessage],
         question: String,
         userMainLanguage: String
     ) -> String {

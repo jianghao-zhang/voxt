@@ -10,7 +10,6 @@ enum HotkeyShortcutKind: String, CaseIterable {
     case transcription
     case translation
     case rewrite
-    case meeting
 
     var titleKey: LocalizedStringKey {
         switch self {
@@ -20,17 +19,13 @@ enum HotkeyShortcutKind: String, CaseIterable {
             return "Translation"
         case .rewrite:
             return "Content Rewrite"
-        case .meeting:
-            return "Meeting"
         }
     }
 }
 
 enum HotkeyShortcutVisibility {
-    static func visibleKinds(meetingEnabled: Bool) -> [HotkeyShortcutKind] {
-        meetingEnabled
-            ? [.transcription, .translation, .rewrite, .meeting]
-            : [.transcription, .translation, .rewrite]
+    static func visibleKinds() -> [HotkeyShortcutKind] {
+        [.transcription, .translation, .rewrite]
     }
 }
 
@@ -39,7 +34,6 @@ struct HotkeySettingsView: View {
         case transcription
         case translation
         case rewrite
-        case meeting
         case customPaste
     }
 
@@ -53,9 +47,6 @@ struct HotkeySettingsView: View {
     @AppStorage(AppPreferenceKey.rewriteHotkeyModifiers) private var rewriteHotkeyModifiers = Int(HotkeyPreference.defaultRewriteModifiers.rawValue)
     @AppStorage(AppPreferenceKey.rewriteHotkeySidedModifiers) private var rewriteHotkeySidedModifiers = 0
     @AppStorage(AppPreferenceKey.rewriteHotkeyActivationMode) private var rewriteHotkeyActivationMode = HotkeyPreference.defaultRewriteActivationMode.rawValue
-    @AppStorage(AppPreferenceKey.meetingHotkeyKeyCode) private var meetingHotkeyKeyCode = Int(HotkeyPreference.defaultMeetingKeyCode)
-    @AppStorage(AppPreferenceKey.meetingHotkeyModifiers) private var meetingHotkeyModifiers = Int(HotkeyPreference.defaultMeetingModifiers.rawValue)
-    @AppStorage(AppPreferenceKey.meetingHotkeySidedModifiers) private var meetingHotkeySidedModifiers = 0
     @AppStorage(AppPreferenceKey.customPasteHotkeyEnabled) private var customPasteHotkeyEnabled = false
     @AppStorage(AppPreferenceKey.customPasteHotkeyKeyCode) private var customPasteHotkeyKeyCode = Int(HotkeyPreference.defaultCustomPasteKeyCode)
     @AppStorage(AppPreferenceKey.customPasteHotkeyModifiers) private var customPasteHotkeyModifiers = Int(HotkeyPreference.defaultCustomPasteModifiers.rawValue)
@@ -65,20 +56,10 @@ struct HotkeySettingsView: View {
     @AppStorage(AppPreferenceKey.hotkeyPreset) private var hotkeyPreset = HotkeyPreference.defaultPreset.rawValue
     @AppStorage(AppPreferenceKey.escapeKeyCancelsOverlaySession) private var escapeKeyCancelsOverlaySession = true
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
-    @AppStorage(AppPreferenceKey.featureSettings) private var featureSettingsRaw = ""
-
     @State private var recordingField: RecordingField?
     @State private var pendingCapturedField: RecordingField?
     @State private var pendingCapturedHotkey: HotkeyPreference.Hotkey?
     @State private var recorderMessageKey: String?
-
-    private var featureSettings: FeatureSettings {
-        FeatureSettingsStore.load(defaults: .standard)
-    }
-
-    private var meetingEnabled: Bool {
-        featureSettings.meeting.enabled
-    }
 
     private var hotkeyBinding: Binding<UInt16> {
         Binding(
@@ -185,41 +166,6 @@ struct HotkeySettingsView: View {
         )
     }
 
-    private var meetingHotkeyBinding: Binding<UInt16> {
-        Binding(
-            get: { UInt16(meetingHotkeyKeyCode) },
-            set: {
-                meetingHotkeyKeyCode = Int($0)
-                hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-            }
-        )
-    }
-
-    private var meetingModifierBinding: Binding<NSEvent.ModifierFlags> {
-        Binding(
-            get: { NSEvent.ModifierFlags(rawValue: UInt(meetingHotkeyModifiers)).intersection(.hotkeyRelevant) },
-            set: {
-                meetingHotkeyModifiers = Int($0.rawValue)
-                hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-            }
-        )
-    }
-
-    private var currentMeetingHotkey: HotkeyPreference.Hotkey {
-        HotkeyPreference.Hotkey(
-            keyCode: meetingHotkeyBinding.wrappedValue,
-            modifiers: meetingModifierBinding.wrappedValue,
-            sidedModifiers: meetingSidedModifierBinding.wrappedValue
-        )
-    }
-
-    private var meetingSidedModifierBinding: Binding<SidedModifierFlags> {
-        Binding(
-            get: { SidedModifierFlags(rawValue: meetingHotkeySidedModifiers).filtered(by: meetingModifierBinding.wrappedValue) },
-            set: { meetingHotkeySidedModifiers = $0.filtered(by: meetingModifierBinding.wrappedValue).rawValue }
-        )
-    }
-
     private var customPasteHotkeyBinding: Binding<UInt16> {
         Binding(
             get: { UInt16(customPasteHotkeyKeyCode) },
@@ -295,7 +241,6 @@ struct HotkeySettingsView: View {
                 translationHotkey: currentTranslationHotkey,
                 rewriteHotkey: currentRewriteHotkey,
                 shouldValidateRewriteHotkey: !isRewriteDoubleTapWakeEnabled,
-                meetingHotkey: meetingEnabled ? currentMeetingHotkey : nil,
                 customPasteHotkey: customPasteHotkeyEnabled ? currentCustomPasteHotkey : nil
             )
         )
@@ -409,25 +354,6 @@ struct HotkeySettingsView: View {
                         onConfirmPending: confirmPendingCapture
                     )
 
-                    if meetingEnabled {
-                        SettingsShortcutCaptureField(
-                            title: "Meeting",
-                            hotkey: displayedHotkey(for: .meeting, current: currentMeetingHotkey),
-                            isRecording: recordingField == .meeting,
-                            isPendingConfirmation: isPendingConfirmation(for: .meeting),
-                            distinguishModifierSides: distinguishModifierSides,
-                            onFocus: { beginRecording(.meeting) },
-                            onReset: {
-                                meetingHotkeyBinding.wrappedValue = HotkeyPreference.defaultMeetingKeyCode
-                                meetingModifierBinding.wrappedValue = HotkeyPreference.defaultMeetingModifiers
-                                meetingSidedModifierBinding.wrappedValue = []
-                                hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-                            },
-                            onCancelPending: discardPendingCapture,
-                            onConfirmPending: confirmPendingCapture
-                        )
-                    }
-
                     if customPasteHotkeyEnabled {
                         SettingsShortcutCaptureField(
                             title: "Custom Paste",
@@ -540,10 +466,7 @@ struct HotkeySettingsView: View {
                     Text(localized("Use a single key such as fn, or combine it with modifier keys."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(localized(meetingEnabled
-                        ? "Long Press runs while held. Tap starts and stops with a tap. Meeting also starts and stops with a tap."
-                        : "Long Press runs while held. Tap starts and stops with a tap."
-                    ))
+                    Text(localized("Long Press runs while held. Tap starts and stops with a tap."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(localized("If text is selected, the translation shortcut translates and replaces the selection directly."))
@@ -558,7 +481,6 @@ struct HotkeySettingsView: View {
             }
         }
         .id(interfaceLanguageRaw)
-        .id(featureSettingsRaw)
         .onChange(of: customPasteHotkeyEnabled) { _, enabled in
             guard !enabled else { return }
             if recordingField == .customPaste || pendingCapturedField == .customPaste {
@@ -634,10 +556,6 @@ struct HotkeySettingsView: View {
             rewriteHotkeyBinding.wrappedValue = hotkey.keyCode
             rewriteModifierBinding.wrappedValue = hotkey.modifiers
             rewriteSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
-        case .meeting:
-            meetingHotkeyBinding.wrappedValue = hotkey.keyCode
-            meetingModifierBinding.wrappedValue = hotkey.modifiers
-            meetingSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
         case .customPaste:
             customPasteHotkeyBinding.wrappedValue = hotkey.keyCode
             customPasteModifierBinding.wrappedValue = hotkey.modifiers

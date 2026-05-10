@@ -4,7 +4,7 @@ enum TranscriptionHistoryConversationSupport {
     static let continuationTimeout: TimeInterval = 10 * 60
 
     static func supportsDetail(for kind: TranscriptionHistoryKind) -> Bool {
-        kind == .rewrite || kind == .meeting
+        kind == .rewrite
     }
 
     static func shouldContinueConversation(
@@ -33,7 +33,7 @@ enum TranscriptionHistoryConversationSupport {
         for entry: TranscriptionHistoryEntry,
         appendingTranscript text: String,
         createdAt: Date = Date()
-    ) -> [MeetingSummaryChatMessage] {
+    ) -> [TranscriptSummaryChatMessage] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return bootstrapChatMessages(for: entry)
@@ -41,7 +41,7 @@ enum TranscriptionHistoryConversationSupport {
 
         var messages = bootstrapChatMessages(for: entry)
         messages.append(
-            MeetingSummaryChatMessage(
+            TranscriptSummaryChatMessage(
                 role: .assistant,
                 content: trimmed,
                 createdAt: createdAt
@@ -53,11 +53,11 @@ enum TranscriptionHistoryConversationSupport {
     static func initialChatMessages(
         forTranscript text: String,
         createdAt: Date = Date()
-    ) -> [MeetingSummaryChatMessage]? {
+    ) -> [TranscriptSummaryChatMessage]? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return [
-            MeetingSummaryChatMessage(
+            TranscriptSummaryChatMessage(
                 role: .assistant,
                 content: trimmed,
                 createdAt: createdAt
@@ -91,7 +91,7 @@ enum TranscriptionHistoryConversationSupport {
         }
     }
 
-    static func bootstrapChatMessages(for entry: TranscriptionHistoryEntry) -> [MeetingSummaryChatMessage] {
+    static func bootstrapChatMessages(for entry: TranscriptionHistoryEntry) -> [TranscriptSummaryChatMessage] {
         if let existingMessages = entry.transcriptionChatMessages, !existingMessages.isEmpty {
             if existingMessages.first?.role == .assistant {
                 return existingMessages
@@ -105,8 +105,8 @@ enum TranscriptionHistoryConversationSupport {
         return [seedMessage(for: entry)]
     }
 
-    static func seedMessage(for entry: TranscriptionHistoryEntry) -> MeetingSummaryChatMessage {
-        MeetingSummaryChatMessage(
+    static func seedMessage(for entry: TranscriptionHistoryEntry) -> TranscriptSummaryChatMessage {
+        TranscriptSummaryChatMessage(
             id: entry.id,
             role: .assistant,
             content: entry.text,
@@ -117,14 +117,14 @@ enum TranscriptionHistoryConversationSupport {
     static func rewriteConversationMessages(
         from turns: [RewriteConversationTurn],
         createdAt: Date = Date()
-    ) -> [MeetingSummaryChatMessage] {
-        var messages: [MeetingSummaryChatMessage] = []
+    ) -> [TranscriptSummaryChatMessage] {
+        var messages: [TranscriptSummaryChatMessage] = []
 
         for turn in turns {
             let userPrompt = turn.userPromptText.trimmingCharacters(in: .whitespacesAndNewlines)
             if !userPrompt.isEmpty {
                 messages.append(
-                    MeetingSummaryChatMessage(
+                    TranscriptSummaryChatMessage(
                         role: .user,
                         content: userPrompt,
                         createdAt: createdAt
@@ -135,7 +135,7 @@ enum TranscriptionHistoryConversationSupport {
             let assistantContent = turn.resultContent.trimmingCharacters(in: .whitespacesAndNewlines)
             if !assistantContent.isEmpty {
                 messages.append(
-                    MeetingSummaryChatMessage(
+                    TranscriptSummaryChatMessage(
                         role: .assistant,
                         content: assistantContent,
                         createdAt: createdAt

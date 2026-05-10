@@ -78,13 +78,6 @@ extension FeatureSettingsView {
         ]
     }
 
-    var meetingPills: [FeatureSummaryPill] {
-        [
-            FeatureSummaryPill(title: featureSettingsLocalized("ASR"), value: shortSummary(asrSelectionSummary(featureSettings.meeting.asrSelectionID))),
-            FeatureSummaryPill(title: featureSettingsLocalized("Summary"), value: shortSummary(llmSelectionSummary(featureSettings.meeting.summaryModelSelectionID)))
-        ]
-    }
-
     func shortSummary(_ text: String) -> String {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard value.count > 28 else { return value }

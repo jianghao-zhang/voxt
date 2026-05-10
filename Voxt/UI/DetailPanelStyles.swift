@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-enum MeetingDetailUIStyle {
+enum DetailPanelUIStyle {
     static let windowCornerRadius: CGFloat = 22
     static let panelCornerRadius: CGFloat = 16
     static let compactCornerRadius: CGFloat = 12
@@ -81,29 +81,29 @@ enum MeetingDetailUIStyle {
     }
 }
 
-struct MeetingDetailPanelSurface: ViewModifier {
+struct DetailPanelSurface: ViewModifier {
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(MeetingDetailUIStyle.panelFillColor)
+                    .fill(DetailPanelUIStyle.panelFillColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                    .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
             )
     }
 }
 
 extension View {
-    func meetingDetailPanelSurface(cornerRadius: CGFloat) -> some View {
-        modifier(MeetingDetailPanelSurface(cornerRadius: cornerRadius))
+    func detailPanelSurface(cornerRadius: CGFloat) -> some View {
+        modifier(DetailPanelSurface(cornerRadius: cornerRadius))
     }
 }
 
-struct MeetingToolbarButtonStyle: ButtonStyle {
+struct DetailToolbarButtonStyle: ButtonStyle {
     var isActive = false
 
     func makeBody(configuration: Configuration) -> some View {
@@ -123,7 +123,7 @@ struct MeetingToolbarButtonStyle: ButtonStyle {
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(
-                        isActive ? Color.accentColor.opacity(0.4) : MeetingDetailUIStyle.borderColor,
+                        isActive ? Color.accentColor.opacity(0.4) : DetailPanelUIStyle.borderColor,
                         lineWidth: 1
                     )
             )
@@ -131,7 +131,7 @@ struct MeetingToolbarButtonStyle: ButtonStyle {
     }
 }
 
-struct MeetingPillButtonStyle: ButtonStyle {
+struct DetailPillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .semibold))
@@ -140,16 +140,16 @@ struct MeetingPillButtonStyle: ButtonStyle {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(MeetingDetailUIStyle.controlFillColor.opacity(configuration.isPressed ? 0.86 : 1))
+                    .fill(DetailPanelUIStyle.controlFillColor.opacity(configuration.isPressed ? 0.86 : 1))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                    .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
             )
     }
 }
 
-struct MeetingPrimaryButtonStyle: ButtonStyle {
+struct DetailPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .semibold))
@@ -167,13 +167,13 @@ struct MeetingPrimaryButtonStyle: ButtonStyle {
     }
 }
 
-struct MeetingPrimaryIconButtonStyle: ButtonStyle {
+struct DetailPrimaryIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .frame(width: 34, height: 34)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(configuration.isPressed ? MeetingDetailUIStyle.primaryButtonPressedFillColor : MeetingDetailUIStyle.primaryButtonFillColor)
+                    .fill(configuration.isPressed ? DetailPanelUIStyle.primaryButtonPressedFillColor : DetailPanelUIStyle.primaryButtonFillColor)
             )
             .opacity(configuration.isPressed ? 0.92 : 1)
     }

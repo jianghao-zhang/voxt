@@ -45,7 +45,7 @@ enum SettingsPermissionKind: String, CaseIterable, Identifiable {
         case .inputMonitoring:
             return "Required for reliable global modifier hotkeys (such as fn)."
         case .systemAudioCapture:
-            return "Required for Meeting Notes and for muting other apps' media audio during recording."
+            return "Required to mute other apps' media audio during recording."
         case .reminders:
             return "Required to sync Voxt notes into Apple Reminders."
         }
@@ -55,7 +55,6 @@ enum SettingsPermissionKind: String, CaseIterable, Identifiable {
 struct SettingsPermissionRequirementContext {
     let selectedEngine: TranscriptionEngine
     let muteSystemAudioWhileRecording: Bool
-    let meetingNotesEnabled: Bool
     let featureSettings: FeatureSettings?
 }
 
@@ -68,7 +67,6 @@ enum SettingsPermissionRequirementResolver {
         SettingsPermissionRequirementContext(
             selectedEngine: selectedEngine,
             muteSystemAudioWhileRecording: muteSystemAudioWhileRecording,
-            meetingNotesEnabled: featureSettings.meeting.enabled,
             featureSettings: featureSettings
         )
     }
@@ -97,8 +95,7 @@ enum SettingsPermissionRequirementResolver {
         let featureSelections = [
             context.featureSettings?.transcription.asrSelectionID.asrSelection,
             context.featureSettings?.translation.asrSelectionID.asrSelection,
-            context.featureSettings?.rewrite.asrSelectionID.asrSelection,
-            context.featureSettings?.meeting.enabled == true ? context.featureSettings?.meeting.asrSelectionID.asrSelection : nil
+            context.featureSettings?.rewrite.asrSelectionID.asrSelection
         ]
 
         let needsSpeechRecognition = context.selectedEngine == .dictation || featureSelections.contains { selection in
@@ -112,7 +109,7 @@ enum SettingsPermissionRequirementResolver {
             permissions.append(.speechRecognition)
         }
 
-        if context.muteSystemAudioWhileRecording || context.meetingNotesEnabled || context.featureSettings?.meeting.enabled == true {
+        if context.muteSystemAudioWhileRecording {
             permissions.append(.systemAudioCapture)
         }
 

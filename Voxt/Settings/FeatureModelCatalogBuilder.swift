@@ -17,9 +17,9 @@ struct FeatureModelCatalogBuilder {
 
     func entries(for sheet: FeatureModelSelectorSheet) -> [FeatureModelSelectorEntry] {
         switch sheet {
-        case .transcriptionASR, .translationASR, .rewriteASR, .meetingASR:
+        case .transcriptionASR, .translationASR, .rewriteASR:
             return asrEntries(for: sheet)
-        case .transcriptionLLM, .transcriptionNoteTitle, .rewriteLLM, .meetingSummary:
+        case .transcriptionLLM, .transcriptionNoteTitle, .rewriteLLM:
             return llmEntries(includeAppleIntelligence: true)
         case .translationModel:
             return translationEntries(
@@ -134,8 +134,7 @@ struct FeatureModelCatalogBuilder {
             )
         })
 
-        if sheet != .meetingASR {
-            entries.append(contentsOf: WhisperKitModelManager.availableModels.map { model in
+        entries.append(contentsOf: WhisperKitModelManager.availableModels.map { model in
             let selectionID = FeatureModelSelectionID.whisper(model.id)
             let isInstalled = whisperModelManager.isModelDownloaded(id: model.id)
             return FeatureModelSelectorEntry(
@@ -165,8 +164,7 @@ struct FeatureModelCatalogBuilder {
                 isSelectable: isInstalled,
                 disabledReason: isInstalled ? nil : localized("Install this model in Model settings first.")
             )
-            })
-        }
+        })
 
         let remoteConfigurations = RemoteModelConfigurationStore.loadConfigurations(
             from: remoteASRProviderConfigurationsRaw,
@@ -387,10 +385,6 @@ struct FeatureModelCatalogBuilder {
             featureSettings.rewrite.llmSelectionID == selectionID {
             labels.append(localized("Rewrite"))
         }
-        if featureSettings.meeting.asrSelectionID == selectionID ||
-            featureSettings.meeting.summaryModelSelectionID == selectionID {
-            labels.append(localized("Meeting"))
-        }
         return labels
     }
 
@@ -472,7 +466,7 @@ struct FeatureModelCatalogBuilder {
 
     private func remoteLLMTags(for provider: RemoteLLMProvider) -> [String] {
         switch provider {
-        case .lmStudio, .ollama:
+        case .lmStudio, .ollama, .omlx:
             return []
         default:
             return [localized("Accurate")]

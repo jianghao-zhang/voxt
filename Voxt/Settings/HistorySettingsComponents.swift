@@ -9,7 +9,6 @@ enum HistoryFilterTab: String, CaseIterable, Identifiable {
     case transcription
     case translation
     case rewrite
-    case meeting
     case note
 
     var id: String { rawValue }
@@ -22,8 +21,6 @@ enum HistoryFilterTab: String, CaseIterable, Identifiable {
             return localized("Translation")
         case .rewrite:
             return localized("Rewrite")
-        case .meeting:
-            return localized("Meeting")
         case .note:
             return localized("Notes")
         }
@@ -37,8 +34,6 @@ enum HistoryFilterTab: String, CaseIterable, Identifiable {
             return entry.kind == .translation
         case .rewrite:
             return entry.kind == .rewrite
-        case .meeting:
-            return entry.kind == .meeting
         case .note:
             return false
         }
@@ -191,8 +186,6 @@ struct HistoryRow: View {
                 Text(localized("Translation"))
             } else if entry.kind == .rewrite {
                 Text(localized("Rewrite"))
-            } else if entry.kind == .meeting {
-                Text(localized("Meeting"))
             } else {
                 Text(localized("Transcription"))
             }
@@ -215,8 +208,8 @@ struct HistoryRow: View {
             return .blue
         case .rewrite:
             return .orange
-        case .meeting:
-            return .green
+        case .transcript:
+            return .secondary
         }
     }
 
@@ -249,49 +242,6 @@ struct HistoryRow: View {
 
     private func openDetailWindow() {
         guard supportsDetail else { return }
-
-        if entry.kind == .meeting {
-            guard let appDelegate = AppDelegate.shared else {
-                VoxtLog.warning("History detail open skipped: AppDelegate.shared was unavailable.")
-                return
-            }
-            MeetingDetailWindowManager.shared.presentHistoryMeeting(
-                entry: entry,
-                audioURL: audioURL,
-                initialSummarySettings: appDelegate.currentMeetingSummarySettingsSnapshot(),
-                summaryModelOptionsProvider: { @MainActor in
-                    appDelegate.meetingSummaryModelOptions()
-                },
-                summarySettingsProvider: { @MainActor in
-                    appDelegate.currentMeetingSummarySettingsSnapshot()
-                },
-                translationHandler: { @MainActor text, targetLanguage in
-                    return try await appDelegate.translateMeetingRealtimeText(text, targetLanguage: targetLanguage)
-                },
-                summaryStatusProvider: { @MainActor settings in
-                    return appDelegate.meetingSummaryProviderStatus(settings: settings)
-                },
-                summaryGenerator: { @MainActor transcript, settings in
-                    return try await appDelegate.generateMeetingSummary(transcript: transcript, settings: settings)
-                },
-                summaryPersistence: { @MainActor entryID, summary in
-                    return appDelegate.persistMeetingSummary(summary, for: entryID)
-                },
-                summaryChatAnswerer: { @MainActor transcript, summary, history, question, settings in
-                    return try await appDelegate.answerMeetingSummaryFollowUp(
-                        transcript: transcript,
-                        summary: summary,
-                        history: history,
-                        question: question,
-                        settings: settings
-                    )
-                },
-                summaryChatPersistence: { @MainActor entryID, messages in
-                    return appDelegate.persistMeetingSummaryChatMessages(messages, for: entryID)
-                }
-            )
-            return
-        }
 
         guard let appDelegate = AppDelegate.shared else {
             VoxtLog.warning("Transcription detail open skipped: AppDelegate.shared was unavailable.")

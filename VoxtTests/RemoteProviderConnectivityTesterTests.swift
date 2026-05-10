@@ -54,7 +54,7 @@ final class RemoteProviderConnectivityTesterTests: XCTestCase {
         XCTAssertEqual(options["num_predict"] as? Int, 32)
     }
 
-    func testOllamaNativeReachabilityBodyUsesGenerateShapeForBaseEndpoint() async throws {
+    func testOllamaNativeReachabilityBodyUsesGenerateShapeForExplicitGenerateEndpoint() async throws {
         let tester = RemoteProviderConnectivityTester(testTarget: .llm(.ollama))
 
         let body = try await tester.openAICompatibleReachabilityBody(
@@ -69,5 +69,22 @@ final class RemoteProviderConnectivityTesterTests: XCTestCase {
 
         XCTAssertEqual(body["prompt"] as? String, "ping")
         XCTAssertNil(body["messages"])
+    }
+
+    func testOllamaNativeReachabilityBodyUsesChatShapeForBaseEndpoint() async throws {
+        let tester = RemoteProviderConnectivityTester(testTarget: .llm(.ollama))
+
+        let body = try await tester.openAICompatibleReachabilityBody(
+            provider: .ollama,
+            endpoint: "http://localhost:11434/api/chat",
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3"
+            ),
+            model: "qwen3"
+        )
+
+        XCTAssertNotNil(body["messages"])
+        XCTAssertNil(body["prompt"])
     }
 }

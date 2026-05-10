@@ -42,12 +42,12 @@ struct ASRDebugWindowView: View {
                         .frame(width: 44, height: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(MeetingDetailUIStyle.controlFillColor)
+                                .fill(DetailPanelUIStyle.controlFillColor)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .strokeBorder(
-                                    viewModel.isRecording ? Color.green.opacity(0.28) : MeetingDetailUIStyle.borderColor,
+                                    viewModel.isRecording ? Color.green.opacity(0.28) : DetailPanelUIStyle.borderColor,
                                     lineWidth: 1
                                 )
                         )
@@ -88,7 +88,7 @@ struct ASRDebugWindowView: View {
                     }
                     .frame(width: 92, height: 30)
                 }
-                .buttonStyle(MeetingPrimaryButtonStyle())
+                .buttonStyle(DetailPrimaryButtonStyle())
                 .disabled(viewModel.isRunning || viewModel.isRecording)
             }
             .frame(height: 54)
@@ -207,11 +207,11 @@ struct LLMDebugWindowView: View {
                         .frame(width: 44, height: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(MeetingDetailUIStyle.controlFillColor)
+                                .fill(DetailPanelUIStyle.controlFillColor)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                                .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
                         )
                 }
                 .buttonStyle(.plain)
@@ -238,7 +238,7 @@ struct LLMDebugWindowView: View {
                     }
                     .frame(width: 92, height: 30)
                 }
-                .buttonStyle(MeetingPrimaryButtonStyle())
+                .buttonStyle(DetailPrimaryButtonStyle())
                 .disabled(viewModel.isRunning || viewModel.selectedPreset == nil || viewModel.selectedModelID.isEmpty)
             }
             .frame(height: 54)

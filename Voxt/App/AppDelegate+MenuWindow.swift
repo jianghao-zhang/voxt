@@ -238,10 +238,10 @@ extension AppDelegate {
             )
         }
 
-        if (devicesChanged || selectionChanged), (isSessionActive || meetingSessionCoordinator.isActive) {
+        if (devicesChanged || selectionChanged), isSessionActive {
             VoxtLog.warning(
                 """
-                Audio input change observed during active session. reason=\(reason), recordingActive=\(isSessionActive), meetingActive=\(meetingSessionCoordinator.isActive), previousSelected=\(previousSelectedUID ?? "none"), newSelected=\(resolvedState.activeUID ?? "none"), devicesChanged=\(devicesChanged), selectionChanged=\(selectionChanged), added=\(describeDevices(addedDevices)), removed=\(describeDevices(removedDevices))
+                Audio input change observed during active session. reason=\(reason), recordingActive=\(isSessionActive), previousSelected=\(previousSelectedUID ?? "none"), newSelected=\(resolvedState.activeUID ?? "none"), devicesChanged=\(devicesChanged), selectionChanged=\(selectionChanged), added=\(describeDevices(addedDevices)), removed=\(describeDevices(removedDevices))
                 """
             )
         }
@@ -279,11 +279,6 @@ extension AppDelegate {
         guard reason == "hardware change" else { return nil }
         guard let currentUID = previousResolvedState.activeUID else { return nil }
         guard availableDevices.contains(where: { $0.uid == currentUID }) else { return nil }
-
-        if meetingSessionCoordinator.isActive {
-            VoxtLog.info("Preserving active microphone during meeting hardware change. uid=\(currentUID)")
-            return currentUID
-        }
 
         guard isSessionActive, recordingStoppedAt == nil else { return nil }
         VoxtLog.info(

@@ -4,13 +4,13 @@ import Combine
 @MainActor
 final class TranscriptionDetailViewModel: ObservableObject {
     typealias FollowUpStatusProvider = @MainActor (TranscriptionHistoryEntry) -> TranscriptionFollowUpProviderStatus
-    typealias FollowUpAnswerer = @MainActor (TranscriptionHistoryEntry, [MeetingSummaryChatMessage], String) async throws -> String
-    typealias FollowUpPersistence = @MainActor (UUID, [MeetingSummaryChatMessage]) -> TranscriptionHistoryEntry?
+    typealias FollowUpAnswerer = @MainActor (TranscriptionHistoryEntry, [TranscriptSummaryChatMessage], String) async throws -> String
+    typealias FollowUpPersistence = @MainActor (UUID, [TranscriptSummaryChatMessage]) -> TranscriptionHistoryEntry?
     typealias ManualCorrectionHandler = @MainActor (TranscriptionHistoryEntry, String) async throws -> TranscriptionHistoryEntry?
 
     @Published private(set) var entry: TranscriptionHistoryEntry
     @Published private(set) var audioURL: URL?
-    @Published private(set) var chatMessages: [MeetingSummaryChatMessage]
+    @Published private(set) var chatMessages: [TranscriptSummaryChatMessage]
     @Published private(set) var providerStatus: TranscriptionFollowUpProviderStatus
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
@@ -111,7 +111,7 @@ final class TranscriptionDetailViewModel: ObservableObject {
         )
     }
 
-    var displayMessages: [MeetingSummaryChatMessage] {
+    var displayMessages: [TranscriptSummaryChatMessage] {
         if chatMessages.first?.role == .assistant {
             return chatMessages
         }
@@ -152,7 +152,7 @@ final class TranscriptionDetailViewModel: ObservableObject {
         draft = ""
         errorMessage = nil
 
-        let userMessage = MeetingSummaryChatMessage(role: .user, content: question)
+        let userMessage = TranscriptSummaryChatMessage(role: .user, content: question)
         chatMessages.append(userMessage)
         _ = followUpPersistence(entry.id, chatMessages)
         isLoading = true
@@ -171,7 +171,7 @@ final class TranscriptionDetailViewModel: ObservableObject {
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    let assistantMessage = MeetingSummaryChatMessage(role: .assistant, content: answer)
+                    let assistantMessage = TranscriptSummaryChatMessage(role: .assistant, content: answer)
                     self.chatMessages.append(assistantMessage)
                     self.isLoading = false
                     self.errorMessage = nil
@@ -266,7 +266,7 @@ final class TranscriptionDetailViewModel: ObservableObject {
         }
     }
 
-    private var seedAssistantMessage: MeetingSummaryChatMessage {
+    private var seedAssistantMessage: TranscriptSummaryChatMessage {
         TranscriptionHistoryConversationSupport.seedMessage(for: entry)
     }
 }

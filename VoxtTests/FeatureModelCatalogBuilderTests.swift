@@ -155,6 +155,30 @@ final class FeatureModelCatalogBuilderTests: XCTestCase {
         XCTAssertEqual(builder.llmSelectionSummary(.remoteLLM(.ollama)), "Ollama · qwen3")
     }
 
+    func testOMLXRemoteEntryIsSelectableWithoutAPIKey() throws {
+        let remoteLLMConfigurations = RemoteModelConfigurationStore.saveConfigurations([
+            RemoteLLMProvider.omlx.rawValue: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.omlx.rawValue,
+                model: "qwen3",
+                endpoint: "http://localhost:8000/v1"
+            )
+        ])
+
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(translationModel: .remoteLLM(.omlx)),
+            remoteLLMConfigurationsRaw: remoteLLMConfigurations
+        )
+
+        let entry = try XCTUnwrap(
+            builder.entries(for: .translationModel)
+                .first(where: { $0.selectionID == .remoteLLM(.omlx) })
+        )
+
+        XCTAssertTrue(entry.isSelectable)
+        XCTAssertEqual(entry.statusText, AppLocalization.localizedString("Configured"))
+        XCTAssertEqual(builder.llmSelectionSummary(.remoteLLM(.omlx)), "oMLX · qwen3")
+    }
+
     func testASRSelectorEntryDisplaysSupportsPrimaryLanguageTag() throws {
         let repo = "mlx-community/Qwen3-ASR-0.6B-4bit"
         let builder = makeBuilder(

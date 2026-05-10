@@ -175,12 +175,12 @@ struct TranscriptionDetailContentView: View {
                     }
                 }
 
-                if let meetingSegments = viewModel.entry.meetingSegments,
-                   !meetingSegments.isEmpty {
-                    detailSection(title: localized("Meeting Segments")) {
-                        ForEach(meetingSegments) { segment in
+                if let transcriptSegments = viewModel.entry.transcriptSegments,
+                   !transcriptSegments.isEmpty {
+                    detailSection(title: localized("Transcript Segments")) {
+                        ForEach(transcriptSegments) { segment in
                             detailLine(
-                                label: "\(MeetingTranscriptFormatter.timestampString(for: segment.startSeconds)) · \(segment.speaker.displayTitle)",
+                                label: "\(TranscriptFormatter.timestampString(for: segment.startSeconds)) · \(segment.speaker.displayTitle)",
                                 value: segment.text
                             )
                         }
@@ -339,8 +339,8 @@ struct TranscriptionDetailContentView: View {
             return localized("Translation")
         case .rewrite:
             return localized("Rewrite")
-        case .meeting:
-            return localized("Meeting")
+        case .transcript:
+            return localized("Transcript")
         }
     }
 
@@ -352,7 +352,7 @@ struct TranscriptionDetailContentView: View {
             return localized("Translation Mode")
         case .rewrite:
             return localized("Rewrite Mode")
-        case .meeting:
+        case .transcript:
             return localized("Summary Mode")
         }
     }
@@ -365,7 +365,7 @@ struct TranscriptionDetailContentView: View {
             return localized("Translation Model")
         case .rewrite:
             return localized("Rewrite Model")
-        case .meeting:
+        case .transcript:
             return localized("Summary Model")
         }
     }

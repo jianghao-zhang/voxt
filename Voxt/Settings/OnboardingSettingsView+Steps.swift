@@ -260,7 +260,7 @@ extension OnboardingSettingsView {
             title: "System ASR",
             lines: [
                 localized("Uses the macOS system speech recognizer with no download required."),
-                localized("Best for the fastest setup, but meeting support and language coverage are more limited.")
+                localized("Best for the fastest setup, but advanced transcription features and language coverage are more limited.")
             ]
         )
     }
@@ -355,7 +355,7 @@ extension OnboardingSettingsView {
             title: "Apple Intelligence",
             lines: appleIntelligenceAvailable
                 ? [
-                    localized("Use the system model for cleanup, rewrite, and meeting summaries on this Mac."),
+                    localized("Use the system model for cleanup, rewrite, and transcript summaries on this Mac."),
                     localized("Translation will keep using the best compatible model automatically.")
                 ]
                 : [
@@ -880,7 +880,7 @@ extension OnboardingSettingsView {
     var hotkeyPresetDescription: String {
         switch hotkeyPresetSelection.wrappedValue {
         case .fnCombo:
-            return localized("Recommended default: fn for transcription, fn+shift for translation, fn+control for rewrite, and fn+option for meeting.")
+            return localized("Recommended default: fn for transcription, fn+shift for translation, and fn+control for rewrite.")
         case .commandCombo:
             return localized("Useful when function-key combinations are already reserved by the system or keyboard tools.")
         case .custom:

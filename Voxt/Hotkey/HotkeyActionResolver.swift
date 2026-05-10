@@ -80,15 +80,13 @@ struct TranscriptionDoubleTapRewriteResolver {
         let triggerMode: HotkeyPreference.TriggerMode
         let rewriteActivationMode: HotkeyPreference.RewriteActivationMode
         let isSessionActive: Bool
-        let isMeetingActive: Bool
         let hasPendingTranscriptionStart: Bool
     }
 
     static func resolve(state: State) -> Action {
         guard state.triggerMode == .tap,
               state.rewriteActivationMode == .doubleTapTranscriptionHotkey,
-              !state.isSessionActive,
-              !state.isMeetingActive
+              !state.isSessionActive
         else {
             return .useStandardHandling
         }

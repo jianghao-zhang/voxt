@@ -114,9 +114,6 @@ struct MainWindowNavigationCommands: Commands {
                         appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .feature, featureTab: .appEnhancement))
                     }
                 }
-                Button(AppLocalization.localizedString("Meeting")) {
-                    appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .feature, featureTab: .meeting))
-                }
             }
 
             Menu(AppLocalization.localizedString("Dictionary")) {

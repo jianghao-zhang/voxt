@@ -40,20 +40,14 @@ extension ModelSettingsView {
             let isSelected = selectedRemoteASRProvider == provider
             let status = remoteASRStatusText(
                 for: provider,
-                configuration: config,
-                showMeetingSetupDetails: isSelected
+                configuration: config
             )
-            let needsMeetingSetup =
-                isSelected &&
-                RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(provider, configuration: config) &&
-                config.isConfigured &&
-                !RemoteASRMeetingConfiguration.hasValidMeetingModel(provider: provider, configuration: config)
             return ModelTableRow(
                 id: provider.rawValue,
                 title: provider.title,
                 isActive: isSelected,
                 status: status,
-                badgeText: (hasIssue(for: .remoteASRProvider(provider)) || needsMeetingSetup) ? AppLocalization.localizedString("Needs Setup") : nil,
+                badgeText: hasIssue(for: .remoteASRProvider(provider)) ? AppLocalization.localizedString("Needs Setup") : nil,
                 actions: [
                     ModelTableAction(
                         title: selectionActionTitle(isSelected: isSelected),
@@ -611,21 +605,14 @@ extension ModelSettingsView {
 
     func remoteASRStatusText(
         for provider: RemoteASRProvider,
-        configuration: RemoteProviderConfiguration,
-        showMeetingSetupDetails: Bool = true
+        configuration: RemoteProviderConfiguration
     ) -> String {
         guard configuration.isConfigured else {
             return AppLocalization.localizedString("Not configured")
         }
 
-        var lines = [String]()
-        if showMeetingSetupDetails,
-           RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(provider, configuration: configuration) {
-            if !configuration.hasUsableMeetingModel {
-                lines.append(RemoteASRMeetingConfiguration.missingMeetingModelStatus(provider: provider))
-            }
-        }
-        return lines.joined(separator: "\n")
+        _ = provider
+        return ""
     }
 
     func resolvedASRHintSettings(for target: ASRHintTarget) -> ASRHintSettings {

@@ -267,6 +267,7 @@ Voxt 里的 `OpenAI Whisper / Transcribe` 也可以当作通用的 OpenAI-compat
 | Google | `gemini-2.5-pro` | Gemini 原生 | 文本增强 / 翻译 / 改写 | 已集成 |
 | OpenAI | `gpt-5.2` | OpenAI-compatible | 文本增强 / 翻译 / 改写 | 已集成 |
 | Ollama | `qwen2.5` | OpenAI-compatible | 本地 / 自建 LLM 网关 | 已集成 |
+| oMLX | `qwen3` | OpenAI-compatible | Apple Silicon 本地 MLX 模型服务 | 已集成 |
 | DeepSeek | `deepseek-chat` | OpenAI-compatible | 文本增强 / 翻译 / 改写 | 已集成 |
 | OpenRouter | `openrouter/auto` | OpenAI-compatible | 自动路由 | 已集成 |
 | xAI (Grok) | `grok-4` | OpenAI-compatible | 文本增强 / 翻译 / 改写 | 已集成 |
@@ -281,6 +282,7 @@ Voxt 里的 `OpenAI Whisper / Transcribe` 也可以当作通用的 OpenAI-compat
 
 - `Needs Setup`
 - Anthropic / Google / MiniMax 缺少对应 API Key
+- Ollama / oMLX 这类本地网关如果未开启鉴权，可以留空 API Key
 - `Invalid endpoint URL` / `Invalid Google endpoint URL`
 - `Invalid server response.`
 - `Server reachable, but authentication failed (HTTP 401/403).`

@@ -5,7 +5,7 @@ enum TranscriptionHistoryKind: String, Codable {
     case normal
     case translation
     case rewrite
-    case meeting
+    case transcript = "meeting"
 }
 
 struct WhisperHistoryWordTiming: Codable, Hashable {
@@ -42,12 +42,12 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
     let remoteLLMEndpoint: String?
     let audioRelativePath: String?
     let whisperWordTimings: [WhisperHistoryWordTiming]?
-    let meetingSegments: [MeetingTranscriptSegment]?
-    let meetingAudioRelativePath: String?
-    let meetingSummary: MeetingSummarySnapshot?
-    let meetingSummaryChatMessages: [MeetingSummaryChatMessage]?
+    let transcriptSegments: [TranscriptSegment]?
+    let transcriptAudioRelativePath: String?
+    let transcriptSummary: TranscriptSummarySnapshot?
+    let transcriptSummaryChatMessages: [TranscriptSummaryChatMessage]?
     let displayTitle: String?
-    let transcriptionChatMessages: [MeetingSummaryChatMessage]?
+    let transcriptionChatMessages: [TranscriptSummaryChatMessage]?
     let dictionaryHitTerms: [String]
     let dictionaryCorrectedTerms: [String]
     let dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot]
@@ -80,10 +80,10 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         case remoteLLMEndpoint
         case audioRelativePath
         case whisperWordTimings
-        case meetingSegments
-        case meetingAudioRelativePath
-        case meetingSummary
-        case meetingSummaryChatMessages
+        case transcriptSegments = "meetingSegments"
+        case transcriptAudioRelativePath = "meetingAudioRelativePath"
+        case transcriptSummary = "meetingSummary"
+        case transcriptSummaryChatMessages = "meetingSummaryChatMessages"
         case displayTitle
         case transcriptionChatMessages
         case dictionaryHitTerms
@@ -119,12 +119,12 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         remoteLLMEndpoint: String?,
         audioRelativePath: String? = nil,
         whisperWordTimings: [WhisperHistoryWordTiming]?,
-        meetingSegments: [MeetingTranscriptSegment]? = nil,
-        meetingAudioRelativePath: String? = nil,
-        meetingSummary: MeetingSummarySnapshot? = nil,
-        meetingSummaryChatMessages: [MeetingSummaryChatMessage]? = nil,
+        transcriptSegments: [TranscriptSegment]? = nil,
+        transcriptAudioRelativePath: String? = nil,
+        transcriptSummary: TranscriptSummarySnapshot? = nil,
+        transcriptSummaryChatMessages: [TranscriptSummaryChatMessage]? = nil,
         displayTitle: String? = nil,
-        transcriptionChatMessages: [MeetingSummaryChatMessage]? = nil,
+        transcriptionChatMessages: [TranscriptSummaryChatMessage]? = nil,
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
         dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot] = [],
@@ -154,12 +154,12 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         self.remoteLLMProvider = remoteLLMProvider
         self.remoteLLMModel = remoteLLMModel
         self.remoteLLMEndpoint = remoteLLMEndpoint
-        self.audioRelativePath = audioRelativePath ?? meetingAudioRelativePath
+        self.audioRelativePath = audioRelativePath ?? transcriptAudioRelativePath
         self.whisperWordTimings = whisperWordTimings
-        self.meetingSegments = meetingSegments
-        self.meetingAudioRelativePath = meetingAudioRelativePath
-        self.meetingSummary = meetingSummary
-        self.meetingSummaryChatMessages = meetingSummaryChatMessages
+        self.transcriptSegments = transcriptSegments
+        self.transcriptAudioRelativePath = transcriptAudioRelativePath
+        self.transcriptSummary = transcriptSummary
+        self.transcriptSummaryChatMessages = transcriptSummaryChatMessages
         self.displayTitle = displayTitle
         self.transcriptionChatMessages = transcriptionChatMessages
         self.dictionaryHitTerms = dictionaryHitTerms
@@ -202,13 +202,13 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         remoteLLMEndpoint = try container.decodeIfPresent(String.self, forKey: .remoteLLMEndpoint)
         let decodedAudioRelativePath = try container.decodeIfPresent(String.self, forKey: .audioRelativePath)
         whisperWordTimings = try container.decodeIfPresent([WhisperHistoryWordTiming].self, forKey: .whisperWordTimings)
-        meetingSegments = try container.decodeIfPresent([MeetingTranscriptSegment].self, forKey: .meetingSegments)
-        meetingAudioRelativePath = try container.decodeIfPresent(String.self, forKey: .meetingAudioRelativePath)
-        audioRelativePath = decodedAudioRelativePath ?? meetingAudioRelativePath
-        meetingSummary = try container.decodeIfPresent(MeetingSummarySnapshot.self, forKey: .meetingSummary)
-        meetingSummaryChatMessages = try container.decodeIfPresent([MeetingSummaryChatMessage].self, forKey: .meetingSummaryChatMessages)
+        transcriptSegments = try container.decodeIfPresent([TranscriptSegment].self, forKey: .transcriptSegments)
+        transcriptAudioRelativePath = try container.decodeIfPresent(String.self, forKey: .transcriptAudioRelativePath)
+        audioRelativePath = decodedAudioRelativePath ?? transcriptAudioRelativePath
+        transcriptSummary = try container.decodeIfPresent(TranscriptSummarySnapshot.self, forKey: .transcriptSummary)
+        transcriptSummaryChatMessages = try container.decodeIfPresent([TranscriptSummaryChatMessage].self, forKey: .transcriptSummaryChatMessages)
         displayTitle = try container.decodeIfPresent(String.self, forKey: .displayTitle)
-        transcriptionChatMessages = try container.decodeIfPresent([MeetingSummaryChatMessage].self, forKey: .transcriptionChatMessages)
+        transcriptionChatMessages = try container.decodeIfPresent([TranscriptSummaryChatMessage].self, forKey: .transcriptionChatMessages)
         dictionaryHitTerms = try container.decodeIfPresent([String].self, forKey: .dictionaryHitTerms) ?? []
         dictionaryCorrectedTerms = try container.decodeIfPresent([String].self, forKey: .dictionaryCorrectedTerms) ?? []
         dictionaryCorrectionSnapshots = try container.decodeIfPresent([DictionaryCorrectionSnapshot].self, forKey: .dictionaryCorrectionSnapshots) ?? []
@@ -340,11 +340,11 @@ final class TranscriptionHistoryStore: ObservableObject {
         remoteLLMEndpoint: String?,
         audioRelativePath: String? = nil,
         whisperWordTimings: [WhisperHistoryWordTiming]?,
-        meetingSegments: [MeetingTranscriptSegment]? = nil,
-        meetingAudioRelativePath: String? = nil,
-        meetingSummary: MeetingSummarySnapshot? = nil,
+        transcriptSegments: [TranscriptSegment]? = nil,
+        transcriptAudioRelativePath: String? = nil,
+        transcriptSummary: TranscriptSummarySnapshot? = nil,
         displayTitle: String? = nil,
-        transcriptionChatMessages: [MeetingSummaryChatMessage]? = nil,
+        transcriptionChatMessages: [TranscriptSummaryChatMessage]? = nil,
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
         dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot] = [],
@@ -380,9 +380,9 @@ final class TranscriptionHistoryStore: ObservableObject {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -446,7 +446,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
 
         let existingEntry = allEntries[index]
-        let relativePath = existingEntry.audioRelativePath ?? existingEntry.meetingAudioRelativePath
+        let relativePath = existingEntry.audioRelativePath ?? existingEntry.transcriptAudioRelativePath
         let resolvedRelativePath = relativePath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? relativePath!
             : "\(audioFolderName(for: existingEntry.kind))/\(sanitizedAudioFileName(nil, fallbackKind: existingEntry.kind))"
@@ -464,7 +464,7 @@ final class TranscriptionHistoryStore: ObservableObject {
     }
 
     func audioURL(for entry: TranscriptionHistoryEntry) -> URL? {
-        let relativePath = entry.audioRelativePath ?? entry.meetingAudioRelativePath
+        let relativePath = entry.audioRelativePath ?? entry.transcriptAudioRelativePath
         guard let relativePath, !relativePath.isEmpty else {
             return nil
         }
@@ -665,9 +665,9 @@ final class TranscriptionHistoryStore: ObservableObject {
     }
 
     @discardableResult
-    func updateMeetingSummary(_ summary: MeetingSummarySnapshot?, for entryID: UUID) -> TranscriptionHistoryEntry? {
+    func updateTranscriptSummary(_ summary: TranscriptSummarySnapshot?, for entryID: UUID) -> TranscriptionHistoryEntry? {
         guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
-        allEntries[index] = allEntries[index].updatingMeetingSummary(summary)
+        allEntries[index] = allEntries[index].updatingTranscriptSummary(summary)
         refreshEntryIndexes()
         publishVisibleEntries()
         persist()
@@ -675,9 +675,9 @@ final class TranscriptionHistoryStore: ObservableObject {
     }
 
     @discardableResult
-    func updateMeetingSummaryChatMessages(_ messages: [MeetingSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
+    func updateSummaryChatMessages(_ messages: [TranscriptSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
         guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
-        allEntries[index] = allEntries[index].updatingMeetingSummaryChatMessages(messages)
+        allEntries[index] = allEntries[index].updatingSummaryChatMessages(messages)
         refreshEntryIndexes()
         publishVisibleEntries()
         persist()
@@ -685,7 +685,7 @@ final class TranscriptionHistoryStore: ObservableObject {
     }
 
     @discardableResult
-    func updateTranscriptionChatMessages(_ messages: [MeetingSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
+    func updateTranscriptionChatMessages(_ messages: [TranscriptSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
         guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
         allEntries[index] = allEntries[index].updatingTranscriptionChatMessages(messages)
         refreshEntryIndexes()
@@ -703,7 +703,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         transcriptionProcessingDurationSeconds: TimeInterval?,
         llmDurationSeconds: TimeInterval?,
         whisperWordTimings: [WhisperHistoryWordTiming]?,
-        transcriptionChatMessages: [MeetingSummaryChatMessage],
+        transcriptionChatMessages: [TranscriptSummaryChatMessage],
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
         dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot] = [],
@@ -758,7 +758,9 @@ final class TranscriptionHistoryStore: ObservableObject {
         _ decodedEntries: [TranscriptionHistoryEntry],
         resetPagination: Bool
     ) {
-        allEntries = decodedEntries.sorted { $0.createdAt > $1.createdAt }
+        allEntries = decodedEntries
+            .filter { $0.kind != .transcript }
+            .sorted { $0.createdAt > $1.createdAt }
         let didPrune = applyRetentionPolicyIfNeeded()
 
         let targetLoadedCount: Int
@@ -814,7 +816,7 @@ final class TranscriptionHistoryStore: ObservableObject {
     }
 
     private func removeAudioIfNeeded(for entry: TranscriptionHistoryEntry) {
-        let relativePath = entry.audioRelativePath ?? entry.meetingAudioRelativePath
+        let relativePath = entry.audioRelativePath ?? entry.transcriptAudioRelativePath
         guard let relativePath, !relativePath.isEmpty else { return }
         do {
             let url = try historyAssetsDirectoryURL().appendingPathComponent(relativePath)
@@ -865,7 +867,7 @@ final class TranscriptionHistoryStore: ObservableObject {
             return "translation"
         case .rewrite:
             return "rewrite"
-        case .meeting:
+        case .transcript:
             return "meeting"
         }
     }
@@ -952,10 +954,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
+            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -993,10 +995,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
+            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -1034,10 +1036,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
+            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -1075,10 +1077,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
+            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -1088,7 +1090,7 @@ private extension TranscriptionHistoryEntry {
         )
     }
 
-    func updatingMeetingSummary(_ meetingSummary: MeetingSummarySnapshot?) -> TranscriptionHistoryEntry {
+    func updatingTranscriptSummary(_ summary: TranscriptSummarySnapshot?) -> TranscriptionHistoryEntry {
         TranscriptionHistoryEntry(
             id: id,
             text: text,
@@ -1116,10 +1118,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: summary,
+            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -1129,7 +1131,7 @@ private extension TranscriptionHistoryEntry {
         )
     }
 
-    func updatingMeetingSummaryChatMessages(_ meetingSummaryChatMessages: [MeetingSummaryChatMessage]) -> TranscriptionHistoryEntry {
+    func updatingSummaryChatMessages(_ summaryChatMessages: [TranscriptSummaryChatMessage]) -> TranscriptionHistoryEntry {
         TranscriptionHistoryEntry(
             id: id,
             text: text,
@@ -1157,10 +1159,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
+            transcriptSummaryChatMessages: summaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -1170,7 +1172,7 @@ private extension TranscriptionHistoryEntry {
         )
     }
 
-    func updatingTranscriptionChatMessages(_ transcriptionChatMessages: [MeetingSummaryChatMessage]) -> TranscriptionHistoryEntry {
+    func updatingTranscriptionChatMessages(_ transcriptionChatMessages: [TranscriptSummaryChatMessage]) -> TranscriptionHistoryEntry {
         TranscriptionHistoryEntry(
             id: id,
             text: text,
@@ -1198,10 +1200,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
+            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -1218,7 +1220,7 @@ private extension TranscriptionHistoryEntry {
         transcriptionProcessingDurationSeconds: TimeInterval?,
         llmDurationSeconds: TimeInterval?,
         whisperWordTimings: [WhisperHistoryWordTiming]?,
-        transcriptionChatMessages: [MeetingSummaryChatMessage],
+        transcriptionChatMessages: [TranscriptSummaryChatMessage],
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
         dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot],
@@ -1251,10 +1253,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
+            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
@@ -1292,10 +1294,10 @@ private extension TranscriptionHistoryEntry {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
-            meetingSegments: meetingSegments,
-            meetingAudioRelativePath: meetingAudioRelativePath,
-            meetingSummary: meetingSummary,
-            meetingSummaryChatMessages: meetingSummaryChatMessages,
+            transcriptSegments: transcriptSegments,
+            transcriptAudioRelativePath: transcriptAudioRelativePath,
+            transcriptSummary: transcriptSummary,
+            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
             displayTitle: displayTitle,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,

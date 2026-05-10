@@ -55,31 +55,6 @@ extension OnboardingSettingsView {
         }
     }
 
-    var meetingBlockingMessages: [String] {
-        guard featureSettings.meeting.enabled else { return [] }
-        var messages: [String] = []
-        let remoteConfiguration = RemoteModelConfigurationStore.resolvedASRConfiguration(
-            provider: selectedRemoteASRProvider,
-            stored: remoteASRConfigurations
-        )
-        let decision = MeetingStartPlanner.resolve(
-            selectedEngine: selectedEngine,
-            mlxModelState: mlxModelManager.state,
-            whisperModelState: whisperModelManager.state,
-            remoteASRProvider: selectedRemoteASRProvider,
-            remoteASRConfiguration: remoteConfiguration
-        )
-        if case .blocked(let reason) = decision {
-            messages.append(reason.userMessage)
-        }
-
-        if SystemAudioCapturePermission.authorizationStatus() != .authorized {
-            messages.append(localized("System audio recording permission is required for Meeting. Enable it in Settings > Permissions."))
-        }
-
-        return Array(Set(messages))
-    }
-
     var onboardingStatusSnapshot: OnboardingStepStatusSnapshot {
         OnboardingStepStatusSnapshot(
             hasModelIssues: !missingConfigurationIssues.isEmpty,
@@ -114,18 +89,6 @@ extension OnboardingSettingsView {
 
     var shouldShowPermissionBadge: Bool {
         !currentStepMissingPermissions.isEmpty
-    }
-
-    var meetingEnabledBinding: Binding<Bool> {
-        Binding(
-            get: { featureSettings.meeting.enabled },
-            set: { isEnabled in
-                FeatureSettingsStore.update(defaults: .standard) { settings in
-                    settings.meeting.enabled = isEnabled
-                }
-                featureSettings = FeatureSettingsStore.load(defaults: .standard)
-            }
-        )
     }
 
     func handleMuteSystemAudioChange(_ newValue: Bool) {
@@ -266,30 +229,6 @@ extension OnboardingSettingsView {
         llmSelectionSummary(featureSettings.transcription.llmSelectionID)
     }
 
-    var formattedMeetingHotkey: String {
-        let hotkey = HotkeyPreference.loadMeeting()
-        return HotkeyPreference.displayString(for: hotkey, distinguishModifierSides: hotkeyDistinguishModifierSides)
-    }
-
-    var onboardingMeetingSummary: String {
-        guard featureSettings.meeting.enabled else {
-            return AppLocalization.localizedString("Disabled")
-        }
-        return meetingBlockingMessages.isEmpty
-            ? AppLocalization.localizedString("Ready")
-            : AppLocalization.localizedString("Needs Setup")
-    }
-
-    var onboardingMeetingStatusLines: [String] {
-        guard featureSettings.meeting.enabled else {
-            return [localized("Meeting is optional during onboarding. You can enable it later from Feature > Transcription.")]
-        }
-
-        var lines = [AppLocalization.format("Meeting shortcut: %@", formattedMeetingHotkey)]
-        lines.append(localized("Meeting notes: Tap the meeting shortcut to start the dedicated meeting overlay. Tap it again to stop the meeting session."))
-        return lines
-    }
-
     var onboardingASRSelectionID: FeatureModelSelectionID {
         OnboardingFeatureSelectionResolver.asrSelectionID(
             selectedEngine: selectedEngine,
@@ -340,9 +279,6 @@ extension OnboardingSettingsView {
             settings.rewrite.asrSelectionID = asrSelection
             settings.rewrite.llmSelectionID = llmSelection
             settings.rewrite.appEnhancementEnabled = appEnhancementEnabled
-
-            settings.meeting.asrSelectionID = asrSelection
-            settings.meeting.summaryModelSelectionID = llmSelection
         }
 
         featureSettings = FeatureSettingsStore.load(defaults: .standard)
@@ -425,15 +361,7 @@ extension OnboardingSettingsView {
             return localized("Not configured")
         }
 
-        var lines = [AppLocalization.format("Configured model: %@", configuration.model)]
-        if RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(provider, configuration: configuration) {
-            if configuration.hasUsableMeetingModel {
-                lines.append(RemoteASRMeetingConfiguration.configuredMeetingModelStatus(configuration.meetingModel))
-            } else {
-                lines.append(RemoteASRMeetingConfiguration.missingMeetingModelStatus(provider: provider))
-            }
-        }
-        return lines.joined(separator: "\n")
+        return AppLocalization.format("Configured model: %@", configuration.model)
     }
 
     func remoteLLMStatusText(for provider: RemoteLLMProvider) -> String {

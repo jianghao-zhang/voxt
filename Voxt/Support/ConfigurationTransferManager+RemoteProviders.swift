@@ -3,7 +3,6 @@ import Foundation
 struct SanitizedRemoteProviderConfiguration: Codable {
     var providerID: String
     var model: String
-    var meetingModel: String
     var endpoint: String
     var apiKey: String
     var appID: String
@@ -24,7 +23,6 @@ struct SanitizedRemoteProviderConfiguration: Codable {
     enum CodingKeys: String, CodingKey {
         case providerID
         case model
-        case meetingModel
         case endpoint
         case apiKey
         case appID
@@ -46,7 +44,6 @@ struct SanitizedRemoteProviderConfiguration: Codable {
     init(
         providerID: String,
         model: String,
-        meetingModel: String,
         endpoint: String,
         apiKey: String,
         appID: String,
@@ -66,7 +63,6 @@ struct SanitizedRemoteProviderConfiguration: Codable {
     ) {
         self.providerID = providerID
         self.model = model
-        self.meetingModel = meetingModel
         self.endpoint = endpoint
         self.apiKey = apiKey
         self.appID = appID
@@ -89,7 +85,6 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         providerID = try container.decode(String.self, forKey: .providerID)
         model = try container.decodeIfPresent(String.self, forKey: .model) ?? ""
-        meetingModel = try container.decodeIfPresent(String.self, forKey: .meetingModel) ?? ""
         endpoint = try container.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
         appID = try container.decodeIfPresent(String.self, forKey: .appID) ?? ""
@@ -117,7 +112,6 @@ extension ConfigurationTransferManager {
             SanitizedRemoteProviderConfiguration(
                 providerID: $0.providerID,
                 model: $0.model,
-                meetingModel: $0.meetingModel,
                 endpoint: $0.endpoint,
                 apiKey: sanitizeSensitive($0.apiKey),
                 appID: sanitizeSensitive($0.appID),
@@ -145,7 +139,6 @@ extension ConfigurationTransferManager {
                 RemoteProviderConfiguration(
                     providerID: item.providerID,
                     model: item.model,
-                    meetingModel: item.meetingModel,
                     endpoint: item.endpoint,
                     apiKey: resolveImportedSensitive(item.apiKey),
                     appID: resolveImportedSensitive(item.appID),

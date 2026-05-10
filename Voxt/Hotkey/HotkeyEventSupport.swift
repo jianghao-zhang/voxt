@@ -11,23 +11,19 @@ enum HotkeyEventSupport {
         transcriptionHotkey: HotkeyPreference.Hotkey,
         translationHotkey: HotkeyPreference.Hotkey,
         rewriteHotkey: HotkeyPreference.Hotkey?,
-        meetingHotkey: HotkeyPreference.Hotkey?,
         isKeyDown: Bool,
         isTranslationKeyDown: Bool,
         isRewriteKeyDown: Bool,
-        isMeetingKeyDown: Bool,
         hasTranscriptionModifierTapCandidate: Bool,
         hasTranslationModifierTapCandidate: Bool,
         hasRewriteModifierTapCandidate: Bool,
-        hasMeetingModifierTapCandidate: Bool,
         sawNonModifierKeyDuringFunctionChord: Bool
     ) -> Bool {
         guard typeRequiresTapFlagsLog(
             triggerMode: triggerMode,
             transcriptionHotkey: transcriptionHotkey,
             translationHotkey: translationHotkey,
-            rewriteHotkey: rewriteHotkey,
-            meetingHotkey: meetingHotkey
+            rewriteHotkey: rewriteHotkey
         ) else {
             return false
         }
@@ -37,11 +33,9 @@ enum HotkeyEventSupport {
             isKeyDown ||
             isTranslationKeyDown ||
             isRewriteKeyDown ||
-            isMeetingKeyDown ||
             hasTranscriptionModifierTapCandidate ||
             hasTranslationModifierTapCandidate ||
             hasRewriteModifierTapCandidate ||
-            hasMeetingModifierTapCandidate ||
             sawNonModifierKeyDuringFunctionChord
     }
 
@@ -49,14 +43,12 @@ enum HotkeyEventSupport {
         triggerMode: HotkeyPreference.TriggerMode,
         transcriptionHotkey: HotkeyPreference.Hotkey,
         translationHotkey: HotkeyPreference.Hotkey,
-        rewriteHotkey: HotkeyPreference.Hotkey?,
-        meetingHotkey: HotkeyPreference.Hotkey?
+        rewriteHotkey: HotkeyPreference.Hotkey?
     ) -> Bool {
         guard triggerMode == .tap else { return false }
         return HotkeyModifierInterpreter.isModifierOnly(transcriptionHotkey)
             || HotkeyModifierInterpreter.isModifierOnly(translationHotkey)
             || (rewriteHotkey.map { HotkeyModifierInterpreter.isModifierOnly($0) } ?? false)
-            || (meetingHotkey.map { HotkeyModifierInterpreter.isModifierOnly($0) } ?? false)
     }
 
     static func isModifierKeyCode(_ keyCode: UInt16) -> Bool {

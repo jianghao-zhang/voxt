@@ -1,6 +1,6 @@
 import Foundation
 
-enum MeetingSpeaker: String, Codable, Hashable, Sendable {
+enum TranscriptSpeaker: String, Codable, Hashable, Sendable {
     case me
     case them
 
@@ -14,9 +14,9 @@ enum MeetingSpeaker: String, Codable, Hashable, Sendable {
     }
 }
 
-struct MeetingTranscriptSegment: Identifiable, Codable, Hashable, Sendable {
+struct TranscriptSegment: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
-    let speaker: MeetingSpeaker
+    let speaker: TranscriptSpeaker
     let startSeconds: TimeInterval
     let endSeconds: TimeInterval?
     let text: String
@@ -26,7 +26,7 @@ struct MeetingTranscriptSegment: Identifiable, Codable, Hashable, Sendable {
 
     nonisolated init(
         id: UUID = UUID(),
-        speaker: MeetingSpeaker,
+        speaker: TranscriptSpeaker,
         startSeconds: TimeInterval,
         endSeconds: TimeInterval?,
         text: String,
@@ -47,8 +47,8 @@ struct MeetingTranscriptSegment: Identifiable, Codable, Hashable, Sendable {
     func updatingTranslation(
         translatedText: String?,
         isTranslationPending: Bool
-    ) -> MeetingTranscriptSegment {
-        MeetingTranscriptSegment(
+    ) -> TranscriptSegment {
+        TranscriptSegment(
             id: id,
             speaker: speaker,
             startSeconds: startSeconds,
@@ -73,7 +73,7 @@ struct MeetingTranscriptSegment: Identifiable, Codable, Hashable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
-        speaker = try container.decode(MeetingSpeaker.self, forKey: .speaker)
+        speaker = try container.decode(TranscriptSpeaker.self, forKey: .speaker)
         startSeconds = try container.decode(TimeInterval.self, forKey: .startSeconds)
         endSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .endSeconds)
         text = try container.decode(String.self, forKey: .text)
@@ -94,8 +94,8 @@ struct MeetingTranscriptSegment: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-enum MeetingTranscriptFormatter {
-    nonisolated static func meaningfulSegments(for segments: [MeetingTranscriptSegment]) -> [MeetingTranscriptSegment] {
+enum TranscriptFormatter {
+    nonisolated static func meaningfulSegments(for segments: [TranscriptSegment]) -> [TranscriptSegment] {
         segments.filter { segment in
             let hasOriginalText = isMeaningfulText(segment.text)
             let hasTranslatedText = isMeaningfulText(segment.translatedText)
@@ -104,10 +104,10 @@ enum MeetingTranscriptFormatter {
     }
 
     nonisolated static func mergedSegmentsForPersistence(
-        primarySegments: [MeetingTranscriptSegment],
-        fallbackSegments: [MeetingTranscriptSegment]
-    ) -> [MeetingTranscriptSegment] {
-        var mergedByID: [UUID: MeetingTranscriptSegment] = [:]
+        primarySegments: [TranscriptSegment],
+        fallbackSegments: [TranscriptSegment]
+    ) -> [TranscriptSegment] {
+        var mergedByID: [UUID: TranscriptSegment] = [:]
 
         for segment in meaningfulSegments(for: fallbackSegments) {
             mergedByID[segment.id] = segment
@@ -141,18 +141,18 @@ enum MeetingTranscriptFormatter {
         return String(format: "%02d:%02d", minutes, remainder)
     }
 
-    nonisolated static func copyString(for segment: MeetingTranscriptSegment) -> String {
+    nonisolated static func copyString(for segment: TranscriptSegment) -> String {
         exportString(for: segment)
     }
 
-    nonisolated static func joinedText(for segments: [MeetingTranscriptSegment]) -> String {
+    nonisolated static func joinedText(for segments: [TranscriptSegment]) -> String {
         segments
             .map { exportString(for: $0) }
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    nonisolated static func llmInputText(for segments: [MeetingTranscriptSegment]) -> String {
+    nonisolated static func llmInputText(for segments: [TranscriptSegment]) -> String {
         segments
             .compactMap { segment in
                 let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -163,7 +163,7 @@ enum MeetingTranscriptFormatter {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    nonisolated static func exportString(for segment: MeetingTranscriptSegment) -> String {
+    nonisolated static func exportString(for segment: TranscriptSegment) -> String {
         var lines = ["\(timestampString(for: segment.startSeconds)) \(segment.speaker.displayTitle) \(segment.text)"]
         if let translatedText = segment.translatedText?.trimmingCharacters(in: .whitespacesAndNewlines),
            !translatedText.isEmpty {
@@ -173,16 +173,16 @@ enum MeetingTranscriptFormatter {
     }
 
     nonisolated static func mergedAdjacentSegment(
-        previous: MeetingTranscriptSegment,
-        next: MeetingTranscriptSegment
-    ) -> MeetingTranscriptSegment? {
+        previous: TranscriptSegment,
+        next: TranscriptSegment
+    ) -> TranscriptSegment? {
         guard !previous.preventsAdjacentMerge, !next.preventsAdjacentMerge else { return nil }
         guard previous.speaker == next.speaker else { return nil }
         guard next.startSeconds >= previous.startSeconds else { return nil }
         let previousEnd = previous.endSeconds ?? previous.startSeconds
         guard next.startSeconds - previousEnd <= 2.0 else { return nil }
 
-        return MeetingTranscriptSegment(
+        return TranscriptSegment(
             id: previous.id,
             speaker: previous.speaker,
             startSeconds: previous.startSeconds,
@@ -195,9 +195,9 @@ enum MeetingTranscriptFormatter {
     }
 
     private nonisolated static func mergedAdjacentSegments(
-        in segments: [MeetingTranscriptSegment]
-    ) -> [MeetingTranscriptSegment] {
-        var merged: [MeetingTranscriptSegment] = []
+        in segments: [TranscriptSegment]
+    ) -> [TranscriptSegment] {
+        var merged: [TranscriptSegment] = []
         for segment in segments {
             if let last = merged.last,
                let mergedSegment = mergedAdjacentSegment(previous: last, next: segment) {
@@ -210,15 +210,15 @@ enum MeetingTranscriptFormatter {
     }
 
     private nonisolated static func mergedSegment(
-        preferred: MeetingTranscriptSegment,
-        fallback: MeetingTranscriptSegment
-    ) -> MeetingTranscriptSegment {
+        preferred: TranscriptSegment,
+        fallback: TranscriptSegment
+    ) -> TranscriptSegment {
         let preferredText = preferred.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let fallbackText = fallback.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let translatedText = preferred.translatedText?.trimmingCharacters(in: .whitespacesAndNewlines)
         let fallbackTranslatedText = fallback.translatedText?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        return MeetingTranscriptSegment(
+        return TranscriptSegment(
             id: preferred.id,
             speaker: preferred.speaker,
             startSeconds: preferred.startSeconds,

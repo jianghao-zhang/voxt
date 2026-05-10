@@ -48,10 +48,6 @@ extension AppDelegate {
             guard let self else { return }
             self.handleRewriteHotkeyUp()
         }
-        hotkeyManager.onMeetingKeyDown = { [weak self] in
-            guard let self else { return }
-            self.handleMeetingHotkeyDown()
-        }
         hotkeyManager.onCustomPasteKeyDown = { [weak self] in
             guard let self else { return }
             self.handleCustomPasteHotkeyDown()
@@ -149,14 +145,6 @@ extension AppDelegate {
             dismissAnswerOverlay()
             return true
         }
-        if meetingSessionCoordinator.isActive {
-            if meetingSessionCoordinator.overlayState.isCloseConfirmationPresented {
-                dismissMeetingSessionCloseConfirmation()
-            } else {
-                requestMeetingSessionCloseConfirmation()
-            }
-            return true
-        }
         guard HotkeyPreference.loadTriggerMode() == .tap else { return false }
         guard isSessionActive else { return false }
         guard !isSelectedTextTranslationFlow else { return false }
@@ -185,14 +173,6 @@ extension AppDelegate {
     }
 
     func handleTranscriptionTapDown() {
-        if meetingSessionCoordinator.isActive {
-            if meetingSessionCoordinator.overlayState.isCloseConfirmationPresented {
-                dismissMeetingSessionCloseConfirmation()
-            } else {
-                requestMeetingSessionCloseConfirmation()
-            }
-            return
-        }
         if isSessionActive {
             guard !shouldIgnoreTapStop() else { return }
             endRecording()
@@ -215,14 +195,6 @@ extension AppDelegate {
     }
 
     func handleTranscriptionHotkeyDown() {
-        if meetingSessionCoordinator.isActive {
-            if meetingSessionCoordinator.overlayState.isCloseConfirmationPresented {
-                dismissMeetingSessionCloseConfirmation()
-            } else {
-                requestMeetingSessionCloseConfirmation()
-            }
-            return
-        }
         let triggerMode = HotkeyPreference.loadTriggerMode()
         VoxtLog.hotkey(
             "Hotkey callback transcriptionDown. mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
@@ -232,7 +204,6 @@ extension AppDelegate {
                 triggerMode: triggerMode,
                 rewriteActivationMode: HotkeyPreference.loadRewriteActivationMode(),
                 isSessionActive: isSessionActive,
-                isMeetingActive: meetingSessionCoordinator.isActive,
                 hasPendingTranscriptionStart: pendingTranscriptionStartTask != nil
             )
         )
@@ -291,7 +262,7 @@ extension AppDelegate {
 
     func handleTranslationHotkeyDown() {
         VoxtLog.info(
-            "Translation hotkey invoked. mode=\(HotkeyPreference.loadTriggerMode().rawValue), isSessionActive=\(isSessionActive), isMeetingActive=\(meetingSessionCoordinator.isActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
+            "Translation hotkey invoked. mode=\(HotkeyPreference.loadTriggerMode().rawValue), isSessionActive=\(isSessionActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
         )
         let triggerMode = HotkeyPreference.loadTriggerMode()
         VoxtLog.hotkey(
@@ -309,14 +280,6 @@ extension AppDelegate {
         )
         for action in actions where action == .cancelPendingTranscriptionStart {
             performHotkeyAction(action)
-        }
-        guard !meetingSessionCoordinator.isActive else {
-            VoxtLog.info("Translation hotkey blocked because Meeting Notes is active.")
-            showOverlayStatus(
-                String(localized: "Meeting Notes is currently active. Close it before starting another recording."),
-                clearAfter: 2.2
-            )
-            return
         }
         guard !isSessionActive else {
             VoxtLog.info("Translation hotkey ignored because a session is already active.")
@@ -359,7 +322,7 @@ extension AppDelegate {
 
     func handleRewriteHotkeyDown() {
         VoxtLog.info(
-            "Rewrite hotkey invoked. mode=\(HotkeyPreference.loadTriggerMode().rawValue), isSessionActive=\(isSessionActive), isMeetingActive=\(meetingSessionCoordinator.isActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
+            "Rewrite hotkey invoked. mode=\(HotkeyPreference.loadTriggerMode().rawValue), isSessionActive=\(isSessionActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
         )
         let triggerMode = HotkeyPreference.loadTriggerMode()
         VoxtLog.hotkey(
@@ -439,11 +402,6 @@ extension AppDelegate {
             guard !Task.isCancelled else { return }
             guard !self.isSessionActive else {
                 VoxtLog.hotkey("Pending transcription start dropped: session already active.")
-                self.pendingTranscriptionStartTask = nil
-                return
-            }
-            guard !self.meetingSessionCoordinator.isActive else {
-                VoxtLog.hotkey("Pending transcription start dropped: meeting session is active.")
                 self.pendingTranscriptionStartTask = nil
                 return
             }

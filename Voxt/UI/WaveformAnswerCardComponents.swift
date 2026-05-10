@@ -539,7 +539,7 @@ struct AnswerConversationWaveView: View {
     )
 
     var body: some View {
-        MeetingMiniWaveform(
+        SessionMiniWaveform(
             waveformState: waveformState,
             isSubdued: !isRecording || isProcessing
         )
@@ -568,5 +568,43 @@ struct AnswerConversationWaveView: View {
         let clamped = max(0, min(level, 1))
         let expanded = min(1.0, pow(Double(clamped), 0.72) * 1.24)
         return Float(expanded)
+    }
+}
+
+private struct SessionMiniWaveform: View {
+    @ObservedObject var waveformState: RecentAudioWaveformState
+    var isSubdued = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 2.5) {
+            ForEach(0..<waveformState.barCount, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(WaveformBarVisuals.barGradient)
+                    .frame(width: 4, height: barHeight(for: index))
+                    .shadow(color: .white.opacity(glowOpacity(for: index)), radius: 2.5, x: 0, y: 0)
+            }
+        }
+        .frame(height: 28, alignment: .center)
+    }
+
+    private func barHeight(for index: Int) -> CGFloat {
+        if isSubdued {
+            let quietPattern: [CGFloat] = [3.2, 3.9, 4.6, 5.1, 4.2, 3.5, 4.4, 4.9]
+            return quietPattern[index % quietPattern.count]
+        }
+        let baseLevel = waveformState.barLevels.indices.contains(index) ? waveformState.barLevels[index] : 0
+        return WaveformBarVisuals.barHeight(
+            level: baseLevel,
+            minHeight: 2.5,
+            maxHeight: 22
+        )
+    }
+
+    private func glowOpacity(for index: Int) -> Double {
+        if isSubdued {
+            return 0.03
+        }
+        let baseLevel = waveformState.barLevels.indices.contains(index) ? waveformState.barLevels[index] : 0
+        return WaveformBarVisuals.glowOpacity(level: baseLevel, base: 0.03, gain: 0.18, cap: 0.22)
     }
 }

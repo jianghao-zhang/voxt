@@ -275,6 +275,15 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertTrue(configuration.isConfigured)
     }
 
+    func testOMLXConfigurationIsConfiguredWithoutAPIKeyWhenModelExists() {
+        let configuration = TestFactories.makeRemoteConfiguration(
+            providerID: RemoteLLMProvider.omlx.rawValue,
+            model: "qwen3"
+        )
+
+        XCTAssertTrue(configuration.isConfigured)
+    }
+
     func testOpenAIConfigurationStillRequiresCredential() {
         let configuration = TestFactories.makeRemoteConfiguration(
             providerID: RemoteLLMProvider.openAI.rawValue,
@@ -352,6 +361,8 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertTrue(RemoteLLMProvider.volcengine.supportsHostedSearch)
         XCTAssertTrue(RemoteLLMProvider.aliyunBailian.defaultSearchEnabled)
         XCTAssertFalse(RemoteLLMProvider.volcengine.defaultSearchEnabled)
+        XCTAssertTrue(RemoteLLMProvider.omlx.apiKeyIsOptional)
+        XCTAssertFalse(RemoteLLMProvider.omlx.usesResponsesAPI)
     }
 
     func testDeepSeekUsesCurrentSuggestedModelAndKeepsLegacyAliases() {

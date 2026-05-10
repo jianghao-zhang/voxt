@@ -16,8 +16,6 @@ struct GeneralSettingsView: View {
     @AppStorage(AppPreferenceKey.overlayScreenEdgeInset) private var overlayScreenEdgeInset = 30
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @AppStorage(AppPreferenceKey.userMainLanguageCodes) private var userMainLanguageCodesRaw = UserMainLanguageOption.defaultStoredSelectionValue
-    @AppStorage(AppPreferenceKey.meetingNotesBetaEnabled) private var meetingNotesBetaEnabled = false
-    @AppStorage(AppPreferenceKey.hideMeetingOverlayFromScreenSharing) private var hideMeetingOverlayFromScreenSharing = false
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) private var autoCopyWhenNoFocusedInput = false
     @AppStorage(AppPreferenceKey.realtimeTextDisplayEnabled) private var realtimeTextDisplayEnabled = true
     @AppStorage(AppPreferenceKey.customPasteHotkeyEnabled) private var customPasteHotkeyEnabled = false
@@ -132,9 +130,7 @@ struct GeneralSettingsView: View {
                 overlayPosition: overlayPosition,
                 overlayCardOpacity: $overlayCardOpacity,
                 overlayCardCornerRadius: $overlayCardCornerRadius,
-                overlayScreenEdgeInset: $overlayScreenEdgeInset,
-                meetingNotesBetaEnabled: $meetingNotesBetaEnabled,
-                hideMeetingOverlayFromScreenSharing: $hideMeetingOverlayFromScreenSharing
+                overlayScreenEdgeInset: $overlayScreenEdgeInset
             )
             .settingsNavigationAnchor(.generalTranscriptionUI)
 

@@ -32,7 +32,7 @@ struct TranscriptionDetailConversationView: View {
                 audioPlayer
             }
             Divider()
-                .overlay(MeetingDetailUIStyle.dividerColor)
+                .overlay(DetailPanelUIStyle.dividerColor)
             conversationBody
             composer
         }
@@ -177,18 +177,18 @@ struct TranscriptionDetailConversationView: View {
                     .padding(.vertical, 10)
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(MeetingDetailUIStyle.controlFillColor)
+                            .fill(DetailPanelUIStyle.controlFillColor)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(MeetingDetailUIStyle.borderColor, lineWidth: 1)
+                            .strokeBorder(DetailPanelUIStyle.borderColor, lineWidth: 1)
                     )
                     .disabled(!viewModel.providerStatus.isAvailable || viewModel.isLoading)
                     .onSubmit {
                         viewModel.send()
                     }
 
-                MeetingDetailFollowUpSendButton(
+                DetailFollowUpSendButton(
                     action: { viewModel.send() },
                     isDisabled: !viewModel.canSend
                 )
@@ -234,7 +234,7 @@ struct TranscriptionDetailConversationView: View {
 private struct TranscriptionDetailMessageRow: View {
     @Environment(\.locale) private var locale
 
-    let message: MeetingSummaryChatMessage
+    let message: TranscriptSummaryChatMessage
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 10) {
@@ -281,7 +281,7 @@ private struct TranscriptionDetailMessageRow: View {
 }
 
 private struct TranscriptionDetailMessageBubble: View {
-    let message: MeetingSummaryChatMessage
+    let message: TranscriptSummaryChatMessage
     let timestampText: String
 
     @State private var isHovered = false
@@ -299,13 +299,13 @@ private struct TranscriptionDetailMessageBubble: View {
     private var fillColor: Color {
         isUserMessage
             ? Color.accentColor.opacity(0.10)
-            : MeetingDetailUIStyle.mutedFillColor
+            : DetailPanelUIStyle.mutedFillColor
     }
 
     private var borderColor: Color {
         isUserMessage
             ? Color.accentColor.opacity(0.20)
-            : MeetingDetailUIStyle.softBorderColor
+            : DetailPanelUIStyle.softBorderColor
     }
 
     var body: some View {
@@ -427,14 +427,39 @@ private struct TranscriptionDetailLoadingRow: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(MeetingDetailUIStyle.mutedFillColor)
+                    .fill(DetailPanelUIStyle.mutedFillColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(MeetingDetailUIStyle.softBorderColor, lineWidth: 1)
+                    .strokeBorder(DetailPanelUIStyle.softBorderColor, lineWidth: 1)
             )
 
             Spacer(minLength: 52)
         }
+    }
+}
+
+private struct DetailFollowUpSendButton: View {
+    let action: () -> Void
+    let isDisabled: Bool
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "paperplane.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.96))
+                .frame(width: 34, height: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.96))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.accentColor.opacity(0.28), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.55 : 1)
     }
 }

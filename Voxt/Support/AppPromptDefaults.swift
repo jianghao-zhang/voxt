@@ -4,7 +4,7 @@ enum AppPromptKind: CaseIterable {
     case enhancement
     case translation
     case rewrite
-    case meetingSummary
+    case transcriptSummary
     case dictionaryIngest
     case dictionaryAutoLearning
     case qwenASRContextBias
@@ -14,6 +14,9 @@ enum AppPromptKind: CaseIterable {
 }
 
 enum AppPromptDefaults {
+    private static let transcriptPromptCurrentToken = TranscriptSummarySupport.transcriptRecordTemplateVariable
+    private static let transcriptPromptLegacyToken = "{{MEETING_RECORD}}"
+
     static func interfaceLanguage(from defaults: UserDefaults = .standard) -> AppInterfaceLanguage {
         let rawValue = defaults.string(forKey: AppPreferenceKey.interfaceLanguage)
         return AppInterfaceLanguage(rawValue: rawValue ?? "") ?? .system
@@ -41,21 +44,24 @@ enum AppPromptDefaults {
         kind: AppPromptKind,
         defaults: UserDefaults = .standard
     ) -> String {
-        let trimmedText = storedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedStoredText = normalizeStoredText(storedText, kind: kind)
+        let trimmedText = normalizedStoredText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmedText.isEmpty || matchesKnownDefault(trimmedText, kind: kind) {
             return text(for: kind, resolvedFrom: defaults)
         }
-        return storedText ?? ""
+        return normalizedStoredText ?? ""
     }
 
     static func canonicalStoredText(_ text: String, kind: AppPromptKind) -> String {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedText = normalizeStoredText(text, kind: kind) ?? text
+        let trimmedText = normalizedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return "" }
-        return matchesKnownDefault(trimmedText, kind: kind) ? "" : text
+        return matchesKnownDefault(trimmedText, kind: kind) ? "" : normalizedText
     }
 
     static func matchesKnownDefault(_ text: String, kind: AppPromptKind) -> Bool {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedText = normalizeStoredText(text, kind: kind) ?? text
+        let trimmedText = normalizedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
             return kind == .whisperASRHint
         }
@@ -75,6 +81,12 @@ enum AppPromptDefaults {
         return false
     }
 
+    private static func normalizeStoredText(_ text: String?, kind: AppPromptKind) -> String? {
+        guard let text else { return nil }
+        guard kind == .transcriptSummary else { return text }
+        return text.replacingOccurrences(of: transcriptPromptLegacyToken, with: transcriptPromptCurrentToken)
+    }
+
     private static func resolvedLanguage(_ language: AppInterfaceLanguage) -> AppInterfaceLanguage {
         switch language {
         case .system:
@@ -92,8 +104,8 @@ enum AppPromptDefaults {
             return AppPreferenceKey.defaultTranslationPrompt
         case .rewrite:
             return AppPreferenceKey.defaultRewritePrompt
-        case .meetingSummary:
-            return AppPreferenceKey.defaultMeetingSummaryPrompt
+        case .transcriptSummary:
+            return AppPreferenceKey.defaultTranscriptSummaryPrompt
         case .dictionaryIngest:
             return """
             You are building a personal dictionary for a speech-to-text app. Be conservative. Only output high-confidence terms that are genuinely worth storing in a custom dictionary.
@@ -265,45 +277,45 @@ enum AppPromptDefaults {
             3. 如果已选源文本为空，则直接根据口述指令生成所需内容。
             4. 只返回最终要插入的文本，不要附加解释、Markdown、标签或评论。
             """
-        case .meetingSummary:
+        case .transcriptSummary:
             return """
-            你的任务是根据提供的会议纪要，生成一份清晰、可信、简洁的会议总结，并以 JSON 结构返回。请严格遵守以下要求：
+            你的任务是根据提供的转写记录，生成一份清晰、可信、简洁的转写摘要，并以 JSON 结构返回。请严格遵守以下要求：
 
             用户主要语言：
             {{USER_MAIN_LANGUAGE}}
 
-            会议纪要：
-            {{MEETING_RECORD}}
+            转写记录：
+            {{TRANSCRIPT_RECORD}}
 
-            生成总结时，请遵守以下规范：
-            1. 无论会议纪要使用什么语言，最终总结都必须使用用户主要语言输出。
+            生成摘要时，请遵守以下规范：
+            1. 无论转写记录使用什么语言，最终摘要都必须使用用户主要语言输出。
             2. 总结正文控制在 1200 个中文字符以内；若为非中文语言，也应保持同等程度的精炼，优先追求信息效率，而不是机械控制字符数。
             3. 优先提取以下内容：
-               - 会议背景：会议原因、目的、参与方
-               - 关键讨论点：会议主要讨论的话题与各方观点
-               - 已达成决策：会议中明确形成的决定或共识
-               - 风险 / 阻塞项：会议中提到的潜在风险或当前障碍
+               - 背景与上下文
+               - 关键讨论点与主要观点
+               - 已达成决策或明确结论
+               - 风险 / 阻塞项
                - 待解决问题：尚未定论、仍需后续讨论的事项
-            4. 如果会议中存在明确或强烈暗示的待办事项，请把它们写入 JSON 的 "todo_list" 字段。
-            5. 必须严格依据会议纪要内容，不得编造未提及的事实；若信息不足，请使用保守表述。
-            6. 标题应简洁，并准确概括会议主题。
+            4. 如果转写记录中存在明确或强烈暗示的待办事项，请把它们写入 JSON 的 "todo_list" 字段。
+            5. 必须严格依据转写记录内容，不得编造未提及的事实；若信息不足，请使用保守表述。
+            6. 标题应简洁，并准确概括本次转写的主题。
             7. 翻译规则：
-               - 会议纪要中非用户主要语言的内容，必须翻译成用户主要语言。
+               - 转写记录中非用户主要语言的内容，必须翻译成用户主要语言。
                - 专有名词、产品名、URL 和代码片段可以保留原文。
             8. 内容不支持 markdown，只能使用 "\\n" 表示换行。
 
             输出必须是一个合法 JSON 对象，结构如下：
             {
-              "meeting_summary": {
-                "title": "[在这里填写简短的会议主题]",
-                "content": "[在这里填写会议总结正文，包含会议背景、关键讨论点、已达成决策、风险/阻塞项和待解决问题，并在合适位置使用 \\n 提高可读性]"
+              "transcript_summary": {
+                "title": "[在这里填写简短的转写主题]",
+                "content": "[在这里填写转写摘要正文，包含背景与上下文、关键讨论点、已达成决策、风险/阻塞项和待解决问题，并在合适位置使用 \\n 提高可读性]"
               },
               "todo_list": [
-                "[在这里逐条列出待办事项，并尽可能写明负责人和截止时间（若会议中提到）]"
+                "[在这里逐条列出待办事项，并尽可能写明负责人和截止时间（若转写中提到）]"
               ]
             }
 
-            注意：如果没有待办事项，"todo_list" 必须返回空数组。请确保 JSON 格式正确、没有多余逗号，并使用符合用户主要语言表达习惯的自然流畅语言，准确反映会议纪要内容。
+            注意：如果没有待办事项，"todo_list" 必须返回空数组。请确保 JSON 格式正确、没有多余逗号，并使用符合用户主要语言表达习惯的自然流畅语言，准确反映转写内容。
             """
         case .dictionaryIngest:
             return """
@@ -527,43 +539,43 @@ enum AppPromptDefaults {
             3. 選択された元テキストが空の場合は、話された指示だけをもとに必要な内容を直接生成すること。
             4. 返すのは最終的に挿入すべきテキストのみとし、説明、Markdown、ラベル、コメントは含めないこと。
             """
-        case .meetingSummary:
+        case .transcriptSummary:
             return """
-            提供された会議記録をもとに、明確で信頼でき、簡潔な会議要約を生成し、JSON 構造で返してください。以下の要件を厳守してください。
+            提供された文字起こし記録をもとに、明確で信頼でき、簡潔な文字起こし要約を生成し、JSON 構造で返してください。以下の要件を厳守してください。
 
             ユーザーの主要言語：
             {{USER_MAIN_LANGUAGE}}
 
-            会議記録：
-            {{MEETING_RECORD}}
+            文字起こし記録：
+            {{TRANSCRIPT_RECORD}}
 
             要約生成時は以下に従ってください：
-            1. 会議記録がどの言語で書かれていても、最終要約は必ずユーザーの主要言語で出力すること。
+            1. 文字起こし記録がどの言語で書かれていても、最終要約は必ずユーザーの主要言語で出力すること。
             2. 要約本文は簡潔さを保ち、情報効率を優先すること。
             3. 次の内容を優先して抽出すること：
-               - 会議背景
+               - 背景と文脈
                - 主な議論点
                - 決定事項
                - リスク / ブロッカー
                - 未解決事項
             4. タスクがある場合は JSON の "todo_list" に含めること。
-            5. 必ず会議記録の内容に基づき、記載されていない事実を捏造しないこと。
-            6. タイトルは短く、会議テーマを正確に要約すること。
+            5. 必ず文字起こし記録の内容に基づき、記載されていない事実を捏造しないこと。
+            6. タイトルは短く、文字起こしのテーマを正確に要約すること。
             7. ユーザーの主要言語以外の内容は、必要に応じて主要言語へ翻訳すること。
             8. Markdown は使わず、改行は "\\n" のみを使用すること。
 
             出力は次の構造を持つ有効な JSON オブジェクトでなければなりません：
             {
-              "meeting_summary": {
-                "title": "[ここに簡潔な会議テーマを記入]",
-                "content": "[ここに会議要約本文を記入し、必要に応じて \\n で改行する]"
+              "transcript_summary": {
+                "title": "[ここに簡潔な文字起こしテーマを記入]",
+                "content": "[ここに文字起こし要約本文を記入し、必要に応じて \\n で改行する]"
               },
               "todo_list": [
                 "[ここに各タスクを列挙する]"
               ]
             }
 
-            "todo_list" に入れる項目がない場合は空配列を返してください。JSON を正しく整形し、自然な表現で会議内容を正確に反映してください。
+            "todo_list" に入れる項目がない場合は空配列を返してください。JSON を正しく整形し、自然な表現で文字起こし内容を正確に反映してください。
             """
         case .dictionaryIngest:
             return """

@@ -75,7 +75,7 @@ enum OnboardingContextualPermission: Hashable {
         case .inputMonitoring:
             return "Required for reliable global modifier hotkeys (such as fn)."
         case .systemAudioCapture:
-            return "Required for meeting and for muting other apps' media audio during recording."
+            return "Required for transcript capture and for muting other apps' media audio during recording."
         }
     }
 }

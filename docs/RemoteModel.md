@@ -138,6 +138,18 @@ In Voxt, the remote LLM configuration sheet supports both preset models and cust
 
 *Soon*
 
+### oMLX
+
+- Suggested default: `qwen3`
+- Built-in model range: local MLX-hosted Qwen, Llama, DeepSeek, Gemma, Mixtral, GPT-OSS, and other model aliases exposed by your oMLX server
+- Representative models: `qwen3`, `Qwen3-Coder-Next-8bit`, `gpt-oss-120b-MXFP4-Q8`, `Qwen3.5-122B-A10B-4bit`, `Step-3.5-Flash-8bit`
+- API key: optional. Leave it blank for the default localhost setup, or provide a bearer token if you started oMLX with `--api-key`.
+- Endpoint: Voxt defaults to the oMLX OpenAI-compatible root `http://localhost:8000/v1` and resolves requests to `/v1/chat/completions`.
+- Model IDs: oMLX accepts either the configured alias returned by `/v1/models` or the discovered local model directory name.
+- Overview: Best for users running MLX-native local inference on Apple Silicon and want a dedicated local model server with OpenAI-compatible access from Voxt.
+
+*Soon*
+
 ### DeepSeek
 
 - Suggested default: `deepseek-chat`

@@ -12,6 +12,8 @@ extension RemoteLLMRuntimeClient {
             return "https://api.openai.com/v1/models"
         case .ollama:
             return "http://localhost:11434"
+        case .omlx:
+            return "http://localhost:8000/v1"
         case .deepseek:
             return "https://api.deepseek.com"
         case .openrouter:
@@ -144,7 +146,7 @@ extension RemoteLLMRuntimeClient {
             if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
             if path.isEmpty || path == "/" { return base }
             return base
-        case .openAI, .deepseek, .openrouter, .grok, .zai, .kimi, .lmStudio:
+        case .openAI, .omlx, .deepseek, .openrouter, .grok, .zai, .kimi, .lmStudio:
             if path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
                 return base
             }

@@ -15,8 +15,6 @@ struct RemoteProviderConfigurationSheet: View {
 
     @State var selectedProviderModel = ""
     @State var customModelID = ""
-    @State var selectedMeetingModel = ""
-    @State var customMeetingModelID = ""
     @State var endpoint = ""
     @State var apiKey = ""
     @State var appID = ""
@@ -57,10 +55,6 @@ struct RemoteProviderConfigurationSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     modelSection
-
-                    if showsMeetingASRSection {
-                        meetingModelSection
-                    }
 
                     if !isDoubaoASRTest {
                         endpointAndKeySection
@@ -116,8 +110,6 @@ struct RemoteProviderConfigurationSheet: View {
         .onAppear {
             configureModelSelection()
             customModelID = configuration.model
-            configureMeetingModelSelection()
-            customMeetingModelID = configuration.meetingModel
             endpoint = configuration.endpoint
             apiKey = configuration.apiKey
             appID = configuration.appID

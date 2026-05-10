@@ -102,33 +102,6 @@ extension RemoteProviderConfigurationSheet {
         }
     }
 
-    var meetingModelSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(AppLocalization.localizedString("Meeting ASR"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            SettingsMenuPicker(
-                selection: meetingModelSelectionBinding,
-                options: meetingModelMenuOptions,
-                selectedTitle: meetingModelSelectedTitle,
-                width: 240
-            )
-
-            if resolvedMeetingSelectionForPicker == customModelOptionID {
-                Text(AppLocalization.localizedString("Custom Meeting Model ID"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                TextField(AppLocalization.localizedString("e.g. qwen3-asr-flash-filetrans"), text: $customMeetingModelID)
-                    .textFieldStyle(.plain)
-                    .settingsFieldSurface(minHeight: 34)
-            }
-
-            Text(AppLocalization.localizedString("Used only for Meeting Notes transcription."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     var doubaoCredentialsSection: some View {
         Group {
             VStack(alignment: .leading, spacing: 8) {
@@ -278,13 +251,6 @@ extension RemoteProviderConfigurationSheet {
             .buttonStyle(SettingsPillButtonStyle())
             .disabled(isTestingConnection)
 
-            if showsMeetingASRSection {
-                Button(AppLocalization.localizedString("Test Meeting ASR")) {
-                    testMeetingConnection()
-                }
-                .buttonStyle(SettingsPillButtonStyle())
-                .disabled(isTestingConnection)
-            }
         } trailing: {
             Button(AppLocalization.localizedString("Cancel")) {
                 dismiss()
