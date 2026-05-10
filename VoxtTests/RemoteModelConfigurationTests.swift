@@ -266,6 +266,53 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertTrue(metadataOnly[RemoteLLMProvider.openAI.rawValue]?.isConfigured ?? false)
     }
 
+    func testOllamaConfigurationIsConfiguredWithoutAPIKeyWhenModelExists() {
+        let configuration = TestFactories.makeRemoteConfiguration(
+            providerID: RemoteLLMProvider.ollama.rawValue,
+            model: "qwen3"
+        )
+
+        XCTAssertTrue(configuration.isConfigured)
+    }
+
+    func testOpenAIConfigurationStillRequiresCredential() {
+        let configuration = TestFactories.makeRemoteConfiguration(
+            providerID: RemoteLLMProvider.openAI.rawValue,
+            model: "gpt-5.2"
+        )
+
+        XCTAssertFalse(configuration.isConfigured)
+    }
+
+    func testLoadSaveRoundTripPreservesOllamaConfigurationFields() {
+        let stored: [String: RemoteProviderConfiguration] = [
+            RemoteLLMProvider.ollama.rawValue: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                endpoint: "http://127.0.0.1:11434/api/chat",
+                ollamaResponseFormat: OllamaResponseFormat.jsonSchema.rawValue,
+                ollamaJSONSchema: #"{"type":"object","properties":{"answer":{"type":"string"}}}"#,
+                ollamaThinkMode: OllamaThinkMode.low.rawValue,
+                ollamaKeepAlive: "5m",
+                ollamaLogprobsEnabled: true,
+                ollamaTopLogprobs: 7,
+                ollamaOptionsJSON: #"{"num_ctx":8192,"repeat_penalty":1.05}"#
+            )
+        ]
+
+        let raw = RemoteModelConfigurationStore.saveConfigurations(stored)
+        let roundTrip = RemoteModelConfigurationStore.loadConfigurations(from: raw)
+        let restored = roundTrip[RemoteLLMProvider.ollama.rawValue]
+
+        XCTAssertEqual(restored?.ollamaResponseFormat, OllamaResponseFormat.jsonSchema.rawValue)
+        XCTAssertEqual(restored?.ollamaJSONSchema, #"{"type":"object","properties":{"answer":{"type":"string"}}}"#)
+        XCTAssertEqual(restored?.ollamaThinkMode, OllamaThinkMode.low.rawValue)
+        XCTAssertEqual(restored?.ollamaKeepAlive, "5m")
+        XCTAssertEqual(restored?.ollamaLogprobsEnabled, true)
+        XCTAssertEqual(restored?.ollamaTopLogprobs, 7)
+        XCTAssertEqual(restored?.ollamaOptionsJSON, #"{"num_ctx":8192,"repeat_penalty":1.05}"#)
+    }
+
     func testResolvedASRConfigurationFallsBackToSuggestedModelAndClearsRealtimeFlag() {
         let stored: [String: RemoteProviderConfiguration] = [
             RemoteASRProvider.doubaoASR.rawValue: TestFactories.makeRemoteConfiguration(

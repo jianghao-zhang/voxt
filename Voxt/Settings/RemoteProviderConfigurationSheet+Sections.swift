@@ -1,6 +1,29 @@
 import SwiftUI
 
 extension RemoteProviderConfigurationSheet {
+    private var ollamaOptionsJSONPlaceholder: String {
+        """
+        {
+          "num_ctx": 8192,
+          "seed": 42,
+          "repeat_penalty": 1.1,
+          "stop": ["<|im_end|>"]
+        }
+        """
+    }
+
+    private var ollamaJSONSchemaPlaceholder: String {
+        """
+        {
+          "type": "object",
+          "properties": {
+            "answer": { "type": "string" }
+          },
+          "required": ["answer"]
+        }
+        """
+    }
+
     var modelSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(AppLocalization.localizedString("Model"))
@@ -63,10 +86,10 @@ extension RemoteProviderConfigurationSheet {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(AppLocalization.localizedString("API Key"))
+                Text(apiKeyFieldTitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                SecureField(AppLocalization.localizedString("Paste API key"), text: $apiKey)
+                SecureField(apiKeyFieldPlaceholder, text: $apiKey)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
             }
@@ -160,6 +183,89 @@ extension RemoteProviderConfigurationSheet {
         }
     }
 
+    var ollamaConfigurationSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(AppLocalization.localizedString("Ollama Options"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(AppLocalization.localizedString("Response Format"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                SettingsMenuPicker(
+                    selection: $ollamaResponseFormat,
+                    options: ollamaResponseFormatMenuOptions,
+                    selectedTitle: ollamaResponseFormatSelectedTitle,
+                    width: 240
+                )
+            }
+
+            if shouldShowOllamaJSONSchemaField {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(AppLocalization.localizedString("JSON Schema"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    placeholderPromptEditor(
+                        text: $ollamaJSONSchema,
+                        placeholder: ollamaJSONSchemaPlaceholder,
+                        height: 96
+                    )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(AppLocalization.localizedString("Think"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                SettingsMenuPicker(
+                    selection: $ollamaThinkMode,
+                    options: ollamaThinkModeMenuOptions,
+                    selectedTitle: ollamaThinkModeSelectedTitle,
+                    width: 240
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(AppLocalization.localizedString("Keep Alive"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                TextField(AppLocalization.localizedString("e.g. 5m"), text: $ollamaKeepAlive)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface(minHeight: 34)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(AppLocalization.localizedString("Logprobs"), isOn: $ollamaLogprobsEnabled)
+                    .toggleStyle(.switch)
+
+                if ollamaLogprobsEnabled {
+                    Text(AppLocalization.localizedString("Top Logprobs (Optional)"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    TextField(AppLocalization.localizedString("e.g. 5"), text: $ollamaTopLogprobsText)
+                        .textFieldStyle(.plain)
+                        .settingsFieldSurface(width: 140, minHeight: 34)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(AppLocalization.localizedString("Options JSON"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                placeholderPromptEditor(
+                    text: $ollamaOptionsJSON,
+                    placeholder: ollamaOptionsJSONPlaceholder,
+                    height: 112
+                )
+                Text(AppLocalization.localizedString("Merged into Ollama native options after Voxt defaults, so matching keys here override temperature, top_p, and num_predict."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     var actionSection: some View {
         SettingsDialogActionRow {
             if isTestingConnection {
@@ -187,11 +293,32 @@ extension RemoteProviderConfigurationSheet {
             .keyboardShortcut(.cancelAction)
 
             Button(AppLocalization.localizedString("Save")) {
-                onSave(currentConfigurationSnapshot)
-                dismiss()
+                saveConfiguration()
             }
             .buttonStyle(SettingsPrimaryButtonStyle())
             .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    @ViewBuilder
+    private func placeholderPromptEditor(
+        text: Binding<String>,
+        placeholder: String,
+        height: CGFloat
+    ) -> some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: text)
+                .settingsPromptEditor(height: height, contentPadding: 6)
+
+            if text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(placeholder)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .lineSpacing(4)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .allowsHitTesting(false)
+            }
         }
     }
 }

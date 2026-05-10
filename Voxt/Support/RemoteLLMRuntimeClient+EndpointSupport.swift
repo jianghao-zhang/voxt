@@ -11,7 +11,7 @@ extension RemoteLLMRuntimeClient {
         case .openAI:
             return "https://api.openai.com/v1/models"
         case .ollama:
-            return "http://127.0.0.1:11434/api/chat"
+            return "http://localhost:11434"
         case .deepseek:
             return "https://api.deepseek.com"
         case .openrouter:
@@ -33,9 +33,46 @@ extension RemoteLLMRuntimeClient {
         }
     }
 
-    nonisolated func usesNativeOllamaChatEndpoint(_ url: URL) -> Bool {
+    nonisolated func usesNativeOllamaEndpoint(_ url: URL) -> Bool {
         let path = url.path.lowercased()
-        return path.hasSuffix("/api/chat")
+        return path.isEmpty ||
+            path == "/" ||
+            path == "/api" ||
+            path.hasSuffix("/api/chat") ||
+            path.hasSuffix("/api/generate") ||
+            path.hasSuffix("/api/tags")
+    }
+
+    nonisolated func usesNativeOllamaGenerateEndpoint(_ url: URL) -> Bool {
+        url.path.lowercased().hasSuffix("/api/generate")
+    }
+
+    nonisolated func usesOpenAICompatibleOllamaEndpoint(_ url: URL) -> Bool {
+        let path = url.path.lowercased()
+        return path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions")
+    }
+
+    nonisolated func resolvedOllamaRequestEndpoint(endpoint: String, useGenerate: Bool) -> String {
+        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmed.isEmpty ? providerDefaultEndpoint(.ollama) : trimmed
+        guard let url = URL(string: base) else { return base }
+        let path = url.path.lowercased()
+
+        if path.hasSuffix("/api/chat") || path.hasSuffix("/api/generate") || usesOpenAICompatibleOllamaEndpoint(url) {
+            return base
+        }
+
+        let nativeSuffix = useGenerate ? "/api/generate" : "/api/chat"
+        if path.hasSuffix("/api/tags") {
+            return replacingPathSuffix(in: base, oldSuffix: "/api/tags", newSuffix: nativeSuffix)
+        }
+        if path == "/api" || path.hasSuffix("/api") {
+            return appendingPath(base, suffix: useGenerate ? "/generate" : "/chat")
+        }
+        if path.isEmpty || path == "/" {
+            return appendingPath(base, suffix: nativeSuffix)
+        }
+        return base
     }
 
     nonisolated func resolvedLLMEndpoint(provider: RemoteLLMProvider, endpoint: String, model: String) -> String {
@@ -89,11 +126,14 @@ extension RemoteLLMRuntimeClient {
             if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/v1/text/chatcompletion_v2") }
             return base
         case .ollama:
-            if path.hasSuffix("/api/chat") || path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
+            if path.hasSuffix("/api/chat") || path.hasSuffix("/api/generate") || path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {
                 return base
             }
             if path.hasSuffix("/api/tags") {
-                return replacingPathSuffix(in: base, oldSuffix: "/api/tags", newSuffix: "/api/chat")
+                return replacingPathSuffix(in: base, oldSuffix: "/api/tags", newSuffix: "")
+            }
+            if path.hasSuffix("/api") {
+                return replacingPathSuffix(in: base, oldSuffix: "/api", newSuffix: "")
             }
             if path.hasSuffix("/v1/models") {
                 return replacingPathSuffix(in: base, oldSuffix: "/v1/models", newSuffix: "/v1/chat/completions")
@@ -102,7 +142,7 @@ extension RemoteLLMRuntimeClient {
                 return replacingPathSuffix(in: base, oldSuffix: "/models", newSuffix: "/chat/completions")
             }
             if path.hasSuffix("/v1") { return appendingPath(base, suffix: "/chat/completions") }
-            if path.isEmpty || path == "/" { return appendingPath(base, suffix: "/api/chat") }
+            if path.isEmpty || path == "/" { return base }
             return base
         case .openAI, .deepseek, .openrouter, .grok, .zai, .kimi, .lmStudio:
             if path.hasSuffix("/v1/chat/completions") || path.hasSuffix("/chat/completions") {

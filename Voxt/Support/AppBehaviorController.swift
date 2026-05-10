@@ -47,4 +47,19 @@ enum AppBehaviorController {
         guard #available(macOS 13.0, *) else { return false }
         return SMAppService.mainApp.status == .enabled
     }
+
+    @MainActor
+    static func activateCurrentApp() {
+        _ = NSRunningApplication.current.activate(options: [.activateAllWindows])
+    }
+
+    @MainActor
+    static func bringStandardWindowToFront(_ window: NSWindow?) {
+        guard let window else { return }
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        activateCurrentApp()
+        window.makeKeyAndOrderFront(nil)
+    }
 }

@@ -3,7 +3,15 @@ import AppKit
 import HuggingFace
 
 enum ModelStorageDirectoryManager {
+    private struct ResolvedRootCache {
+        let bookmarkData: Data?
+        let path: String?
+        let rootURL: URL
+    }
+
+    private static let lock = NSLock()
     private static var securityScopedURL: URL?
+    private static var resolvedRootCache: ResolvedRootCache?
     private static let fileManager = FileManager.default
 
     static var defaultRootURL: URL {
@@ -12,16 +20,35 @@ enum ModelStorageDirectoryManager {
 
     static func resolvedRootURL() -> URL {
         let defaults = UserDefaults.standard
-        if let bookmarkData = defaults.data(forKey: AppPreferenceKey.modelStorageRootBookmark),
+        let bookmarkData = defaults.data(forKey: AppPreferenceKey.modelStorageRootBookmark)
+        let storedPath = normalizedStoredPath(defaults.string(forKey: AppPreferenceKey.modelStorageRootPath))
+
+        lock.lock()
+        if let resolvedRootCache,
+           resolvedRootCache.bookmarkData == bookmarkData,
+           resolvedRootCache.path == storedPath {
+            let cachedRootURL = resolvedRootCache.rootURL
+            lock.unlock()
+            return cachedRootURL
+        }
+        lock.unlock()
+
+        let rootURL: URL
+        if let bookmarkData,
            let bookmarkedURL = resolveSecurityScopedURL(from: bookmarkData) {
-            return bookmarkedURL
+            rootURL = bookmarkedURL
+        } else if let storedPath {
+            rootURL = URL(fileURLWithPath: storedPath, isDirectory: true)
+        } else {
+            rootURL = defaultRootURL
         }
 
-        if let path = defaults.string(forKey: AppPreferenceKey.modelStorageRootPath), !path.isEmpty {
-            return URL(fileURLWithPath: path, isDirectory: true)
-        }
-
-        return defaultRootURL
+        updateResolvedRootCache(
+            bookmarkData: bookmarkData,
+            path: storedPath,
+            rootURL: rootURL
+        )
+        return rootURL
     }
 
     static func saveUserSelectedRootURL(_ url: URL) throws {
@@ -35,6 +62,11 @@ enum ModelStorageDirectoryManager {
         let defaults = UserDefaults.standard
         defaults.set(normalized.path, forKey: AppPreferenceKey.modelStorageRootPath)
         defaults.set(bookmark, forKey: AppPreferenceKey.modelStorageRootBookmark)
+        updateResolvedRootCache(
+            bookmarkData: bookmark,
+            path: normalized.path,
+            rootURL: normalized
+        )
 
         _ = resolveSecurityScopedURL(from: bookmark)
     }
@@ -70,8 +102,31 @@ enum ModelStorageDirectoryManager {
                 relativeTo: nil
            ) {
             UserDefaults.standard.set(refreshed, forKey: AppPreferenceKey.modelStorageRootBookmark)
+            updateResolvedRootCache(
+                bookmarkData: refreshed,
+                path: normalizedStoredPath(UserDefaults.standard.string(forKey: AppPreferenceKey.modelStorageRootPath)),
+                rootURL: resolved
+            )
         }
 
         return resolved
+    }
+
+    private static func normalizedStoredPath(_ path: String?) -> String? {
+        guard let path,
+              !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.path
+    }
+
+    private static func updateResolvedRootCache(bookmarkData: Data?, path: String?, rootURL: URL) {
+        lock.lock()
+        resolvedRootCache = ResolvedRootCache(
+            bookmarkData: bookmarkData,
+            path: path,
+            rootURL: rootURL
+        )
+        lock.unlock()
     }
 }

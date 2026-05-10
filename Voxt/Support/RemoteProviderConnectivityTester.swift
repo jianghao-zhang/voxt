@@ -557,6 +557,7 @@ struct RemoteProviderConnectivityTester {
                 provider: provider,
                 endpoint: endpoint,
                 headers: headers,
+                configuration: configuration,
                 model: model
             )
         }
@@ -566,36 +567,47 @@ struct RemoteProviderConnectivityTester {
         provider: RemoteLLMProvider,
         endpoint: String,
         headers: [String: String],
+        configuration: RemoteProviderConfiguration,
         model: String
     ) async throws -> String {
-        let body = openAICompatibleReachabilityBody(
+        let runtimeClient = RemoteLLMRuntimeClient()
+        let requestEndpoint: String
+        if provider == .ollama {
+            requestEndpoint = runtimeClient.resolvedOllamaRequestEndpoint(
+                endpoint: endpoint,
+                useGenerate: true
+            )
+        } else {
+            requestEndpoint = endpoint
+        }
+        let body = try await openAICompatibleReachabilityBody(
             provider: provider,
-            endpoint: endpoint,
+            endpoint: requestEndpoint,
+            configuration: configuration,
             model: model
         )
-        return try await testJSONPOSTReachability(endpoint: endpoint, headers: headers, body: body)
+        return try await testJSONPOSTReachability(endpoint: requestEndpoint, headers: headers, body: body)
     }
 
     func openAICompatibleReachabilityBody(
         provider: RemoteLLMProvider,
         endpoint: String,
+        configuration: RemoteProviderConfiguration,
         model: String
-    ) -> [String: Any] {
+    ) async throws -> [String: Any] {
+        let runtimeClient = RemoteLLMRuntimeClient()
         if provider == .ollama,
            let url = URL(string: endpoint),
-           usesNativeOllamaChatEndpoint(url) {
-            return [
-                "model": model,
-                "messages": [
-                    ["role": "user", "content": "ping"]
-                ],
-                "stream": false,
-                "options": [
-                    "temperature": 0.2,
-                    "top_p": 0.9,
-                    "num_predict": 32
-                ]
-            ]
+           usesNativeOllamaEndpoint(url) {
+            return try runtimeClient.ollamaNativePayload(
+                endpointURL: url,
+                model: model,
+                systemPrompt: "",
+                userPrompt: "ping",
+                configuration: configuration,
+                tuning: .init(maxTokens: 32, temperature: 0.2, topP: 0.9),
+                streamingEnabled: false
+            )
         }
 
         if provider == .deepseek {
@@ -612,13 +624,20 @@ struct RemoteProviderConnectivityTester {
             ]
         }
 
-        return [
+        var payload: [String: Any] = [
             "model": model,
             "messages": [
                 ["role": "user", "content": "ping"]
             ],
             "stream": false
         ]
+        if provider == .ollama {
+            try runtimeClient.applyOllamaCompatibleOptionOverrides(
+                to: &payload,
+                configuration: configuration
+            )
+        }
+        return payload
     }
 
     private func testResponsesReachability(
@@ -757,8 +776,14 @@ struct RemoteProviderConnectivityTester {
         )
     }
 
-    private func usesNativeOllamaChatEndpoint(_ url: URL) -> Bool {
-        url.path.lowercased().hasSuffix("/api/chat")
+    private func usesNativeOllamaEndpoint(_ url: URL) -> Bool {
+        let path = url.path.lowercased()
+        return path.isEmpty ||
+            path == "/" ||
+            path == "/api" ||
+            path.hasSuffix("/api/chat") ||
+            path.hasSuffix("/api/generate") ||
+            path.hasSuffix("/api/tags")
     }
 
     private func testHTTPReachability(

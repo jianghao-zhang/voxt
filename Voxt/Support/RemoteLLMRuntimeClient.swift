@@ -765,12 +765,20 @@ struct RemoteLLMRuntimeClient {
         tuning: GenerationTuning,
         streamingEnabled: Bool
     ) throws -> URLRequest {
-        let resolvedEndpoint = streamingEndpointValue(
-            provider: provider,
-            endpoint: endpointValue,
-            model: model,
-            streamingEnabled: streamingEnabled
-        )
+        let resolvedEndpoint: String
+        if provider == .ollama {
+            resolvedEndpoint = resolvedOllamaRequestEndpoint(
+                endpoint: endpointValue,
+                useGenerate: shouldUseOllamaGenerateEndpoint(messagesOverride: messagesOverride)
+            )
+        } else {
+            resolvedEndpoint = streamingEndpointValue(
+                provider: provider,
+                endpoint: endpointValue,
+                model: model,
+                streamingEnabled: streamingEnabled
+            )
+        }
         guard let url = URL(string: resolvedEndpoint) else {
             throw NSError(
                 domain: "Voxt.RemoteLLM",
@@ -858,21 +866,23 @@ struct RemoteLLMRuntimeClient {
                 "stream": streamingEnabled,
                 "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt)
             ])
-        case .ollama where usesNativeOllamaChatEndpoint(url):
+        case .ollama where usesNativeOllamaEndpoint(url):
             let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             if !apiKey.isEmpty {
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             }
-            request.httpBody = try JSONSerialization.data(withJSONObject: [
-                "model": model,
-                "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt),
-                "stream": streamingEnabled,
-                "options": [
-                    "temperature": tuning.temperature,
-                    "top_p": tuning.topP,
-                    "num_predict": tuning.maxTokens
-                ]
-            ])
+            request.httpBody = try JSONSerialization.data(
+                withJSONObject: try ollamaNativePayload(
+                    endpointURL: url,
+                    model: model,
+                    systemPrompt: systemPrompt,
+                    userPrompt: userPrompt,
+                    messagesOverride: messagesOverride,
+                    configuration: configuration,
+                    tuning: tuning,
+                    streamingEnabled: streamingEnabled
+                )
+            )
         default:
             let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             if !apiKey.isEmpty {
@@ -887,6 +897,12 @@ struct RemoteLLMRuntimeClient {
                 streamingEnabled: streamingEnabled,
                 responseFormat: openAICompatibleResponseFormat
             )
+            if provider == .ollama {
+                try applyOllamaCompatibleOptionOverrides(
+                    to: &payload,
+                    configuration: configuration
+                )
+            }
             applyOpenAICompatibleSearchConfiguration(
                 to: &payload,
                 provider: provider,
@@ -924,6 +940,254 @@ struct RemoteLLMRuntimeClient {
         }
 
         return payload
+    }
+
+    func ollamaNativePayload(
+        endpointURL: URL? = nil,
+        model: String,
+        systemPrompt: String,
+        userPrompt: String,
+        messagesOverride: [[String: String]]? = nil,
+        configuration: RemoteProviderConfiguration,
+        tuning: GenerationTuning,
+        streamingEnabled: Bool
+    ) throws -> [String: Any] {
+        if let endpointURL, usesNativeOllamaGenerateEndpoint(endpointURL) {
+            return try ollamaNativeGeneratePayload(
+                model: model,
+                systemPrompt: systemPrompt,
+                userPrompt: userPrompt,
+                messagesOverride: messagesOverride,
+                configuration: configuration,
+                tuning: tuning,
+                streamingEnabled: streamingEnabled
+            )
+        }
+
+        var payload: [String: Any] = [
+            "model": model,
+            "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt),
+            "stream": streamingEnabled,
+            "options": try mergedOllamaNativeOptions(configuration: configuration, tuning: tuning)
+        ]
+
+        try applyOllamaNativeConfiguration(to: &payload, configuration: configuration)
+        return payload
+    }
+
+    private func ollamaNativeGeneratePayload(
+        model: String,
+        systemPrompt: String,
+        userPrompt: String,
+        messagesOverride: [[String: String]]?,
+        configuration: RemoteProviderConfiguration,
+        tuning: GenerationTuning,
+        streamingEnabled: Bool
+    ) throws -> [String: Any] {
+        let promptInput = ollamaGeneratePromptInput(
+            systemPrompt: systemPrompt,
+            userPrompt: userPrompt,
+            messagesOverride: messagesOverride
+        )
+
+        var payload: [String: Any] = [
+            "model": model,
+            "prompt": promptInput.prompt,
+            "stream": streamingEnabled,
+            "options": try mergedOllamaNativeOptions(configuration: configuration, tuning: tuning)
+        ]
+
+        if !promptInput.system.isEmpty {
+            payload["system"] = promptInput.system
+        }
+
+        try applyOllamaNativeConfiguration(to: &payload, configuration: configuration)
+        return payload
+    }
+
+    private func applyOllamaNativeConfiguration(
+        to payload: inout [String: Any],
+        configuration: RemoteProviderConfiguration
+    ) throws {
+        switch configuration.ollamaResponseFormatValue {
+        case .plain:
+            break
+        case .json:
+            payload["format"] = "json"
+        case .jsonSchema:
+            payload["format"] = try requiredJSONObject(
+                source: configuration.ollamaJSONSchema,
+                fieldName: "Ollama JSON Schema"
+            )
+        }
+
+        switch configuration.ollamaThinkModeValue {
+        case .off:
+            payload["think"] = false
+        case .on:
+            payload["think"] = true
+        case .low, .medium, .high:
+            payload["think"] = configuration.ollamaThinkModeValue.rawValue
+        }
+
+        let keepAlive = configuration.ollamaKeepAlive.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !keepAlive.isEmpty {
+            payload["keep_alive"] = keepAlive
+        }
+
+        if configuration.ollamaLogprobsEnabled {
+            payload["logprobs"] = true
+            if let topLogprobs = configuration.ollamaTopLogprobs {
+                payload["top_logprobs"] = topLogprobs
+            }
+        }
+    }
+
+    private func shouldUseOllamaGenerateEndpoint(messagesOverride: [[String: String]]?) -> Bool {
+        guard let messagesOverride else { return true }
+        return messagesOverride.isEmpty
+    }
+
+    private func ollamaGeneratePromptInput(
+        systemPrompt: String,
+        userPrompt: String,
+        messagesOverride: [[String: String]]?
+    ) -> (system: String, prompt: String) {
+        guard let messagesOverride, !messagesOverride.isEmpty else {
+            return (
+                systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines),
+                userPrompt
+            )
+        }
+
+        var resolvedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        var promptSegments: [String] = []
+
+        for message in messagesOverride {
+            let role = message["role"]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+            let content = message["content"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !content.isEmpty else { continue }
+
+            if role == "system" {
+                if resolvedSystem.isEmpty {
+                    resolvedSystem = content
+                }
+                continue
+            }
+
+            let prefix: String
+            switch role {
+            case "assistant":
+                prefix = "Assistant"
+            case "user":
+                prefix = "User"
+            default:
+                prefix = role.isEmpty ? "User" : role.capitalized
+            }
+            promptSegments.append("\(prefix):\n\(content)")
+        }
+
+        let prompt = promptSegments.joined(separator: "\n\n")
+        return (
+            resolvedSystem,
+            prompt.isEmpty ? userPrompt : prompt
+        )
+    }
+
+    func mergedOllamaNativeOptions(
+        configuration: RemoteProviderConfiguration,
+        tuning: GenerationTuning
+    ) throws -> [String: Any] {
+        var options: [String: Any] = [
+            "temperature": tuning.temperature,
+            "top_p": tuning.topP,
+            "num_predict": tuning.maxTokens
+        ]
+
+        if let customOptions = try optionalJSONObject(
+            source: configuration.ollamaOptionsJSON,
+            fieldName: "Ollama Options JSON"
+        ) {
+            for (key, value) in customOptions {
+                options[key] = value
+            }
+        }
+
+        return options
+    }
+
+    func applyOllamaCompatibleOptionOverrides(
+        to payload: inout [String: Any],
+        configuration: RemoteProviderConfiguration
+    ) throws {
+        guard let customOptions = try optionalJSONObject(
+            source: configuration.ollamaOptionsJSON,
+            fieldName: "Ollama Options JSON"
+        ) else {
+            return
+        }
+
+        if let temperature = doubleValue(from: customOptions["temperature"]) {
+            payload["temperature"] = temperature
+        }
+        if let topP = doubleValue(from: customOptions["top_p"] ?? customOptions["topP"]) {
+            payload["top_p"] = topP
+        }
+        if let maxTokens = intValue(from: customOptions["max_tokens"] ?? customOptions["num_predict"]) {
+            payload["max_tokens"] = maxTokens
+        }
+    }
+
+    func optionalJSONObject(
+        source: String,
+        fieldName: String
+    ) throws -> [String: Any]? {
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return try requiredJSONObject(source: trimmed, fieldName: fieldName)
+    }
+
+    func requiredJSONObject(
+        source: String,
+        fieldName: String
+    ) throws -> [String: Any] {
+        guard let data = source.data(using: .utf8) else {
+            throw NSError(
+                domain: "Voxt.RemoteLLM",
+                code: -308,
+                userInfo: [NSLocalizedDescriptionKey: "\(fieldName) is not valid UTF-8 JSON."]
+            )
+        }
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NSError(
+                domain: "Voxt.RemoteLLM",
+                code: -309,
+                userInfo: [NSLocalizedDescriptionKey: "\(fieldName) must be a JSON object."]
+            )
+        }
+        return object
+    }
+
+    func doubleValue(from value: Any?) -> Double? {
+        switch value {
+        case let number as NSNumber:
+            return number.doubleValue
+        case let string as String:
+            return Double(string.trimmingCharacters(in: .whitespacesAndNewlines))
+        default:
+            return nil
+        }
+    }
+
+    func intValue(from value: Any?) -> Int? {
+        switch value {
+        case let number as NSNumber:
+            return number.intValue
+        case let string as String:
+            return Int(string.trimmingCharacters(in: .whitespacesAndNewlines))
+        default:
+            return nil
+        }
     }
 
     private func logRequest(

@@ -13,9 +13,9 @@ struct SettingsView: View {
     let availableDictionaryHistoryScanModels: () -> [DictionaryHistoryScanModelOption]
     let onIngestDictionarySuggestionsFromHistory: (DictionaryHistoryScanRequest, Bool) -> Void
     let onCancelDictionarySuggestionsFromHistory: () -> Void
-    @ObservedObject var mlxModelManager: MLXModelManager
-    @ObservedObject var whisperModelManager: WhisperKitModelManager
-    @ObservedObject var customLLMManager: CustomLLMModelManager
+    let mlxModelManager: MLXModelManager
+    let whisperModelManager: WhisperKitModelManager
+    let customLLMManager: CustomLLMModelManager
     @ObservedObject var historyStore: TranscriptionHistoryStore
     @ObservedObject var noteStore: VoxtNoteStore
     @ObservedObject var dictionaryStore: DictionaryStore
@@ -39,6 +39,7 @@ struct SettingsView: View {
     @State private var languageRefreshToken = UUID()
     @State private var displayMode: SettingsDisplayMode
     @State private var initializedStaticTabs: Set<SettingsTab>
+    @State private var activeModelDownloadCount = 0
     private let issueRefreshTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
 
     init(
@@ -75,6 +76,13 @@ struct SettingsView: View {
         _navigationRequest = State(initialValue: SettingsNavigationRequest(target: initialNavigationTarget))
         _displayMode = State(initialValue: initialDisplayMode)
         _initializedStaticTabs = State(initialValue: Self.initializedStaticTabs(for: initialNavigationTarget.tab))
+        _activeModelDownloadCount = State(
+            initialValue: SettingsModelDownloadBadgeSupport.activeDownloadCount(
+                mlxActiveDownloadRepos: mlxModelManager.activeDownloadRepos,
+                whisperActiveDownload: whisperModelManager.activeDownload,
+                customLLMState: customLLMManager.state
+            )
+        )
     }
 
     var body: some View {
@@ -108,6 +116,9 @@ struct SettingsView: View {
             refreshPermissionBadge()
             refreshMicrophoneBadge()
             refreshModelConfigurationBadge()
+        }
+        .onReceive(modelDownloadBadgeCountPublisher) { count in
+            activeModelDownloadCount = count
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionBadge()
@@ -320,18 +331,21 @@ struct SettingsView: View {
         return .none
     }
 
-    private var activeModelDownloadCount: Int {
-        var count = 0
-        if case .downloading = mlxModelManager.state {
-            count += 1
+    private var modelDownloadBadgeCountPublisher: AnyPublisher<Int, Never> {
+        Publishers.CombineLatest3(
+            mlxModelManager.$activeDownloadRepos,
+            whisperModelManager.$activeDownload,
+            customLLMManager.$state
+        )
+        .map { mlxActiveDownloadRepos, whisperActiveDownload, customLLMState in
+            SettingsModelDownloadBadgeSupport.activeDownloadCount(
+                mlxActiveDownloadRepos: mlxActiveDownloadRepos,
+                whisperActiveDownload: whisperActiveDownload,
+                customLLMState: customLLMState
+            )
         }
-        if whisperModelManager.activeDownload != nil {
-            count += 1
-        }
-        if case .downloading = customLLMManager.state {
-            count += 1
-        }
-        return count
+        .removeDuplicates()
+        .eraseToAnyPublisher()
     }
 
     @ViewBuilder

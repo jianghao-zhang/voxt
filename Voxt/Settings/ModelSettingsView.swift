@@ -79,9 +79,9 @@ struct ModelSettingsView: View {
     @AppStorage(AppPreferenceKey.interfaceLanguage) var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @AppStorage(AppPreferenceKey.featureSettings) var featureSettingsRaw = ""
 
-    @ObservedObject var mlxModelManager: MLXModelManager
-    @ObservedObject var whisperModelManager: WhisperKitModelManager
-    @ObservedObject var customLLMManager: CustomLLMModelManager
+    let mlxModelManager: MLXModelManager
+    let whisperModelManager: WhisperKitModelManager
+    let customLLMManager: CustomLLMModelManager
     @ObservedObject var mainWindowState: MainWindowVisibilityState
     let missingConfigurationIssues: [ConfigurationTransferManager.MissingConfigurationIssue]
     let navigationRequest: SettingsNavigationRequest?
@@ -107,10 +107,13 @@ struct ModelSettingsView: View {
     @State private var globalDownloadEndpointResult: DownloadEndpointCheckResult?
     @State private var chinaDownloadEndpointResult: DownloadEndpointCheckResult?
     @State var catalogSnapshot = ModelSettingsCatalogSnapshot.empty
+    @State private var isCatalogRefreshScheduled = false
+    @State private var isRefreshingCatalogSnapshot = false
+    @State private var needsAnotherCatalogRefresh = false
     @State var pendingModelRemovalTarget: LocalModelRemovalTarget?
     @State var uninstallingModelTarget: LocalModelRemovalTarget?
 
-    let modelStateRefreshTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
+    let modelStateRefreshTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     var selectedEngine: TranscriptionEngine {
         TranscriptionEngine(rawValue: engineRaw) ?? .mlxAudio
@@ -434,6 +437,32 @@ struct ModelSettingsView: View {
     }
 
     func refreshCatalogSnapshot() {
+        if isRefreshingCatalogSnapshot {
+            needsAnotherCatalogRefresh = true
+            return
+        }
+        guard !isCatalogRefreshScheduled else { return }
+        isCatalogRefreshScheduled = true
+        DispatchQueue.main.async {
+            isCatalogRefreshScheduled = false
+            rebuildCatalogSnapshot()
+        }
+    }
+
+    private func rebuildCatalogSnapshot() {
+        if isRefreshingCatalogSnapshot {
+            needsAnotherCatalogRefresh = true
+            return
+        }
+        isRefreshingCatalogSnapshot = true
+        defer {
+            isRefreshingCatalogSnapshot = false
+            if needsAnotherCatalogRefresh {
+                needsAnotherCatalogRefresh = false
+                refreshCatalogSnapshot()
+            }
+        }
+
         let entries = switch catalogTab {
         case .asr:
             catalogBuilder.asrEntries()
@@ -756,9 +785,13 @@ struct ModelSettingsView: View {
     }
 
     var shouldPollModelState: Bool {
-        isModelStatePollingRequired(for: mlxModelManager.state)
-        || isWhisperStatePollingRequired(for: whisperModelManager.state)
-        || isCustomLLMStatePollingRequired(for: customLLMManager.state)
+        ModelSettingsProgressRefreshSupport.shouldPollModelState(
+            mlxState: mlxModelManager.state,
+            mlxActiveDownloadRepos: mlxModelManager.activeDownloadRepos,
+            whisperState: whisperModelManager.state,
+            whisperActiveDownload: whisperModelManager.activeDownload,
+            customLLMState: customLLMManager.state
+        )
     }
 
     private func toggleTag(_ tag: String) {
@@ -774,33 +807,6 @@ struct ModelSettingsView: View {
 
     func pruneSelectedTags() {
         selectedTags = selectedTags.intersection(Set(availableTags))
-    }
-
-    private func isModelStatePollingRequired(for state: MLXModelManager.ModelState) -> Bool {
-        switch state {
-        case .downloading, .loading:
-            return true
-        case .notDownloaded, .downloaded, .paused, .ready, .error:
-            return false
-        }
-    }
-
-    private func isWhisperStatePollingRequired(for state: WhisperKitModelManager.ModelState) -> Bool {
-        switch state {
-        case .downloading, .loading:
-            return true
-        case .notDownloaded, .downloaded, .paused, .ready, .error:
-            return false
-        }
-    }
-
-    private func isCustomLLMStatePollingRequired(for state: CustomLLMModelManager.ModelState) -> Bool {
-        switch state {
-        case .downloading:
-            return true
-        case .notDownloaded, .downloaded, .paused, .error:
-            return false
-        }
     }
 
     private func openModelDebugWindow() {

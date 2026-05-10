@@ -513,7 +513,9 @@ extension AppDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = false
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        // Keep the main settings window on standard AppKit behavior so Space
+        // switching preserves normal foreground window ordering and focus.
+        window.collectionBehavior = []
         window.contentViewController = hostingController
         window.setContentSize(mainWindowContentSize)
         window.contentMinSize = mainWindowMinimumContentSize
@@ -545,13 +547,7 @@ extension AppDelegate {
     }
 
     private func bringWindowToFront(_ window: NSWindow) {
-        if window.isMiniaturized {
-            window.deminiaturize(nil)
-        }
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
-        NSRunningApplication.current.activate(options: [.activateAllWindows])
-        NSApp.activate(ignoringOtherApps: true)
+        AppBehaviorController.bringStandardWindowToFront(window)
     }
 
     private func centerMainWindow(_ window: NSWindow, on screen: NSScreen?) {
@@ -634,7 +630,7 @@ extension AppDelegate {
     func prepareMainWindowForUpdatePresentation() {
         mainWindowPresentationState = MainWindowPresentationState()
         synchronizeAppActivationPolicy(mainWindowVisible: true)
-        NSApp.activate(ignoringOtherApps: true)
+        AppBehaviorController.activateCurrentApp()
         VoxtLog.info("Preparing Sparkle update UI without hiding main window.")
     }
 

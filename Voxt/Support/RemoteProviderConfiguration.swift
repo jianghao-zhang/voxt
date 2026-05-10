@@ -1,5 +1,49 @@
 import Foundation
 
+enum OllamaResponseFormat: String, CaseIterable, Identifiable {
+    case plain
+    case json
+    case jsonSchema
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .plain:
+            return AppLocalization.localizedString("Plain Text")
+        case .json:
+            return "JSON"
+        case .jsonSchema:
+            return AppLocalization.localizedString("JSON Schema")
+        }
+    }
+}
+
+enum OllamaThinkMode: String, CaseIterable, Identifiable {
+    case off
+    case on
+    case low
+    case medium
+    case high
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off:
+            return AppLocalization.localizedString("Off")
+        case .on:
+            return AppLocalization.localizedString("On")
+        case .low:
+            return AppLocalization.localizedString("Low")
+        case .medium:
+            return AppLocalization.localizedString("Medium")
+        case .high:
+            return AppLocalization.localizedString("High")
+        }
+    }
+}
+
 struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     let providerID: String
     var model: String
@@ -13,6 +57,13 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     var doubaoDictionaryMode: String
     var doubaoEnableRequestHotwords: Bool
     var doubaoEnableRequestCorrections: Bool
+    var ollamaResponseFormat: String
+    var ollamaJSONSchema: String
+    var ollamaThinkMode: String
+    var ollamaKeepAlive: String
+    var ollamaLogprobsEnabled: Bool
+    var ollamaTopLogprobs: Int?
+    var ollamaOptionsJSON: String
 
     var id: String { providerID }
 
@@ -25,7 +76,10 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     }
 
     var isConfigured: Bool {
-        hasUsableModel && (
+        if RemoteLLMProvider(rawValue: providerID) == .ollama {
+            return hasUsableModel
+        }
+        return hasUsableModel && (
             !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
             !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         )
@@ -33,6 +87,14 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
 
     var doubaoDictionaryModeValue: DoubaoDictionaryMode {
         DoubaoDictionaryMode(rawValue: doubaoDictionaryMode) ?? .requestScoped
+    }
+
+    var ollamaResponseFormatValue: OllamaResponseFormat {
+        OllamaResponseFormat(rawValue: ollamaResponseFormat) ?? .plain
+    }
+
+    var ollamaThinkModeValue: OllamaThinkMode {
+        OllamaThinkMode(rawValue: ollamaThinkMode) ?? .off
     }
 
     init(
@@ -47,7 +109,14 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         openAIChunkPseudoRealtimeEnabled: Bool = false,
         doubaoDictionaryMode: String = DoubaoDictionaryMode.requestScoped.rawValue,
         doubaoEnableRequestHotwords: Bool = true,
-        doubaoEnableRequestCorrections: Bool = true
+        doubaoEnableRequestCorrections: Bool = true,
+        ollamaResponseFormat: String = OllamaResponseFormat.plain.rawValue,
+        ollamaJSONSchema: String = "",
+        ollamaThinkMode: String = OllamaThinkMode.off.rawValue,
+        ollamaKeepAlive: String = "",
+        ollamaLogprobsEnabled: Bool = false,
+        ollamaTopLogprobs: Int? = nil,
+        ollamaOptionsJSON: String = ""
     ) {
         self.providerID = providerID
         self.model = model
@@ -61,6 +130,13 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         self.doubaoDictionaryMode = doubaoDictionaryMode
         self.doubaoEnableRequestHotwords = doubaoEnableRequestHotwords
         self.doubaoEnableRequestCorrections = doubaoEnableRequestCorrections
+        self.ollamaResponseFormat = ollamaResponseFormat
+        self.ollamaJSONSchema = ollamaJSONSchema
+        self.ollamaThinkMode = ollamaThinkMode
+        self.ollamaKeepAlive = ollamaKeepAlive
+        self.ollamaLogprobsEnabled = ollamaLogprobsEnabled
+        self.ollamaTopLogprobs = ollamaTopLogprobs
+        self.ollamaOptionsJSON = ollamaOptionsJSON
     }
 
     enum CodingKeys: String, CodingKey {
@@ -76,6 +152,13 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         case doubaoDictionaryMode
         case doubaoEnableRequestHotwords
         case doubaoEnableRequestCorrections
+        case ollamaResponseFormat
+        case ollamaJSONSchema
+        case ollamaThinkMode
+        case ollamaKeepAlive
+        case ollamaLogprobsEnabled
+        case ollamaTopLogprobs
+        case ollamaOptionsJSON
     }
 
     init(from decoder: Decoder) throws {
@@ -93,6 +176,13 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         doubaoDictionaryMode = try container.decodeIfPresent(String.self, forKey: .doubaoDictionaryMode) ?? DoubaoDictionaryMode.requestScoped.rawValue
         doubaoEnableRequestHotwords = try container.decodeIfPresent(Bool.self, forKey: .doubaoEnableRequestHotwords) ?? true
         doubaoEnableRequestCorrections = try container.decodeIfPresent(Bool.self, forKey: .doubaoEnableRequestCorrections) ?? true
+        ollamaResponseFormat = try container.decodeIfPresent(String.self, forKey: .ollamaResponseFormat) ?? OllamaResponseFormat.plain.rawValue
+        ollamaJSONSchema = try container.decodeIfPresent(String.self, forKey: .ollamaJSONSchema) ?? ""
+        ollamaThinkMode = try container.decodeIfPresent(String.self, forKey: .ollamaThinkMode) ?? OllamaThinkMode.off.rawValue
+        ollamaKeepAlive = try container.decodeIfPresent(String.self, forKey: .ollamaKeepAlive) ?? ""
+        ollamaLogprobsEnabled = try container.decodeIfPresent(Bool.self, forKey: .ollamaLogprobsEnabled) ?? false
+        ollamaTopLogprobs = try container.decodeIfPresent(Int.self, forKey: .ollamaTopLogprobs)
+        ollamaOptionsJSON = try container.decodeIfPresent(String.self, forKey: .ollamaOptionsJSON) ?? ""
     }
 
     nonisolated var withoutSensitiveValues: RemoteProviderConfiguration {

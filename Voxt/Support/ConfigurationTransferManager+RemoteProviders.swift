@@ -13,6 +13,13 @@ struct SanitizedRemoteProviderConfiguration: Codable {
     var doubaoDictionaryMode: String
     var doubaoEnableRequestHotwords: Bool
     var doubaoEnableRequestCorrections: Bool
+    var ollamaResponseFormat: String
+    var ollamaJSONSchema: String
+    var ollamaThinkMode: String
+    var ollamaKeepAlive: String
+    var ollamaLogprobsEnabled: Bool
+    var ollamaTopLogprobs: Int?
+    var ollamaOptionsJSON: String
 
     enum CodingKeys: String, CodingKey {
         case providerID
@@ -27,6 +34,13 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         case doubaoDictionaryMode
         case doubaoEnableRequestHotwords
         case doubaoEnableRequestCorrections
+        case ollamaResponseFormat
+        case ollamaJSONSchema
+        case ollamaThinkMode
+        case ollamaKeepAlive
+        case ollamaLogprobsEnabled
+        case ollamaTopLogprobs
+        case ollamaOptionsJSON
     }
 
     init(
@@ -41,7 +55,14 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         openAIChunkPseudoRealtimeEnabled: Bool,
         doubaoDictionaryMode: String,
         doubaoEnableRequestHotwords: Bool,
-        doubaoEnableRequestCorrections: Bool
+        doubaoEnableRequestCorrections: Bool,
+        ollamaResponseFormat: String,
+        ollamaJSONSchema: String,
+        ollamaThinkMode: String,
+        ollamaKeepAlive: String,
+        ollamaLogprobsEnabled: Bool,
+        ollamaTopLogprobs: Int?,
+        ollamaOptionsJSON: String
     ) {
         self.providerID = providerID
         self.model = model
@@ -55,6 +76,13 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         self.doubaoDictionaryMode = doubaoDictionaryMode
         self.doubaoEnableRequestHotwords = doubaoEnableRequestHotwords
         self.doubaoEnableRequestCorrections = doubaoEnableRequestCorrections
+        self.ollamaResponseFormat = ollamaResponseFormat
+        self.ollamaJSONSchema = ollamaJSONSchema
+        self.ollamaThinkMode = ollamaThinkMode
+        self.ollamaKeepAlive = ollamaKeepAlive
+        self.ollamaLogprobsEnabled = ollamaLogprobsEnabled
+        self.ollamaTopLogprobs = ollamaTopLogprobs
+        self.ollamaOptionsJSON = ollamaOptionsJSON
     }
 
     init(from decoder: Decoder) throws {
@@ -72,6 +100,13 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         doubaoDictionaryMode = try container.decodeIfPresent(String.self, forKey: .doubaoDictionaryMode) ?? DoubaoDictionaryMode.requestScoped.rawValue
         doubaoEnableRequestHotwords = try container.decodeIfPresent(Bool.self, forKey: .doubaoEnableRequestHotwords) ?? true
         doubaoEnableRequestCorrections = try container.decodeIfPresent(Bool.self, forKey: .doubaoEnableRequestCorrections) ?? true
+        ollamaResponseFormat = try container.decodeIfPresent(String.self, forKey: .ollamaResponseFormat) ?? OllamaResponseFormat.plain.rawValue
+        ollamaJSONSchema = try container.decodeIfPresent(String.self, forKey: .ollamaJSONSchema) ?? ""
+        ollamaThinkMode = try container.decodeIfPresent(String.self, forKey: .ollamaThinkMode) ?? OllamaThinkMode.off.rawValue
+        ollamaKeepAlive = try container.decodeIfPresent(String.self, forKey: .ollamaKeepAlive) ?? ""
+        ollamaLogprobsEnabled = try container.decodeIfPresent(Bool.self, forKey: .ollamaLogprobsEnabled) ?? false
+        ollamaTopLogprobs = try container.decodeIfPresent(Int.self, forKey: .ollamaTopLogprobs)
+        ollamaOptionsJSON = try container.decodeIfPresent(String.self, forKey: .ollamaOptionsJSON) ?? ""
     }
 }
 
@@ -91,7 +126,14 @@ extension ConfigurationTransferManager {
                 openAIChunkPseudoRealtimeEnabled: $0.openAIChunkPseudoRealtimeEnabled,
                 doubaoDictionaryMode: $0.doubaoDictionaryMode,
                 doubaoEnableRequestHotwords: $0.doubaoEnableRequestHotwords,
-                doubaoEnableRequestCorrections: $0.doubaoEnableRequestCorrections
+                doubaoEnableRequestCorrections: $0.doubaoEnableRequestCorrections,
+                ollamaResponseFormat: $0.ollamaResponseFormat,
+                ollamaJSONSchema: $0.ollamaJSONSchema,
+                ollamaThinkMode: $0.ollamaThinkMode,
+                ollamaKeepAlive: $0.ollamaKeepAlive,
+                ollamaLogprobsEnabled: $0.ollamaLogprobsEnabled,
+                ollamaTopLogprobs: $0.ollamaTopLogprobs,
+                ollamaOptionsJSON: $0.ollamaOptionsJSON
             )
         }
     }
@@ -112,7 +154,14 @@ extension ConfigurationTransferManager {
                     openAIChunkPseudoRealtimeEnabled: item.openAIChunkPseudoRealtimeEnabled,
                     doubaoDictionaryMode: item.doubaoDictionaryMode,
                     doubaoEnableRequestHotwords: item.doubaoEnableRequestHotwords,
-                    doubaoEnableRequestCorrections: item.doubaoEnableRequestCorrections
+                    doubaoEnableRequestCorrections: item.doubaoEnableRequestCorrections,
+                    ollamaResponseFormat: item.ollamaResponseFormat,
+                    ollamaJSONSchema: item.ollamaJSONSchema,
+                    ollamaThinkMode: item.ollamaThinkMode,
+                    ollamaKeepAlive: item.ollamaKeepAlive,
+                    ollamaLogprobsEnabled: item.ollamaLogprobsEnabled,
+                    ollamaTopLogprobs: item.ollamaTopLogprobs,
+                    ollamaOptionsJSON: item.ollamaOptionsJSON
                 )
             )
         })

@@ -38,8 +38,7 @@ final class MeetingDetailWindowManager {
                 modelOptions: summaryModelOptionsProvider()
             )
             controller.showWindow(nil)
-            controller.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            AppBehaviorController.bringStandardWindowToFront(controller.window)
             return
         }
 
@@ -69,8 +68,7 @@ final class MeetingDetailWindowManager {
         }
         historyControllers[entry.id] = controller
         controller.showWindow(nil)
-        controller.window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        AppBehaviorController.bringStandardWindowToFront(controller.window)
     }
 
     func presentLiveMeeting(
@@ -86,8 +84,7 @@ final class MeetingDetailWindowManager {
                 modelOptions: summaryModelOptionsProvider()
             )
             controller.showWindow(nil)
-            controller.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            AppBehaviorController.bringStandardWindowToFront(controller.window)
             return
         }
 
@@ -104,8 +101,7 @@ final class MeetingDetailWindowManager {
         }
         liveController = controller
         controller.showWindow(nil)
-        controller.window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        AppBehaviorController.bringStandardWindowToFront(controller.window)
     }
 
     func closeLiveWindow() {
@@ -141,6 +137,8 @@ private final class MeetingDetailWindowController: NSWindowController, NSWindowD
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = true
+        window.collectionBehavior = []
+        window.level = .normal
 
         super.init(window: window)
         window.delegate = self

@@ -13,9 +13,7 @@ final class ASRDebugWindowManager {
         let controller = resolvedController(appDelegate: appDelegate)
         controller.refresh()
         controller.showWindow(nil)
-        controller.window?.makeKeyAndOrderFront(nil)
-        controller.window?.orderFrontRegardless()
-        NSApp.activate(ignoringOtherApps: true)
+        AppBehaviorController.bringStandardWindowToFront(controller.window)
     }
 
     private func resolvedController(appDelegate: AppDelegate) -> ASRDebugWindowController {
@@ -40,9 +38,7 @@ final class LLMDebugWindowManager {
         let controller = resolvedController(appDelegate: appDelegate)
         controller.refresh()
         controller.showWindow(nil)
-        controller.window?.makeKeyAndOrderFront(nil)
-        controller.window?.orderFrontRegardless()
-        NSApp.activate(ignoringOtherApps: true)
+        AppBehaviorController.bringStandardWindowToFront(controller.window)
     }
 
     private func resolvedController(appDelegate: AppDelegate) -> LLMDebugWindowController {
@@ -79,7 +75,8 @@ private final class ASRDebugWindowController: NSWindowController, NSWindowDelega
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbar = nil
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.collectionBehavior = []
+        window.level = .normal
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: ModelDebugWindowStyle.minWidth, height: ModelDebugWindowStyle.minHeight)
         window.setContentSize(NSSize(width: ModelDebugWindowStyle.width, height: ModelDebugWindowStyle.height))
@@ -139,7 +136,8 @@ private final class LLMDebugWindowController: NSWindowController, NSWindowDelega
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbar = nil
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.collectionBehavior = []
+        window.level = .normal
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: ModelDebugWindowStyle.minWidth, height: ModelDebugWindowStyle.minHeight)
         window.setContentSize(NSSize(width: ModelDebugWindowStyle.width, height: ModelDebugWindowStyle.height))

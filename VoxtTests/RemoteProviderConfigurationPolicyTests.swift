@@ -170,6 +170,60 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
         XCTAssertFalse(sheet.shouldShowCustomProviderModelField)
     }
 
+    func testOllamaSheetUsesOptionalAPIKeyAndShowsOllamaSection() {
+        let sheet = makeSheet(
+            target: .llm(.ollama),
+            model: "qwen3"
+        )
+
+        XCTAssertTrue(sheet.isOllamaLLMProvider)
+        XCTAssertEqual(sheet.apiKeyFieldTitle, AppLocalization.localizedString("API Key (Optional)"))
+        XCTAssertEqual(sheet.apiKeyFieldPlaceholder, AppLocalization.localizedString("Paste API key (optional)"))
+    }
+
+    func testOllamaSheetShowsJSONSchemaFieldOnlyForJSONSchemaFormat() {
+        var sheet = makeSheet(
+            target: .llm(.ollama),
+            model: "qwen3"
+        )
+
+        XCTAssertFalse(sheet.shouldShowOllamaJSONSchemaField)
+        sheet.ollamaResponseFormat = OllamaResponseFormat.jsonSchema.rawValue
+        XCTAssertTrue(sheet.shouldShowOllamaJSONSchemaField)
+    }
+
+    func testOllamaSheetValidationRejectsInvalidJSONFields() {
+        var sheet = makeSheet(
+            target: .llm(.ollama),
+            model: "qwen3"
+        )
+        sheet.ollamaResponseFormat = OllamaResponseFormat.jsonSchema.rawValue
+        sheet.ollamaJSONSchema = #"["not-an-object"]"#
+        sheet.ollamaOptionsJSON = #"{"num_ctx":4096}"#
+
+        XCTAssertEqual(
+            sheet.validationMessage(),
+            AppLocalization.format(
+                "%@ must be a JSON object.",
+                AppLocalization.localizedString("JSON Schema")
+            )
+        )
+    }
+
+    func testOllamaSheetValidationRejectsNegativeTopLogprobs() {
+        var sheet = makeSheet(
+            target: .llm(.ollama),
+            model: "qwen3"
+        )
+        sheet.ollamaLogprobsEnabled = true
+        sheet.ollamaTopLogprobsText = "-1"
+
+        XCTAssertEqual(
+            sheet.validationMessage(),
+            AppLocalization.localizedString("Top Logprobs must be a non-negative integer.")
+        )
+    }
+
     func testSelectingCustomProviderModelPrefillsCurrentBuiltinModel() {
         let customModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
             previousResolvedModel: "gpt-4o-transcribe",

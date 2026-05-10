@@ -110,6 +110,50 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         )
     }
 
+    func testResolvedLLMEndpointDefaultsOllamaToBaseEndpoint() {
+        let client = RemoteLLMRuntimeClient()
+
+        XCTAssertEqual(
+            client.providerDefaultEndpoint(.ollama),
+            "http://localhost:11434"
+        )
+        XCTAssertEqual(
+            client.resolvedLLMEndpoint(
+                provider: .ollama,
+                endpoint: "",
+                model: "qwen3"
+            ),
+            "http://localhost:11434"
+        )
+        XCTAssertEqual(
+            client.resolvedLLMEndpoint(
+                provider: .ollama,
+                endpoint: "http://localhost:11434/api",
+                model: "qwen3"
+            ),
+            "http://localhost:11434"
+        )
+    }
+
+    func testResolvedOllamaRequestEndpointSelectsNativeRouteFromBaseEndpoint() {
+        let client = RemoteLLMRuntimeClient()
+
+        XCTAssertEqual(
+            client.resolvedOllamaRequestEndpoint(
+                endpoint: "http://localhost:11434",
+                useGenerate: true
+            ),
+            "http://localhost:11434/api/generate"
+        )
+        XCTAssertEqual(
+            client.resolvedOllamaRequestEndpoint(
+                endpoint: "http://localhost:11434",
+                useGenerate: false
+            ),
+            "http://localhost:11434/api/chat"
+        )
+    }
+
     func testExtractStreamingDeltaParsesAnthropicTextDelta() {
         let client = RemoteLLMRuntimeClient()
         let payload: [String: Any] = [
@@ -149,6 +193,16 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         ]
 
         XCTAssertEqual(client.extractStreamingDelta(from: payload), "本地流式输出")
+    }
+
+    func testExtractStreamingDeltaParsesOllamaGenerateResponse() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "response": "本地生成增量",
+            "done": false
+        ]
+
+        XCTAssertEqual(client.extractStreamingDelta(from: payload), "本地生成增量")
     }
 
     func testExtractPrimaryTextParsesOllamaNativeResponse() {
@@ -463,5 +517,165 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         let responseFormat = try XCTUnwrap(payload["response_format"] as? [String: Any])
         XCTAssertEqual(responseFormat["type"] as? String, "json_object")
         XCTAssertEqual(payload["stream"] as? Bool, true)
+    }
+
+    func testOllamaNativePayloadIncludesConfiguredFields() throws {
+        let client = RemoteLLMRuntimeClient()
+
+        let payload = try client.ollamaNativePayload(
+            model: "qwen3",
+            systemPrompt: "你是助手",
+            userPrompt: "你好",
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                ollamaResponseFormat: OllamaResponseFormat.json.rawValue,
+                ollamaThinkMode: OllamaThinkMode.medium.rawValue,
+                ollamaKeepAlive: "10m",
+                ollamaLogprobsEnabled: true,
+                ollamaTopLogprobs: 3,
+                ollamaOptionsJSON: #"{"temperature":0.7,"repeat_penalty":1.1}"#
+            ),
+            tuning: .init(maxTokens: 256, temperature: 0.2, topP: 0.9),
+            streamingEnabled: true
+        )
+
+        XCTAssertEqual(payload["format"] as? String, "json")
+        XCTAssertEqual(payload["think"] as? String, "medium")
+        XCTAssertEqual(payload["keep_alive"] as? String, "10m")
+        XCTAssertEqual(payload["logprobs"] as? Bool, true)
+        XCTAssertEqual(payload["top_logprobs"] as? Int, 3)
+
+        let options = try XCTUnwrap(payload["options"] as? [String: Any])
+        XCTAssertEqual(options["temperature"] as? Double, 0.7)
+        XCTAssertEqual(options["top_p"] as? Double, 0.9)
+        XCTAssertEqual(options["num_predict"] as? Int, 256)
+        XCTAssertEqual(options["repeat_penalty"] as? Double, 1.1)
+    }
+
+    func testOllamaGeneratePayloadUsesPromptAndSystemFields() throws {
+        let client = RemoteLLMRuntimeClient()
+
+        let payload = try client.ollamaNativePayload(
+            endpointURL: URL(string: "http://localhost:11434/api/generate"),
+            model: "qwen3",
+            systemPrompt: "你是助手",
+            userPrompt: "你好",
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                ollamaThinkMode: OllamaThinkMode.on.rawValue
+            ),
+            tuning: .init(maxTokens: 128, temperature: 0.2, topP: 0.9),
+            streamingEnabled: true
+        )
+
+        XCTAssertEqual(payload["prompt"] as? String, "你好")
+        XCTAssertEqual(payload["system"] as? String, "你是助手")
+        XCTAssertNil(payload["messages"])
+        XCTAssertEqual(payload["think"] as? Bool, true)
+    }
+
+    func testOllamaGeneratePayloadFlattensConversationMessagesIntoPrompt() throws {
+        let client = RemoteLLMRuntimeClient()
+
+        let payload = try client.ollamaNativePayload(
+            endpointURL: URL(string: "http://localhost:11434/api/generate"),
+            model: "qwen3",
+            systemPrompt: "",
+            userPrompt: "继续",
+            messagesOverride: [
+                ["role": "system", "content": "你是助手"],
+                ["role": "user", "content": "第一问"],
+                ["role": "assistant", "content": "第一答"],
+                ["role": "user", "content": "继续"]
+            ],
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3"
+            ),
+            tuning: .init(maxTokens: 128, temperature: 0.2, topP: 0.9),
+            streamingEnabled: false
+        )
+
+        XCTAssertEqual(payload["system"] as? String, "你是助手")
+        XCTAssertEqual(
+            payload["prompt"] as? String,
+            """
+            User:
+            第一问
+
+            Assistant:
+            第一答
+
+            User:
+            继续
+            """
+        )
+    }
+
+    func testResolvedOllamaRequestEndpointPreservesExplicitNativeAndCompatibleEndpoints() {
+        let client = RemoteLLMRuntimeClient()
+
+        XCTAssertEqual(
+            client.resolvedOllamaRequestEndpoint(
+                endpoint: "http://localhost:11434/api/chat",
+                useGenerate: true
+            ),
+            "http://localhost:11434/api/chat"
+        )
+        XCTAssertEqual(
+            client.resolvedOllamaRequestEndpoint(
+                endpoint: "http://localhost:11434/v1/chat/completions",
+                useGenerate: true
+            ),
+            "http://localhost:11434/v1/chat/completions"
+        )
+    }
+
+    func testOllamaNativePayloadSupportsJSONObjectFormatSchema() throws {
+        let client = RemoteLLMRuntimeClient()
+
+        let payload = try client.ollamaNativePayload(
+            model: "qwen3",
+            systemPrompt: "",
+            userPrompt: "返回结构化结果",
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                ollamaResponseFormat: OllamaResponseFormat.jsonSchema.rawValue,
+                ollamaJSONSchema: #"{"type":"object","properties":{"answer":{"type":"string"}}}"#
+            ),
+            tuning: .init(maxTokens: 128, temperature: 0.2, topP: 0.9),
+            streamingEnabled: false
+        )
+
+        let schema = try XCTUnwrap(payload["format"] as? [String: Any])
+        XCTAssertEqual(schema["type"] as? String, "object")
+    }
+
+    func testOllamaCompatibleOverridesMapSupportedOptionKeysOnly() throws {
+        let client = RemoteLLMRuntimeClient()
+        var payload = client.openAICompatiblePayload(
+            model: "qwen3",
+            systemPrompt: "",
+            userPrompt: "hi",
+            tuning: .init(maxTokens: 256, temperature: 0.2, topP: 0.9),
+            streamingEnabled: false
+        )
+
+        try client.applyOllamaCompatibleOptionOverrides(
+            to: &payload,
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                ollamaOptionsJSON: #"{"temperature":0.4,"top_p":0.8,"num_predict":64,"repeat_penalty":1.2}"#
+            )
+        )
+
+        XCTAssertEqual(payload["temperature"] as? Double, 0.4)
+        XCTAssertEqual(payload["top_p"] as? Double, 0.8)
+        XCTAssertEqual(payload["max_tokens"] as? Int, 64)
+        XCTAssertNil(payload["repeat_penalty"])
     }
 }

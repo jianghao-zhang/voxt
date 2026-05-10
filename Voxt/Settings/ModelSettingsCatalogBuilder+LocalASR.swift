@@ -40,9 +40,12 @@ extension ModelCatalogBuilder {
         MLXModelManager.availableModels.map { model in
             let repo = MLXModelManager.canonicalModelRepo(model.id)
             let selectionID = FeatureModelSelectionID.mlx(repo)
-            let isInstalled = mlxModelManager.isModelDownloaded(repo: repo)
+            let snapshot = mlxModelManager.catalogSnapshot(for: repo)
+            let isInstalled = snapshot.isDownloaded
             let badge = hasIssue(.mlxModel(repo)) ? localizedModelCatalog("Needs Setup") : nil
-            let status = isUninstallingModel(repo) ? localizedModelCatalog("Uninstalling…") : modelStatusText(repo)
+            let status = isUninstallingModel(repo)
+                ? localizedModelCatalog("Uninstalling…")
+                : mlxStatusText(snapshot)
 
             return ModelCatalogEntry(
                 id: "mlx:\(repo)",
@@ -66,8 +69,8 @@ extension ModelCatalogBuilder {
                 statusText: status,
                 usageLocations: usageLocations(for: selectionID),
                 badgeText: badge,
-                primaryAction: mlxPrimaryAction(repo: repo, isInstalled: isInstalled),
-                secondaryActions: mlxSecondaryActions(repo: repo, isInstalled: isInstalled)
+                primaryAction: mlxPrimaryAction(repo: repo, snapshot: snapshot),
+                secondaryActions: mlxSecondaryActions(repo: repo, snapshot: snapshot)
             )
         }
     }
@@ -122,21 +125,21 @@ extension ModelCatalogBuilder {
         return whisperModelManager.remoteSizeText(id: modelID)
     }
 
-    private func mlxPrimaryAction(repo: String, isInstalled: Bool) -> ModelTableAction? {
+    private func mlxPrimaryAction(repo: String, snapshot: MLXModelManager.CatalogSnapshot) -> ModelTableAction? {
         if isUninstallingModel(repo) {
             return ModelTableAction(title: localizedModelCatalog("Uninstalling…"), isEnabled: false) {}
         }
-        if isDownloadingModel(repo) {
+        if snapshot.isDownloading {
             return ModelTableAction(title: localizedModelCatalog("Pause")) {
                 pauseModelDownload(repo)
             }
         }
-        if isPausedModel(repo) {
+        if snapshot.isPaused {
             return ModelTableAction(title: localizedModelCatalog("Continue")) {
                 downloadModel(repo)
             }
         }
-        if isInstalled {
+        if snapshot.isDownloaded {
             return ModelTableAction(title: localizedModelCatalog("Uninstall"), role: .destructive) {
                 deleteModel(repo)
             }
@@ -148,21 +151,21 @@ extension ModelCatalogBuilder {
         }
     }
 
-    private func mlxSecondaryActions(repo: String, isInstalled: Bool) -> [ModelTableAction] {
+    private func mlxSecondaryActions(repo: String, snapshot: MLXModelManager.CatalogSnapshot) -> [ModelTableAction] {
         var actions = [ModelTableAction]()
-        if isDownloadingModel(repo) {
+        if snapshot.isDownloading {
             actions.append(
                 ModelTableAction(title: localizedModelCatalog("Cancel"), role: .destructive) {
                     cancelModelDownload(repo)
                 }
             )
-        } else if isPausedModel(repo) {
+        } else if snapshot.isPaused {
             actions.append(
                 ModelTableAction(title: localizedModelCatalog("Cancel"), role: .destructive) {
                     cancelModelDownload(repo)
                 }
             )
-        } else if isInstalled {
+        } else if snapshot.isDownloaded {
             actions.append(
                 ModelTableAction(title: localizedModelCatalog("Open Location")) {
                     openMLXModelDirectory(repo)
@@ -175,6 +178,43 @@ extension ModelCatalogBuilder {
             }
         )
         return actions
+    }
+
+    private func mlxStatusText(_ snapshot: MLXModelManager.CatalogSnapshot) -> String {
+        if case .downloading(_, let completed, let total, _, _, _) = snapshot.state {
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .downloading(completed: completed, total: total)
+            )
+        }
+
+        if case .paused(_, let completed, let total, _, _, _) = snapshot.state {
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .paused(
+                    completed: completed,
+                    total: total,
+                    pauseMessage: snapshot.pausedStatusMessage
+                )
+            )
+        }
+
+        if snapshot.isPaused {
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .paused(
+                    completed: 0,
+                    total: 0,
+                    pauseMessage: AppLocalization.localizedString("Paused. Ready to continue.")
+                )
+            )
+        }
+
+        if case .error(let message) = snapshot.state {
+            return ModelDownloadPresentationSupport.statusText(
+                downloadState: .idle,
+                errorMessage: message
+            )
+        }
+
+        return ""
     }
 
     private func whisperPrimaryAction(modelID: String, isInstalled: Bool) -> ModelTableAction? {

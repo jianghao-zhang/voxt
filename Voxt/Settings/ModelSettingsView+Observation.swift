@@ -1,6 +1,89 @@
 import SwiftUI
+import Combine
 
 extension ModelSettingsView {
+    private var downloadLifecycleRefreshPublisher: AnyPublisher<Void, Never> {
+        let mlx = Publishers.CombineLatest(
+            mlxModelManager.$activeDownloadRepos.removeDuplicates(),
+            mlxModelManager.$state
+                .map(ModelSettingsManagerRefreshSupport.phase(for:))
+                .removeDuplicates()
+        )
+        .map { _ in () }
+        .eraseToAnyPublisher()
+
+        let whisper = Publishers.CombineLatest3(
+            whisperModelManager.$state
+                .map(ModelSettingsManagerRefreshSupport.phase(for:))
+                .removeDuplicates(),
+            whisperModelManager.$activeDownload
+                .map(ModelSettingsManagerRefreshSupport.whisperDownloadDescriptor(for:))
+                .removeDuplicates(),
+            whisperModelManager.$pausedStatusMessageByID.removeDuplicates()
+        )
+        .map { _, _, _ in () }
+        .eraseToAnyPublisher()
+
+        let customLLM = customLLMManager.$state
+            .map(ModelSettingsManagerRefreshSupport.phase(for:))
+            .removeDuplicates()
+            .map { _ in () }
+            .eraseToAnyPublisher()
+
+        return Publishers.Merge(
+            Publishers.Merge(mlx, whisper),
+            customLLM
+        )
+        .dropFirst()
+        .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
+        .eraseToAnyPublisher()
+    }
+
+    private var downloadMetadataRefreshPublisher: AnyPublisher<Void, Never> {
+        let mlx = mlxModelManager.$remoteSizeTextByRepo
+            .removeDuplicates()
+            .map { _ in () }
+            .eraseToAnyPublisher()
+
+        let mlxPauseMessage = mlxModelManager.$pausedStatusMessage
+            .removeDuplicates()
+            .map { _ in () }
+            .eraseToAnyPublisher()
+
+        let whisper = Publishers.Merge(
+            whisperModelManager.$remoteSizeTextByID
+                .removeDuplicates()
+                .map { _ in () }
+                .eraseToAnyPublisher(),
+            whisperModelManager.$pausedStatusMessageByID
+                .removeDuplicates()
+                .map { _ in () }
+                .eraseToAnyPublisher()
+        )
+        .eraseToAnyPublisher()
+
+        let customLLM = customLLMManager.$remoteSizeTextByRepo
+            .removeDuplicates()
+            .map { _ in () }
+            .eraseToAnyPublisher()
+
+        let customLLMPauseMessage = customLLMManager.$pausedStatusMessage
+            .removeDuplicates()
+            .map { _ in () }
+            .eraseToAnyPublisher()
+
+        return Publishers.Merge(
+            Publishers.Merge(
+                Publishers.Merge(mlx, mlxPauseMessage),
+                whisper
+            ),
+            Publishers.Merge(customLLM, customLLMPauseMessage)
+        )
+        .dropFirst()
+        .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+        .eraseToAnyPublisher()
+    }
+
     var contentWithLifecycle: some View {
         let appeared = AnyView(
             mainContent
@@ -62,37 +145,10 @@ extension ModelSettingsView {
 
         let stateObserved = AnyView(
             configurationObserved
-                .onChange(of: mlxModelManager.state) { _, _ in
-                    refreshCatalogSnapshot()
+                .onReceive(downloadLifecycleRefreshPublisher) { _ in
+                    handleImmediateDownloadLifecycleChange()
                 }
-                .onChange(of: mlxModelManager.stateByRepo) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: mlxModelManager.pausedStatusMessageByRepo) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: mlxModelManager.activeDownloadRepos) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: whisperModelManager.state) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: whisperModelManager.activeDownload) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: whisperModelManager.pausedStatusMessageByID) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: customLLMManager.state) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: mlxModelManager.remoteSizeTextByRepo) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: whisperModelManager.remoteSizeTextByID) { _, _ in
-                    refreshCatalogSnapshot()
-                }
-                .onChange(of: customLLMManager.remoteSizeTextByRepo) { _, _ in
+                .onReceive(downloadMetadataRefreshPublisher) { _ in
                     refreshCatalogSnapshot()
                 }
         )
@@ -186,6 +242,15 @@ extension ModelSettingsView {
     }
 
     func handleCatalogFilterSelectionChange() {
+        pruneSelectedTags()
+        refreshCatalogSnapshot()
+    }
+
+    func handleImmediateDownloadLifecycleChange() {
+        guard isActive else { return }
+        guard mainWindowState.isVisible else { return }
+        guard shouldPollModelState else { return }
+        refreshModelInstallStateIfNeeded()
         pruneSelectedTags()
         refreshCatalogSnapshot()
     }

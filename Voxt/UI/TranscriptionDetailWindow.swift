@@ -23,15 +23,13 @@ final class TranscriptionDetailWindowManager {
         if let controller = historyControllers[entry.id] {
             controller.refresh(entry: entry, audioURL: audioURL)
             controller.showWindow(nil)
-            controller.window?.makeKeyAndOrderFront(nil)
-            controller.window?.orderFrontRegardless()
+            AppBehaviorController.bringStandardWindowToFront(controller.window)
             controller.recenterIfNeeded()
             if let window = controller.window {
                 VoxtLog.info(
                     "Transcription detail window reused. frame=\(NSStringFromRect(window.frame)), visible=\(window.isVisible), miniaturized=\(window.isMiniaturized)"
                 )
             }
-            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
@@ -47,15 +45,13 @@ final class TranscriptionDetailWindowManager {
         }
         historyControllers[entry.id] = controller
         controller.showWindow(nil)
-        controller.window?.makeKeyAndOrderFront(nil)
-        controller.window?.orderFrontRegardless()
+        AppBehaviorController.bringStandardWindowToFront(controller.window)
         controller.recenterIfNeeded()
         if let window = controller.window {
             VoxtLog.info(
                 "Transcription detail window shown. frame=\(NSStringFromRect(window.frame)), visible=\(window.isVisible), miniaturized=\(window.isMiniaturized)"
             )
         }
-        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
@@ -86,13 +82,13 @@ private final class TranscriptionDetailWindowController: NSWindowController, NSW
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbar = nil
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.collectionBehavior = []
         window.isMovableByWindowBackground = false
         window.isReleasedWhenClosed = false
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = true
-        window.level = .floating
+        window.level = .normal
         window.minSize = Self.minimumWindowSize
         window.setContentSize(Self.defaultWindowSize)
         window.center()

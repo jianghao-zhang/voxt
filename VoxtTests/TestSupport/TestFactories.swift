@@ -42,7 +42,14 @@ enum TestFactories {
         openAIChunkPseudoRealtimeEnabled: Bool = false,
         doubaoDictionaryMode: String = DoubaoDictionaryMode.requestScoped.rawValue,
         doubaoEnableRequestHotwords: Bool = true,
-        doubaoEnableRequestCorrections: Bool = true
+        doubaoEnableRequestCorrections: Bool = true,
+        ollamaResponseFormat: String = OllamaResponseFormat.plain.rawValue,
+        ollamaJSONSchema: String = "",
+        ollamaThinkMode: String = OllamaThinkMode.off.rawValue,
+        ollamaKeepAlive: String = "",
+        ollamaLogprobsEnabled: Bool = false,
+        ollamaTopLogprobs: Int? = nil,
+        ollamaOptionsJSON: String = ""
     ) -> RemoteProviderConfiguration {
         RemoteProviderConfiguration(
             providerID: providerID,
@@ -55,7 +62,14 @@ enum TestFactories {
             openAIChunkPseudoRealtimeEnabled: openAIChunkPseudoRealtimeEnabled,
             doubaoDictionaryMode: doubaoDictionaryMode,
             doubaoEnableRequestHotwords: doubaoEnableRequestHotwords,
-            doubaoEnableRequestCorrections: doubaoEnableRequestCorrections
+            doubaoEnableRequestCorrections: doubaoEnableRequestCorrections,
+            ollamaResponseFormat: ollamaResponseFormat,
+            ollamaJSONSchema: ollamaJSONSchema,
+            ollamaThinkMode: ollamaThinkMode,
+            ollamaKeepAlive: ollamaKeepAlive,
+            ollamaLogprobsEnabled: ollamaLogprobsEnabled,
+            ollamaTopLogprobs: ollamaTopLogprobs,
+            ollamaOptionsJSON: ollamaOptionsJSON
         )
     }
 

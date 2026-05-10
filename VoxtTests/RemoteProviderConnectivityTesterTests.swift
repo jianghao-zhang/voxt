@@ -2,12 +2,16 @@ import XCTest
 @testable import Voxt
 
 final class RemoteProviderConnectivityTesterTests: XCTestCase {
-    func testDeepSeekReachabilityBodyDisablesThinkingAndLimitsOutput() throws {
+    func testDeepSeekReachabilityBodyDisablesThinkingAndLimitsOutput() async throws {
         let tester = RemoteProviderConnectivityTester(testTarget: .llm(.deepseek))
 
-        let body = tester.openAICompatibleReachabilityBody(
+        let body = try await tester.openAICompatibleReachabilityBody(
             provider: .deepseek,
             endpoint: "https://api.deepseek.com/chat/completions",
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.deepseek.rawValue,
+                model: "deepseek-v4-flash"
+            ),
             model: "deepseek-v4-flash"
         )
 
@@ -17,5 +21,53 @@ final class RemoteProviderConnectivityTesterTests: XCTestCase {
 
         let thinking = try XCTUnwrap(body["thinking"] as? [String: String])
         XCTAssertEqual(thinking["type"], "disabled")
+    }
+
+    func testOllamaNativeReachabilityBodyIncludesConfiguredOptions() async throws {
+        let tester = RemoteProviderConnectivityTester(testTarget: .llm(.ollama))
+
+        let body = try await tester.openAICompatibleReachabilityBody(
+            provider: .ollama,
+            endpoint: "http://127.0.0.1:11434/api/chat",
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                ollamaResponseFormat: OllamaResponseFormat.json.rawValue,
+                ollamaThinkMode: OllamaThinkMode.high.rawValue,
+                ollamaKeepAlive: "5m",
+                ollamaLogprobsEnabled: true,
+                ollamaTopLogprobs: 4,
+                ollamaOptionsJSON: #"{"temperature":0.6,"num_ctx":8192}"#
+            ),
+            model: "qwen3"
+        )
+
+        XCTAssertEqual(body["format"] as? String, "json")
+        XCTAssertEqual(body["think"] as? String, "high")
+        XCTAssertEqual(body["keep_alive"] as? String, "5m")
+        XCTAssertEqual(body["logprobs"] as? Bool, true)
+        XCTAssertEqual(body["top_logprobs"] as? Int, 4)
+
+        let options = try XCTUnwrap(body["options"] as? [String: Any])
+        XCTAssertEqual(options["temperature"] as? Double, 0.6)
+        XCTAssertEqual(options["num_ctx"] as? Int, 8192)
+        XCTAssertEqual(options["num_predict"] as? Int, 32)
+    }
+
+    func testOllamaNativeReachabilityBodyUsesGenerateShapeForBaseEndpoint() async throws {
+        let tester = RemoteProviderConnectivityTester(testTarget: .llm(.ollama))
+
+        let body = try await tester.openAICompatibleReachabilityBody(
+            provider: .ollama,
+            endpoint: "http://localhost:11434/api/generate",
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3"
+            ),
+            model: "qwen3"
+        )
+
+        XCTAssertEqual(body["prompt"] as? String, "ping")
+        XCTAssertNil(body["messages"])
     }
 }

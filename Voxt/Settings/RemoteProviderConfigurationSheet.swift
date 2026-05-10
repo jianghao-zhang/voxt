@@ -26,50 +26,80 @@ struct RemoteProviderConfigurationSheet: View {
     @State var doubaoDictionaryMode = DoubaoDictionaryMode.requestScoped.rawValue
     @State var doubaoEnableRequestHotwords = true
     @State var doubaoEnableRequestCorrections = true
+    @State var ollamaResponseFormat = OllamaResponseFormat.plain.rawValue
+    @State var ollamaJSONSchema = ""
+    @State var ollamaThinkMode = OllamaThinkMode.off.rawValue
+    @State var ollamaKeepAlive = ""
+    @State var ollamaLogprobsEnabled = false
+    @State var ollamaTopLogprobsText = ""
+    @State var ollamaOptionsJSON = ""
     @State var isTestingConnection = false
     @State var testResultMessage: String?
     @State var testResultIsSuccess = false
+
+    private var dialogWidth: CGFloat {
+        isOllamaLLMProvider ? 520 : 440
+    }
+
+    private var dialogMaxHeight: CGFloat {
+        isOllamaLLMProvider ? 720 : 560
+    }
+
+    private var scrollContentMaxHeight: CGFloat {
+        isOllamaLLMProvider ? 600 : 440
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(AppLocalization.format("Configure %@", providerTitle))
                 .font(.title3.weight(.semibold))
 
-            modelSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    modelSection
 
-            if showsMeetingASRSection {
-                meetingModelSection
-            }
+                    if showsMeetingASRSection {
+                        meetingModelSection
+                    }
 
-            if !isDoubaoASRTest {
-                endpointAndKeySection
-            }
+                    if !isDoubaoASRTest {
+                        endpointAndKeySection
+                    }
 
-            if showsSearchSection {
-                searchSection
-            }
+                    if showsSearchSection {
+                        searchSection
+                    }
 
-            if showsDoubaoFields {
-                doubaoCredentialsSection
-                doubaoDictionarySection
-            }
+                    if isOllamaLLMProvider {
+                        ollamaConfigurationSection
+                    }
 
-            if isOpenAIASRTest {
-                openAIChunkSection
-            }
+                    if showsDoubaoFields {
+                        doubaoCredentialsSection
+                        doubaoDictionarySection
+                    }
 
-            if let credentialHint, !credentialHint.isEmpty {
-                Text(credentialHint)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+                    if isOpenAIASRTest {
+                        openAIChunkSection
+                    }
 
-            if let activeProviderNotice {
-                Text(activeProviderNotice)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    if let credentialHint, !credentialHint.isEmpty {
+                        Text(credentialHint)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let activeProviderNotice {
+                        Text(activeProviderNotice)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(.trailing, 4)
             }
+            .frame(maxHeight: scrollContentMaxHeight)
 
             actionSection
 
@@ -81,7 +111,8 @@ struct RemoteProviderConfigurationSheet: View {
             }
         }
         .padding(18)
-        .frame(width: 440)
+        .frame(width: dialogWidth)
+        .frame(maxHeight: dialogMaxHeight, alignment: .top)
         .onAppear {
             configureModelSelection()
             customModelID = configuration.model
@@ -96,6 +127,13 @@ struct RemoteProviderConfigurationSheet: View {
             doubaoDictionaryMode = configuration.doubaoDictionaryMode
             doubaoEnableRequestHotwords = configuration.doubaoEnableRequestHotwords
             doubaoEnableRequestCorrections = configuration.doubaoEnableRequestCorrections
+            ollamaResponseFormat = configuration.ollamaResponseFormat
+            ollamaJSONSchema = configuration.ollamaJSONSchema
+            ollamaThinkMode = configuration.ollamaThinkMode
+            ollamaKeepAlive = configuration.ollamaKeepAlive
+            ollamaLogprobsEnabled = configuration.ollamaLogprobsEnabled
+            ollamaTopLogprobsText = configuration.ollamaTopLogprobs.map(String.init) ?? ""
+            ollamaOptionsJSON = configuration.ollamaOptionsJSON
         }
     }
 }

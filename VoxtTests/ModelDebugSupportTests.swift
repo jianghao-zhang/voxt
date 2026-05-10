@@ -180,6 +180,12 @@ final class ModelDebugSupportTests: XCTestCase {
                 model: "",
                 endpoint: "",
                 apiKey: ""
+            ),
+            RemoteLLMProvider.ollama.rawValue: RemoteProviderConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                endpoint: "http://127.0.0.1:11434/api/chat",
+                apiKey: ""
             )
         ]
 
@@ -198,5 +204,6 @@ final class ModelDebugSupportTests: XCTestCase {
         XCTAssertFalse(asrOptions.contains(where: { $0.id == "remote-asr:\(RemoteASRProvider.doubaoASR.rawValue)" }))
         XCTAssertTrue(llmOptions.contains(where: { $0.id == "remote-llm:\(RemoteLLMProvider.openAI.rawValue)" }))
         XCTAssertFalse(llmOptions.contains(where: { $0.id == "remote-llm:\(RemoteLLMProvider.aliyunBailian.rawValue)" }))
+        XCTAssertTrue(llmOptions.contains(where: { $0.id == "remote-llm:\(RemoteLLMProvider.ollama.rawValue)" }))
     }
 }

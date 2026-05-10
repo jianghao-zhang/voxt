@@ -130,7 +130,11 @@ In Voxt, the remote LLM configuration sheet supports both preset models and cust
 - Suggested default: `qwen2.5`
 - Built-in model range: locally hosted or self-managed Qwen, Llama, Mistral, Gemma, DeepSeek, GPT-OSS, and related models
 - Representative models: `qwen2.5`, `qwen3`, `llama3.1`, `mistral`, `gemma2`, `deepseek-v3.1:671b`, `gpt-oss:120b`
-- Overview: Best for users running local deployments or self-hosted gateways. Voxt connects through an OpenAI-compatible interface, so it fits naturally into existing Ollama setups.
+- API key: optional. Local Ollama setups usually leave this blank, but self-hosted gateways can still provide a bearer token if needed.
+- Endpoints: supports both native Ollama `/api/chat` and OpenAI-compatible `/v1/chat/completions` or `/v1/responses`.
+- Advanced config: the configuration sheet now exposes response format, think mode, keep-alive, logprobs, JSON schema, and an `Options JSON` editor.
+- `Options JSON` examples: `{"num_ctx": 8192}`, `{"seed": 7}`, `{"repeat_penalty": 1.1}`, `{"stop": ["</s>"]}`
+- Overview: Best for users running local deployments or self-hosted gateways. Native Ollama endpoints unlock extra runtime controls, while OpenAI-compatible endpoints keep existing gateways reusable.
 
 *Soon*
 

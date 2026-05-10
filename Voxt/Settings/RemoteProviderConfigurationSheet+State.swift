@@ -1,6 +1,22 @@
 import SwiftUI
 
 extension RemoteProviderConfigurationSheet {
+    var isOllamaLLMProvider: Bool {
+        llmProviderForPicker == .ollama
+    }
+
+    var apiKeyFieldTitle: String {
+        isOllamaLLMProvider
+            ? AppLocalization.localizedString("API Key (Optional)")
+            : AppLocalization.localizedString("API Key")
+    }
+
+    var apiKeyFieldPlaceholder: String {
+        isOllamaLLMProvider
+            ? AppLocalization.localizedString("Paste API key (optional)")
+            : AppLocalization.localizedString("Paste API key")
+    }
+
     var providerModelMenuOptions: [SettingsMenuOption<String>] {
         if let llmProvider = llmProviderForPicker {
             var options = (
@@ -51,6 +67,32 @@ extension RemoteProviderConfigurationSheet {
             ?? AppLocalization.localizedString("Custom...")
     }
 
+    var ollamaResponseFormatMenuOptions: [SettingsMenuOption<String>] {
+        OllamaResponseFormat.allCases.map { option in
+            SettingsMenuOption(value: option.rawValue, title: option.title)
+        }
+    }
+
+    var ollamaResponseFormatSelectedTitle: String {
+        OllamaResponseFormat(rawValue: ollamaResponseFormat)?.title
+            ?? OllamaResponseFormat.plain.title
+    }
+
+    var shouldShowOllamaJSONSchemaField: Bool {
+        OllamaResponseFormat(rawValue: ollamaResponseFormat) == .jsonSchema
+    }
+
+    var ollamaThinkModeMenuOptions: [SettingsMenuOption<String>] {
+        OllamaThinkMode.allCases.map { option in
+            SettingsMenuOption(value: option.rawValue, title: option.title)
+        }
+    }
+
+    var ollamaThinkModeSelectedTitle: String {
+        OllamaThinkMode(rawValue: ollamaThinkMode)?.title
+            ?? OllamaThinkMode.off.title
+    }
+
     var currentConfigurationSnapshot: RemoteProviderConfiguration {
         RemoteProviderConfiguration(
             providerID: configuration.providerID,
@@ -64,7 +106,14 @@ extension RemoteProviderConfigurationSheet {
             openAIChunkPseudoRealtimeEnabled: isOpenAIASRTest ? openAIChunkPseudoRealtimeEnabled : false,
             doubaoDictionaryMode: doubaoDictionaryMode,
             doubaoEnableRequestHotwords: doubaoEnableRequestHotwords,
-            doubaoEnableRequestCorrections: doubaoEnableRequestCorrections
+            doubaoEnableRequestCorrections: doubaoEnableRequestCorrections,
+            ollamaResponseFormat: ollamaResponseFormat,
+            ollamaJSONSchema: ollamaJSONSchema.trimmingCharacters(in: .whitespacesAndNewlines),
+            ollamaThinkMode: ollamaThinkMode,
+            ollamaKeepAlive: ollamaKeepAlive.trimmingCharacters(in: .whitespacesAndNewlines),
+            ollamaLogprobsEnabled: ollamaLogprobsEnabled,
+            ollamaTopLogprobs: parsedOllamaTopLogprobsValue(),
+            ollamaOptionsJSON: ollamaOptionsJSON.trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 
@@ -263,22 +312,97 @@ extension RemoteProviderConfigurationSheet {
     }
 
     func testConnection() {
-        runConnectionTest(for: testTarget, modelForLog: currentConfigurationSnapshot.model)
+        guard let snapshot = validatedCurrentConfigurationSnapshot() else { return }
+        runConnectionTest(for: testTarget, modelForLog: snapshot.model, snapshot: snapshot)
     }
 
     func testMeetingConnection() {
         guard let provider = asrProviderForSheet else { return }
+        guard let snapshot = validatedCurrentConfigurationSnapshot() else { return }
         runConnectionTest(
             for: .meetingASR(provider),
-            modelForLog: currentConfigurationSnapshot.meetingModel
+            modelForLog: snapshot.meetingModel,
+            snapshot: snapshot
         )
+    }
+
+    func saveConfiguration() {
+        guard let snapshot = validatedCurrentConfigurationSnapshot() else { return }
+        onSave(snapshot)
+        dismiss()
+    }
+
+    func validatedCurrentConfigurationSnapshot() -> RemoteProviderConfiguration? {
+        if let message = validationMessage() {
+            testResultIsSuccess = false
+            testResultMessage = message
+            return nil
+        }
+        return currentConfigurationSnapshot
+    }
+
+    func validationMessage() -> String? {
+        guard isOllamaLLMProvider else { return nil }
+
+        if let topLogprobsMessage = validateOllamaTopLogprobs() {
+            return topLogprobsMessage
+        }
+        if let optionsMessage = validateJSONObjectField(
+            ollamaOptionsJSON,
+            fieldName: AppLocalization.localizedString("Options JSON"),
+            requiresValue: false
+        ) {
+            return optionsMessage
+        }
+        if shouldShowOllamaJSONSchemaField,
+           let schemaMessage = validateJSONObjectField(
+               ollamaJSONSchema,
+               fieldName: AppLocalization.localizedString("JSON Schema"),
+               requiresValue: true
+           ) {
+            return schemaMessage
+        }
+        return nil
+    }
+
+    func validateOllamaTopLogprobs() -> String? {
+        guard ollamaLogprobsEnabled else { return nil }
+        let trimmed = ollamaTopLogprobsText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let value = Int(trimmed), value >= 0 else {
+            return AppLocalization.localizedString("Top Logprobs must be a non-negative integer.")
+        }
+        return nil
+    }
+
+    func validateJSONObjectField(_ value: String, fieldName: String, requiresValue: Bool) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return requiresValue ? AppLocalization.format("%@ must be a JSON object.", fieldName) : nil
+        }
+        guard let data = trimmed.data(using: .utf8) else {
+            return AppLocalization.format("%@ must be valid JSON.", fieldName)
+        }
+        guard
+            let object = try? JSONSerialization.jsonObject(with: data),
+            object is [String: Any]
+        else {
+            return AppLocalization.format("%@ must be a JSON object.", fieldName)
+        }
+        return nil
+    }
+
+    func parsedOllamaTopLogprobsValue() -> Int? {
+        let trimmed = ollamaTopLogprobsText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return Int(trimmed)
     }
 
     func runConnectionTest(
         for target: RemoteProviderTestTarget,
-        modelForLog: String
+        modelForLog: String,
+        snapshot: RemoteProviderConfiguration
     ) {
-        let snapshot = currentConfigurationSnapshot
         isTestingConnection = true
         testResultMessage = nil
         testResultIsSuccess = false

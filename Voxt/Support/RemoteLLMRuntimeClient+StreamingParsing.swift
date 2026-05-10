@@ -128,6 +128,10 @@ extension RemoteLLMRuntimeClient {
             return reply
         }
 
+        if let response = dict["response"] as? String, !response.isEmpty {
+            return response
+        }
+
         return nil
     }
 
@@ -303,7 +307,8 @@ extension RemoteLLMRuntimeClient {
             from: text,
             markers: [
                 #""content":"#,
-                #""text":"#
+                #""text":"#,
+                #""response":"#
             ]
         ) {
             let normalized = decodeStreamingJSONStringFragment(envelopeFragment)
@@ -315,6 +320,7 @@ extension RemoteLLMRuntimeClient {
         let patterns = [
             #""delta"\s*:\s*\{\s*"content"\s*:\s*"((?:\\.|[^"\\])*)""#,
             #""delta"\s*:\s*\{\s*"text"\s*:\s*"((?:\\.|[^"\\])*)""#,
+            #""response"\s*:\s*"((?:\\.|[^"\\])*)""#,
             #""message"\s*:\s*\{\s*"[^"]*"\s*:\s*"[^"]*"\s*,\s*"content"\s*:\s*"((?:\\.|[^"\\])*)""#,
             #""message"\s*:\s*\{[\s\S]*?"content"\s*:\s*"((?:\\.|[^"\\])*)""#,
             #""content"\s*:\s*"((?:\\.|[^"\\])*)""#

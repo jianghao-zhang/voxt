@@ -52,6 +52,32 @@ class MLXModelManager: ObservableObject {
         case error(String)
     }
 
+    struct CatalogSnapshot: Equatable {
+        let repo: String
+        let isDownloaded: Bool
+        let hasResumableDownload: Bool
+        let state: ModelState
+        let pausedStatusMessage: String?
+        let hasActiveDownloadTask: Bool
+
+        var isDownloading: Bool {
+            if hasActiveDownloadTask {
+                return true
+            }
+            if case .downloading = state {
+                return true
+            }
+            return false
+        }
+
+        var isPaused: Bool {
+            if case .paused = state {
+                return true
+            }
+            return hasResumableDownload
+        }
+    }
+
     struct TranscriptionBehavior: Equatable {
         enum CorrectionMode: Equatable {
             case incremental
@@ -68,11 +94,11 @@ class MLXModelManager: ObservableObject {
     }
 
     @Published private(set) var state: ModelState = .notDownloaded
-    @Published private(set) var stateByRepo: [String: ModelState] = [:]
+    private(set) var stateByRepo: [String: ModelState] = [:]
     @Published private(set) var sizeState: ModelSizeState = .unknown
     @Published private(set) var remoteSizeTextByRepo: [String: String] = [:]
     @Published private(set) var pausedStatusMessage: String?
-    @Published private(set) var pausedStatusMessageByRepo: [String: String] = [:]
+    private(set) var pausedStatusMessageByRepo: [String: String] = [:]
     @Published private(set) var activeDownloadRepos: Set<String> = []
 
     private var downloadedStateByRepo: [String: Bool] = [:]
@@ -153,12 +179,8 @@ class MLXModelManager: ObservableObject {
 
     func hasResumableDownload(repo: String) -> Bool {
         let canonicalRepo = Self.canonicalModelRepo(repo)
-        guard !isModelDownloaded(repo: canonicalRepo) else { return false }
-        guard let tempDir = downloadTempDirectory(for: canonicalRepo),
-              FileManager.default.fileExists(atPath: tempDir.path) else {
-            return false
-        }
-        return FileManager.default.directoryContainsRegularFiles(at: tempDir)
+        let isDownloaded = isModelDownloaded(repo: canonicalRepo)
+        return hasResumableDownload(repo: canonicalRepo, isDownloaded: isDownloaded)
     }
 
     func modelSizeOnDisk(repo: String) -> String {
@@ -346,13 +368,29 @@ class MLXModelManager: ObservableObject {
     }
 
     func state(for repo: String) -> ModelState {
-        MLXModelPerRepoStateSupport.resolvedState(
-            for: repo,
+        let canonicalRepo = Self.canonicalModelRepo(repo)
+        return catalogSnapshot(for: canonicalRepo).state
+    }
+
+    func catalogSnapshot(for repo: String) -> CatalogSnapshot {
+        let canonicalRepo = Self.canonicalModelRepo(repo)
+        let isDownloaded = isModelDownloaded(repo: canonicalRepo)
+        let hasResumableDownload = hasResumableDownload(repo: canonicalRepo, isDownloaded: isDownloaded)
+        let resolvedState = MLXModelPerRepoStateSupport.resolvedState(
+            for: canonicalRepo,
             currentRepo: modelRepo,
             currentState: state,
             storedStates: stateByRepo,
-            isDownloaded: { isModelDownloaded(repo: $0) },
-            hasResumableDownload: { hasResumableDownload(repo: $0) }
+            isDownloaded: { _ in isDownloaded },
+            hasResumableDownload: { _ in hasResumableDownload }
+        )
+        return CatalogSnapshot(
+            repo: canonicalRepo,
+            isDownloaded: isDownloaded,
+            hasResumableDownload: hasResumableDownload,
+            state: resolvedState,
+            pausedStatusMessage: pausedStatusMessage(for: canonicalRepo),
+            hasActiveDownloadTask: downloadTasksByRepo[canonicalRepo] != nil
         )
     }
 
@@ -754,6 +792,15 @@ class MLXModelManager: ObservableObject {
         return ModelStorageDirectoryManager.resolvedRootURL()
             .appendingPathComponent("mlx-audio")
             .appendingPathComponent("\(modelSubdir)-download")
+    }
+
+    private func hasResumableDownload(repo: String, isDownloaded: Bool) -> Bool {
+        guard !isDownloaded else { return false }
+        guard let tempDir = downloadTempDirectory(for: repo),
+              FileManager.default.fileExists(atPath: tempDir.path) else {
+            return false
+        }
+        return FileManager.default.directoryContainsRegularFiles(at: tempDir)
     }
 
     private func cleanupPartialDownload(for repo: String) {

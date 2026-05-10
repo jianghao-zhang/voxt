@@ -205,6 +205,34 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         XCTAssertEqual(importedSuggestions, dictionarySuggestions)
     }
 
+    func testSanitizedRemoteConfigurationsPreserveOllamaFields() {
+        let raw = RemoteModelConfigurationStore.saveConfigurations([
+            RemoteLLMProvider.ollama.rawValue: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                endpoint: "http://127.0.0.1:11434/api/chat",
+                apiKey: "optional-key",
+                ollamaResponseFormat: OllamaResponseFormat.json.rawValue,
+                ollamaThinkMode: OllamaThinkMode.on.rawValue,
+                ollamaKeepAlive: "5m",
+                ollamaLogprobsEnabled: true,
+                ollamaTopLogprobs: 2,
+                ollamaOptionsJSON: #"{"num_ctx":4096}"#
+            )
+        ])
+
+        let sanitized = ConfigurationTransferManager.sanitizeRemoteConfigurations(raw)
+        let restoredRaw = ConfigurationTransferManager.restoreRemoteConfigurations(sanitized)
+        let restored = RemoteModelConfigurationStore.loadConfigurations(from: restoredRaw)[RemoteLLMProvider.ollama.rawValue]
+
+        XCTAssertEqual(restored?.ollamaResponseFormat, OllamaResponseFormat.json.rawValue)
+        XCTAssertEqual(restored?.ollamaThinkMode, OllamaThinkMode.on.rawValue)
+        XCTAssertEqual(restored?.ollamaKeepAlive, "5m")
+        XCTAssertEqual(restored?.ollamaLogprobsEnabled, true)
+        XCTAssertEqual(restored?.ollamaTopLogprobs, 2)
+        XCTAssertEqual(restored?.ollamaOptionsJSON, #"{"num_ctx":4096}"#)
+    }
+
     func testGeneralSettingsDecoderBackfillsNewFields() throws {
         let json = """
         {
