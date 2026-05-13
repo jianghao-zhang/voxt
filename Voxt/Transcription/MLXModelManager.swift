@@ -103,6 +103,7 @@ class MLXModelManager: ObservableObject {
 
     private var downloadedStateByRepo: [String: Bool] = [:]
     private var downloadedStateCachePrimed = false
+    private var resumableDownloadStateByRepo: [String: Bool] = [:]
     private var localSizeTextByRepo: [String: String] = [:]
     private var modelRepo: String
     private var hubBaseURL: URL
@@ -455,6 +456,7 @@ class MLXModelManager: ObservableObject {
     func refreshStorageRoot() {
         downloadedStateByRepo.removeAll()
         downloadedStateCachePrimed = false
+        resumableDownloadStateByRepo.removeAll()
         localSizeTextByRepo.removeAll()
         MLXModelPerRepoStateSupport.resetStorageRootState(
             currentPausedStatusMessage: &pausedStatusMessage,
@@ -472,6 +474,7 @@ class MLXModelManager: ObservableObject {
         if downloadTasksByRepo[canonicalRepo] != nil { return }
         if case .loading = state(for: canonicalRepo) { return }
 
+        resumableDownloadStateByRepo.removeValue(forKey: canonicalRepo)
         let task = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -512,6 +515,7 @@ class MLXModelManager: ObservableObject {
                     fileManager: .default
                 )
                 downloadedStateByRepo[canonicalRepo] = true
+                resumableDownloadStateByRepo[canonicalRepo] = false
                 localSizeTextByRepo.removeValue(forKey: canonicalRepo)
                 if canonicalRepo == modelRepo {
                     checkExistingModel()
@@ -669,6 +673,7 @@ class MLXModelManager: ObservableObject {
 
     private func invalidateLocalCache(for repo: String) {
         downloadedStateByRepo.removeValue(forKey: repo)
+        resumableDownloadStateByRepo.removeValue(forKey: repo)
         localSizeTextByRepo.removeValue(forKey: repo)
     }
 
@@ -795,15 +800,25 @@ class MLXModelManager: ObservableObject {
     }
 
     private func hasResumableDownload(repo: String, isDownloaded: Bool) -> Bool {
-        guard !isDownloaded else { return false }
-        guard let tempDir = downloadTempDirectory(for: repo),
-              FileManager.default.fileExists(atPath: tempDir.path) else {
+        if isDownloaded {
+            resumableDownloadStateByRepo[repo] = false
             return false
         }
-        return FileManager.default.directoryContainsRegularFiles(at: tempDir)
+        if let cached = resumableDownloadStateByRepo[repo] {
+            return cached
+        }
+        guard let tempDir = downloadTempDirectory(for: repo),
+              FileManager.default.fileExists(atPath: tempDir.path) else {
+            resumableDownloadStateByRepo[repo] = false
+            return false
+        }
+        let hasResumableDownload = FileManager.default.directoryContainsRegularFiles(at: tempDir)
+        resumableDownloadStateByRepo[repo] = hasResumableDownload
+        return hasResumableDownload
     }
 
     private func cleanupPartialDownload(for repo: String) {
+        resumableDownloadStateByRepo[repo] = false
         if let tempDir = downloadTempDirectory(for: repo) {
             try? FileManager.default.removeItem(at: tempDir)
         }

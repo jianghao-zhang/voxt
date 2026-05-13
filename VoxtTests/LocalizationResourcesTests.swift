@@ -2,10 +2,39 @@ import XCTest
 @testable import Voxt
 
 final class LocalizationResourcesTests: XCTestCase {
+    private var originalInterfaceLanguage: String?
+
+    override func setUp() {
+        super.setUp()
+        originalInterfaceLanguage = UserDefaults.standard.string(forKey: AppPreferenceKey.interfaceLanguage)
+    }
+
+    override func tearDown() {
+        if let originalInterfaceLanguage {
+            UserDefaults.standard.set(originalInterfaceLanguage, forKey: AppPreferenceKey.interfaceLanguage)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppPreferenceKey.interfaceLanguage)
+        }
+        AppLocalization.refreshLanguageCache()
+        super.tearDown()
+    }
+
     func testFeatureMenuTitleIsLocalizedInSupportedLanguages() {
         XCTAssertEqual(AppLocalization.localizedString("Feature", localeIdentifier: "en"), "Feature")
         XCTAssertEqual(AppLocalization.localizedString("Feature", localeIdentifier: "zh-Hans"), "功能")
         XCTAssertEqual(AppLocalization.localizedString("Feature", localeIdentifier: "ja"), "機能")
+    }
+
+    func testCachedInterfaceLanguageRefreshesFromUserDefaults() {
+        UserDefaults.standard.set(AppInterfaceLanguage.english.rawValue, forKey: AppPreferenceKey.interfaceLanguage)
+        AppLocalization.refreshLanguageCache()
+        XCTAssertEqual(AppLocalization.language, .english)
+        XCTAssertEqual(AppLocalization.localizedString("Feature"), "Feature")
+
+        UserDefaults.standard.set(AppInterfaceLanguage.chineseSimplified.rawValue, forKey: AppPreferenceKey.interfaceLanguage)
+        AppLocalization.refreshLanguageCache()
+        XCTAssertEqual(AppLocalization.language, .chineseSimplified)
+        XCTAssertEqual(AppLocalization.localizedString("Feature"), "功能")
     }
 
     func testBackLabelIsLocalizedInSupportedLanguages() {

@@ -142,6 +142,7 @@ struct SettingsView: View {
             applyNavigationTarget(target)
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtInterfaceLanguageDidChange)) { _ in
+            AppLocalization.refreshLanguageCache()
             languageRefreshToken = UUID()
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in

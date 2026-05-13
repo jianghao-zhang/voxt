@@ -76,43 +76,7 @@ extension ModelCatalogBuilder {
     }
 
     private func resolvedMLXCatalogSnapshot(for repo: String) -> MLXModelManager.CatalogSnapshot {
-        let managerSnapshot = mlxModelManager.catalogSnapshot(for: repo)
-        let downloading = isDownloadingModel(repo)
-        let paused = !downloading && isPausedModel(repo)
-
-        guard downloading || paused else {
-            return managerSnapshot
-        }
-
-        let state: MLXModelManager.ModelState
-        if downloading {
-            state = .downloading(
-                progress: 0,
-                completed: 0,
-                total: 0,
-                currentFile: nil,
-                completedFiles: 0,
-                totalFiles: 0
-            )
-        } else {
-            state = .paused(
-                progress: 0,
-                completed: 0,
-                total: 0,
-                currentFile: nil,
-                completedFiles: 0,
-                totalFiles: 0
-            )
-        }
-
-        return .init(
-            repo: managerSnapshot.repo,
-            isDownloaded: managerSnapshot.isDownloaded,
-            hasResumableDownload: paused || managerSnapshot.hasResumableDownload,
-            state: state,
-            pausedStatusMessage: managerSnapshot.pausedStatusMessage,
-            hasActiveDownloadTask: downloading || managerSnapshot.hasActiveDownloadTask
-        )
+        mlxModelManager.catalogSnapshot(for: repo)
     }
 
     func whisperASREntries() -> [ModelCatalogEntry] {

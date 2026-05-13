@@ -50,4 +50,16 @@ final class ModelSettingsProgressRefreshSupportTests: XCTestCase {
 
         XCTAssertFalse(shouldPoll)
     }
+
+    func testShouldNotPollModelStateForLoadingWithoutActiveDownloads() {
+        let shouldPoll = ModelSettingsProgressRefreshSupport.shouldPollModelState(
+            mlxState: .loading,
+            mlxActiveDownloadRepos: [],
+            whisperState: .loading,
+            whisperActiveDownload: nil,
+            customLLMState: .notDownloaded
+        )
+
+        XCTAssertFalse(shouldPoll)
+    }
 }

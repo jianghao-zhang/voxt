@@ -1,17 +1,54 @@
 import Foundation
 
 enum AppLocalization {
+    private struct LanguageSnapshot {
+        let language: AppInterfaceLanguage
+        let localeIdentifier: String
+        let locale: Locale
+    }
+
+    private static let localizedBundles: [String: Bundle] = {
+        var bundles = [String: Bundle]()
+        for identifier in ["en", "zh-Hans", "ja"] {
+            guard let path = Bundle.main.path(forResource: identifier, ofType: "lproj"),
+                  let bundle = Bundle(path: path)
+            else {
+                continue
+            }
+            bundles[identifier] = bundle
+        }
+        return bundles
+    }()
+
+    private static let languageSnapshotLock = NSLock()
+    private static var languageSnapshot = makeLanguageSnapshot()
+    private static let interfaceLanguageObserver: NSObjectProtocol = {
+        NotificationCenter.default.addObserver(
+            forName: .voxtInterfaceLanguageDidChange,
+            object: nil,
+            queue: nil
+        ) { _ in
+            refreshLanguageCache()
+        }
+    }()
+
     static var language: AppInterfaceLanguage {
-        let raw = UserDefaults.standard.string(forKey: AppPreferenceKey.interfaceLanguage)
-        return AppInterfaceLanguage(rawValue: raw ?? "") ?? .system
+        currentLanguageSnapshot().language
     }
 
     static var locale: Locale {
-        language.locale
+        currentLanguageSnapshot().locale
+    }
+
+    static func refreshLanguageCache(defaults: UserDefaults = .standard) {
+        let snapshot = makeLanguageSnapshot(defaults: defaults)
+        languageSnapshotLock.lock()
+        languageSnapshot = snapshot
+        languageSnapshotLock.unlock()
     }
 
     static func localizedString(_ key: String) -> String {
-        let identifier = language.localeIdentifier
+        let identifier = currentLanguageSnapshot().localeIdentifier
         if let localized = resolvedLocalizedString(key, localeIdentifier: identifier) {
             return localized
         }
@@ -35,10 +72,27 @@ enum AppLocalization {
         String(format: localizedString(key), locale: locale, arguments: arguments)
     }
 
+    private static func currentLanguageSnapshot() -> LanguageSnapshot {
+        _ = interfaceLanguageObserver
+        languageSnapshotLock.lock()
+        let snapshot = languageSnapshot
+        languageSnapshotLock.unlock()
+        return snapshot
+    }
+
+    private static func makeLanguageSnapshot(defaults: UserDefaults = .standard) -> LanguageSnapshot {
+        let raw = defaults.string(forKey: AppPreferenceKey.interfaceLanguage)
+        let language = AppInterfaceLanguage(rawValue: raw ?? "") ?? .system
+        let localeIdentifier = language.localeIdentifier
+        return LanguageSnapshot(
+            language: language,
+            localeIdentifier: localeIdentifier,
+            locale: Locale(identifier: localeIdentifier)
+        )
+    }
+
     private static func resolvedLocalizedString(_ key: String, localeIdentifier: String) -> String? {
-        guard let path = Bundle.main.path(forResource: localeIdentifier, ofType: "lproj"),
-              let bundle = Bundle(path: path)
-        else {
+        guard let bundle = localizedBundles[localeIdentifier] else {
             return nil
         }
         let value = bundle.localizedString(forKey: key, value: key, table: nil)

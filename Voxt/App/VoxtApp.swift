@@ -461,6 +461,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
+                AppLocalization.refreshLanguageCache()
                 self?.buildMenu()
             }
         }

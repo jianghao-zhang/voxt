@@ -33,7 +33,7 @@ enum ModelSettingsProgressRefreshSupport {
 
     private static func isMLXStatePollingRequired(_ state: MLXModelManager.ModelState) -> Bool {
         switch state {
-        case .downloading, .loading:
+        case .downloading:
             return true
         default:
             return false
@@ -42,7 +42,7 @@ enum ModelSettingsProgressRefreshSupport {
 
     private static func isWhisperStatePollingRequired(_ state: WhisperKitModelManager.ModelState) -> Bool {
         switch state {
-        case .downloading, .loading:
+        case .downloading:
             return true
         default:
             return false

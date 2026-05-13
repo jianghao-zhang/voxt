@@ -8,6 +8,7 @@ final class RelativeNoteTimestampFormatterTests: XCTestCase {
         super.setUp()
         originalInterfaceLanguage = UserDefaults.standard.string(forKey: AppPreferenceKey.interfaceLanguage)
         UserDefaults.standard.set(AppInterfaceLanguage.english.rawValue, forKey: AppPreferenceKey.interfaceLanguage)
+        AppLocalization.refreshLanguageCache()
     }
 
     override func tearDown() {
@@ -16,6 +17,7 @@ final class RelativeNoteTimestampFormatterTests: XCTestCase {
         } else {
             UserDefaults.standard.removeObject(forKey: AppPreferenceKey.interfaceLanguage)
         }
+        AppLocalization.refreshLanguageCache()
         super.tearDown()
     }
 
