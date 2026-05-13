@@ -37,6 +37,45 @@ enum HistorySettingsData {
         }
     }
 
+    static func searchEntries(
+        _ entries: [TranscriptionHistoryEntry],
+        query: String
+    ) -> [TranscriptionHistoryEntry] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedQuery = DictionaryStore.normalizeTerm(query)
+        guard !trimmedQuery.isEmpty || !normalizedQuery.isEmpty else { return entries }
+
+        return entries.filter { entry in
+            if entry.text.localizedCaseInsensitiveContains(trimmedQuery) {
+                return true
+            }
+            if entry.displayTitle?.localizedCaseInsensitiveContains(trimmedQuery) == true {
+                return true
+            }
+            if entry.focusedAppName?.localizedCaseInsensitiveContains(trimmedQuery) == true {
+                return true
+            }
+            if !normalizedQuery.isEmpty {
+                return entry.dictionaryHitTerms.contains { DictionaryStore.normalizeTerm($0).contains(normalizedQuery) }
+                    || entry.dictionaryCorrectedTerms.contains { DictionaryStore.normalizeTerm($0).contains(normalizedQuery) }
+            }
+            return false
+        }
+    }
+
+    static func searchNotes(
+        _ notes: [VoxtNoteItem],
+        query: String
+    ) -> [VoxtNoteItem] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return notes }
+
+        return notes.filter {
+            $0.title.localizedCaseInsensitiveContains(trimmedQuery)
+                || $0.text.localizedCaseInsensitiveContains(trimmedQuery)
+        }
+    }
+
     static func visibleEntries<T>(
         from items: [T],
         visibleLimit: Int

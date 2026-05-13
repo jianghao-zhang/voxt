@@ -18,6 +18,29 @@ enum DictionaryEntryCollection {
         ]
     }
 
+    static func searchEntries(_ entries: [DictionaryEntry], query: String) -> [DictionaryEntry] {
+        let normalizedQuery = DictionaryStore.normalizeTerm(query)
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty || !trimmedQuery.isEmpty else { return entries }
+
+        return entries.filter { entry in
+            if !normalizedQuery.isEmpty {
+                if entry.normalizedTerm.contains(normalizedQuery) {
+                    return true
+                }
+                if entry.replacementTerms.contains(where: { $0.normalizedText.contains(normalizedQuery) }) {
+                    return true
+                }
+                if entry.observedVariants.contains(where: { $0.normalizedText.contains(normalizedQuery) }) {
+                    return true
+                }
+            }
+
+            return entry.term.localizedCaseInsensitiveContains(trimmedQuery)
+                || entry.groupNameSnapshot?.localizedCaseInsensitiveContains(trimmedQuery) == true
+        }
+    }
+
     static func activeEntriesForRemoteRequest(
         from entries: [DictionaryEntry],
         activeGroupID: UUID?

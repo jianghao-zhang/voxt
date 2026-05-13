@@ -238,10 +238,11 @@ struct DictionaryPromptContext {
     func glossaryText(limit: Int = 12) -> String {
         guard !isEmpty else { return "" }
 
+        let entriesByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
         var seen = Set<UUID>()
         var lines: [String] = []
         for candidate in candidates.sorted(by: { $0.score > $1.score }) {
-            guard let entry = entries.first(where: { $0.id == candidate.entryID }) else { continue }
+            guard let entry = entriesByID[candidate.entryID] else { continue }
             guard seen.insert(entry.id).inserted else { continue }
             lines.append("- \(entry.term)")
             if lines.count >= limit {
@@ -258,12 +259,13 @@ struct DictionaryPromptContext {
     func glossaryText(policy: DictionaryGlossarySelectionPolicy) -> String {
         guard !isEmpty, policy.maxTerms > 0, policy.maxCharacters > 0 else { return "" }
 
+        let entriesByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
         var seen = Set<UUID>()
         var lines: [String] = []
         var characterCount = 0
 
         for candidate in candidates.sorted(by: { $0.score > $1.score }) {
-            guard let entry = entries.first(where: { $0.id == candidate.entryID }) else { continue }
+            guard let entry = entriesByID[candidate.entryID] else { continue }
             guard seen.insert(entry.id).inserted else { continue }
 
             let line = "- \(entry.term)"
@@ -337,6 +339,31 @@ private struct DictionaryPreparedEntryInput {
     let normalized: String
     let replacementTerms: [DictionaryReplacementTerm]
 }
+
+private struct DictionaryScopeKey: Hashable {
+    let groupID: UUID?
+}
+
+private struct DictionaryValidationIndex {
+    private(set) var usedMatchKeysByScope: [DictionaryScopeKey: Set<String>] = [:]
+
+    init(entries: [DictionaryEntry], excluding excludedID: UUID? = nil) {
+        for entry in entries where entry.id != excludedID {
+            insert(entry)
+        }
+    }
+
+    func contains(_ normalizedKey: String, groupID: UUID?) -> Bool {
+        usedMatchKeysByScope[DictionaryScopeKey(groupID: groupID)]?.contains(normalizedKey) == true
+    }
+
+    mutating func insert(_ entry: DictionaryEntry) {
+        var keys = usedMatchKeysByScope[DictionaryScopeKey(groupID: entry.groupID)] ?? []
+        keys.formUnion(entry.matchKeys)
+        usedMatchKeysByScope[DictionaryScopeKey(groupID: entry.groupID)] = keys
+    }
+}
+
 @MainActor
 final class DictionaryStore: ObservableObject {
     @Published private(set) var entries: [DictionaryEntry] = []
@@ -345,7 +372,9 @@ final class DictionaryStore: ObservableObject {
     private let fileManager: FileManager
     private var reloadGeneration = 0
     private var filteredEntriesCache: [DictionaryFilter: [DictionaryEntry]] = [:]
+    private var validationIndex = DictionaryValidationIndex(entries: [])
     private let persistenceCoordinator: AsyncJSONPersistenceCoordinator
+    private let persistenceEnabled: Bool
 
     convenience init() {
         self.init(
@@ -361,11 +390,13 @@ final class DictionaryStore: ObservableObject {
         defaults: UserDefaults,
         fileManager: FileManager,
         persistenceCoordinator: AsyncJSONPersistenceCoordinator,
-        initialEntries: [DictionaryEntry]? = nil
+        initialEntries: [DictionaryEntry]? = nil,
+        persistenceEnabled: Bool = true
     ) {
         self.defaults = defaults
         self.fileManager = fileManager
         self.persistenceCoordinator = persistenceCoordinator
+        self.persistenceEnabled = persistenceEnabled
         if let initialEntries {
             applyReloadedEntries(initialEntries)
         } else {
@@ -645,7 +676,8 @@ final class DictionaryStore: ObservableObject {
         replacementTerms: [String],
         groupID: UUID?,
         excluding excludedID: UUID? = nil,
-        existingEntries: [DictionaryEntry]? = nil
+        existingEntries: [DictionaryEntry]? = nil,
+        validationIndex providedValidationIndex: DictionaryValidationIndex? = nil
     ) throws -> DictionaryPreparedEntryInput {
         let display = term.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = Self.normalizeTerm(display)
@@ -653,11 +685,18 @@ final class DictionaryStore: ObservableObject {
             throw DictionaryStoreError.emptyTerm
         }
 
-        let comparisonEntries = existingEntries ?? entries
+        let resolvedValidationIndex: DictionaryValidationIndex
+        if let providedValidationIndex {
+            resolvedValidationIndex = providedValidationIndex
+        } else if let existingEntries {
+            resolvedValidationIndex = DictionaryValidationIndex(entries: existingEntries, excluding: excludedID)
+        } else if excludedID != nil {
+            resolvedValidationIndex = DictionaryValidationIndex(entries: entries, excluding: excludedID)
+        } else {
+            resolvedValidationIndex = validationIndex
+        }
 
-        if comparisonEntries.contains(where: {
-            $0.groupID == groupID && $0.id != excludedID && $0.normalizedTerm == normalized
-        }) {
+        if resolvedValidationIndex.contains(normalized, groupID: groupID) {
             throw DictionaryStoreError.duplicateTerm
         }
 
@@ -675,11 +714,7 @@ final class DictionaryStore: ObservableObject {
 
             guard seenReplacementKeys.insert(normalizedValue).inserted else { continue }
 
-            if comparisonEntries.contains(where: {
-                $0.groupID == groupID
-                    && $0.id != excludedID
-                    && $0.matchKeys.contains(normalizedValue)
-            }) {
+            if resolvedValidationIndex.contains(normalizedValue, groupID: groupID) {
                 throw DictionaryStoreError.duplicateReplacementTerm(displayValue)
             }
 
@@ -691,14 +726,6 @@ final class DictionaryStore: ObservableObject {
             )
         }
 
-        if comparisonEntries.contains(where: {
-            $0.groupID == groupID
-                && $0.id != excludedID
-                && $0.replacementTerms.contains(where: { $0.normalizedText == normalized })
-        }) {
-            throw DictionaryStoreError.duplicateTerm
-        }
-
         return DictionaryPreparedEntryInput(
             display: display,
             normalized: normalized,
@@ -708,6 +735,7 @@ final class DictionaryStore: ObservableObject {
 
     private func importTransferEntries(_ transferEntries: [DictionaryTransferManager.Entry]) -> DictionaryImportResult {
         var mergedEntries = entries
+        var importValidationIndex = validationIndex
         var addedCount = 0
         var skippedCount = 0
 
@@ -717,21 +745,21 @@ final class DictionaryStore: ObservableObject {
                     term: transferEntry.term,
                     replacementTerms: transferEntry.replacementTerms,
                     groupID: transferEntry.groupID,
-                    existingEntries: mergedEntries
+                    validationIndex: importValidationIndex
                 )
                 let now = Date()
-                mergedEntries.append(
-                    DictionaryEntry(
-                        term: prepared.display,
-                        normalizedTerm: prepared.normalized,
-                        groupID: transferEntry.groupID,
-                        groupNameSnapshot: transferEntry.groupNameSnapshot,
-                        source: .manual,
-                        createdAt: now,
-                        updatedAt: now,
-                        replacementTerms: prepared.replacementTerms
-                    )
+                let entry = DictionaryEntry(
+                    term: prepared.display,
+                    normalizedTerm: prepared.normalized,
+                    groupID: transferEntry.groupID,
+                    groupNameSnapshot: transferEntry.groupNameSnapshot,
+                    source: .manual,
+                    createdAt: now,
+                    updatedAt: now,
+                    replacementTerms: prepared.replacementTerms
                 )
+                mergedEntries.append(entry)
+                importValidationIndex.insert(entry)
                 addedCount += 1
             } catch {
                 skippedCount += 1
@@ -815,6 +843,7 @@ final class DictionaryStore: ObservableObject {
     }
 
     private func persist() {
+        guard persistenceEnabled else { return }
         do {
             let url = try dictionaryFileURL()
             persistenceCoordinator.scheduleWrite(entries, to: url)
@@ -847,5 +876,6 @@ final class DictionaryStore: ObservableObject {
         let resolvedEntries = sort ? sortEntries(values) : values
         entries = resolvedEntries
         filteredEntriesCache = DictionaryEntryCollection.filteredEntriesCache(for: resolvedEntries)
+        validationIndex = DictionaryValidationIndex(entries: resolvedEntries)
     }
 }

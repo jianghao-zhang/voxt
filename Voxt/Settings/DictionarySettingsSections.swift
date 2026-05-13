@@ -82,17 +82,17 @@ private struct DictionarySettingsHeaderStatus: View {
 
 struct DictionaryEntriesCard: View {
     @Binding var selectedFilter: DictionaryFilter
-    let pagedVisibleEntries: [DictionaryEntry]
     let visibleEntries: [DictionaryEntry]
-    let hasMoreVisibleEntries: Bool
+    let searchText: String
     let dictionaryTransferMessage: String?
     let scopeLabel: (DictionaryEntry) -> String
     let scopeIsMissing: (DictionaryEntry) -> Bool
+    let onSearch: () -> Void
+    let onClearSearch: () -> Void
     let onCreate: () -> Void
     let onClearAll: () -> Void
     let onEdit: (DictionaryEntry) -> Void
     let onDelete: (DictionaryEntry) -> Void
-    let onLoadMore: () -> Void
 
     var body: some View {
         GroupBox {
@@ -101,6 +101,14 @@ struct DictionaryEntriesCard: View {
                     DictionaryFilterPicker(selectedFilter: $selectedFilter)
 
                     Spacer(minLength: 12)
+
+                    Button {
+                        onSearch()
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .buttonStyle(SettingsCompactIconButtonStyle())
+                    .help(AppLocalization.localizedString("Search Dictionary"))
 
                     Button(AppLocalization.localizedString("Create")) {
                         onCreate()
@@ -114,38 +122,38 @@ struct DictionaryEntriesCard: View {
                     .disabled(visibleEntries.isEmpty)
                 }
 
+                if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HStack(spacing: 8) {
+                        Text(AppLocalization.format("Filtered by \"%@\"", searchText))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Button(AppLocalization.localizedString("Clear")) {
+                            onClearSearch()
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
                 if visibleEntries.isEmpty {
-                    Text(AppLocalization.localizedString("No dictionary terms yet."))
+                    Text(emptyStateText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 6) {
-                            ForEach(pagedVisibleEntries) { entry in
-                                DictionaryRow(
-                                    entry: entry,
-                                    scopeLabel: scopeLabel(entry),
-                                    scopeIsMissing: scopeIsMissing(entry),
-                                    onEdit: { onEdit(entry) },
-                                    onDelete: { onDelete(entry) }
-                                )
-                                .onAppear {
-                                    if entry.id == pagedVisibleEntries.last?.id {
-                                        onLoadMore()
-                                    }
-                                }
-                            }
-
-                            if hasMoreVisibleEntries {
-                                Button(AppLocalization.localizedString("Load More")) {
-                                    onLoadMore()
-                                }
-                                .buttonStyle(SettingsPillButtonStyle())
-                                .padding(.top, 4)
-                            }
-                        }
+                    VirtualizedVerticalList(
+                        items: visibleEntries,
+                        rowHeight: 64,
+                        rowSpacing: 6
+                    ) { entry in
+                        DictionaryRow(
+                            entry: entry,
+                            scopeLabel: scopeLabel(entry),
+                            scopeIsMissing: scopeIsMissing(entry),
+                            onEdit: { onEdit(entry) },
+                            onDelete: { onDelete(entry) }
+                        )
                     }
-                    .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(minHeight: 240, idealHeight: 420, maxHeight: 520, alignment: .top)
                 }
 
                 if let dictionaryTransferMessage, !dictionaryTransferMessage.isEmpty {
@@ -159,5 +167,11 @@ struct DictionaryEntriesCard: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
-}
 
+    private var emptyStateText: String {
+        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return AppLocalization.localizedString("No dictionary terms yet.")
+        }
+        return AppLocalization.localizedString("No dictionary terms match this search.")
+    }
+}

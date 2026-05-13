@@ -20,8 +20,6 @@ private enum HistoryBulkDeletionTarget: Identifiable {
 }
 
 struct HistorySettingsView: View {
-    private static let pageSize = 40
-
     @Environment(\.locale) private var locale
     @AppStorage(AppPreferenceKey.historyCleanupEnabled) private var historyCleanupEnabled = true
     @AppStorage(AppPreferenceKey.historyRetentionPeriod) private var historyRetentionPeriodRaw = HistoryRetentionPeriod.ninetyDays.rawValue
@@ -35,7 +33,6 @@ struct HistorySettingsView: View {
     @State private var copiedEntryID: UUID?
     @State private var copiedNoteID: UUID?
     @State private var selectedFilter: HistoryFilterTab = .transcription
-    @State private var visibleItemLimit = pageSize
     @State private var isHistoryAudioSettingsPresented = false
     @State private var historyAudioStorageDisplayPath = ""
     @State private var historyAudioStorageSelectionError: String?
@@ -43,40 +40,39 @@ struct HistorySettingsView: View {
     @State private var historyAudioStorageStats = HistoryAudioStorageStats(storedFileCount: 0, totalBytes: 0)
     @State private var pendingBulkDeletionTarget: HistoryBulkDeletionTarget?
     @State private var selectedHistoryInfoEntry: TranscriptionHistoryEntry?
+    @State private var historySearchText = ""
+    @State private var showHistorySearchDialog = false
 
     private var historyRetentionPeriod: HistoryRetentionPeriod {
         HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) ?? .ninetyDays
     }
 
     private var filteredEntries: [TranscriptionHistoryEntry] {
-        HistorySettingsData.filteredEntries(
+        let entries = HistorySettingsData.filteredEntries(
             for: selectedFilter,
             allEntries: historyStore.allHistoryEntries
         )
+        return HistorySettingsData.searchEntries(entries, query: historySearchText)
     }
 
     private var allNotes: [VoxtNoteItem] {
-        noteStore.items
+        HistorySettingsData.searchNotes(noteStore.items, query: historySearchText)
     }
 
     private var visibleNotes: [VoxtNoteItem] {
-        HistorySettingsData.visibleEntries(from: allNotes, visibleLimit: visibleItemLimit)
+        allNotes
     }
 
     private var visibleEntries: [TranscriptionHistoryEntry] {
-        HistorySettingsData.visibleEntries(from: filteredEntries, visibleLimit: visibleItemLimit)
-    }
-
-    private var hasMoreFilteredEntries: Bool {
-        HistorySettingsData.hasMoreItems(in: filteredEntries, visibleLimit: visibleItemLimit)
-    }
-
-    private var hasMoreVisibleNotes: Bool {
-        HistorySettingsData.hasMoreItems(in: allNotes, visibleLimit: visibleItemLimit)
+        filteredEntries
     }
 
     private var isNoteTabSelected: Bool {
         selectedFilter == .note
+    }
+
+    private var isSearchActive: Bool {
+        !historySearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var emptyState: HistoryContentEmptyState {
@@ -98,6 +94,13 @@ struct HistorySettingsView: View {
                                 HistoryFilterTabPicker(selectedTab: $selectedFilter)
                                 Spacer(minLength: 12)
                                 Button {
+                                    showHistorySearchDialog = true
+                                } label: {
+                                    Image(systemName: "magnifyingglass")
+                                }
+                                .buttonStyle(SettingsCompactIconButtonStyle())
+                                .help(localized("Search History"))
+                                Button {
                                     pendingBulkDeletionTarget = isNoteTabSelected ? .notes : .history
                                 } label: {
                                     Image(systemName: "trash")
@@ -115,100 +118,27 @@ struct HistorySettingsView: View {
                                 .buttonStyle(SettingsCompactIconButtonStyle())
                             }
 
+                            if isSearchActive {
+                                HStack(spacing: 8) {
+                                    Text(AppLocalization.format("Filtered by \"%@\"", historySearchText))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+
+                                    Button(localized("Clear")) {
+                                        historySearchText = ""
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+
                             if let emptyStateKey = emptyState.localizedKey {
                                 Text(localized(emptyStateKey))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else if isNoteTabSelected {
-                                ScrollView {
-                                    LazyVStack(spacing: 8) {
-                                        ForEach(visibleNotes) { item in
-                                            NoteHistoryRow(
-                                                item: item,
-                                                isCopied: copiedNoteID == item.id,
-                                                onCopy: {
-                                                    copyStringToPasteboard(item.text)
-                                                    copiedNoteID = item.id
-                                                    Task {
-                                                        try? await Task.sleep(for: .seconds(1.2))
-                                                        if copiedNoteID == item.id {
-                                                            copiedNoteID = nil
-                                                        }
-                                                    }
-                                                },
-                                                onToggleCompletion: {
-                                                    _ = noteStore.updateCompletion(!item.isCompleted, for: item.id)
-                                                },
-                                                onDelete: {
-                                                    copiedNoteID = nil
-                                                    noteStore.delete(id: item.id)
-                                                }
-                                            )
-                                            .onAppear {
-                                                if item.id == visibleNotes.last?.id {
-                                                    loadNextPageIfNeeded()
-                                                }
-                                            }
-                                        }
-
-                                        if hasMoreVisibleNotes {
-                                            Button(localized("Load More")) {
-                                                loadNextPageIfNeeded()
-                                            }
-                                            .buttonStyle(SettingsPillButtonStyle())
-                                            .padding(.top, 4)
-                                        }
-                                    }
-                                }
-                                .frame(maxHeight: .infinity, alignment: .top)
+                                notesList
                             } else {
-                                ScrollView {
-                                    LazyVStack(spacing: 8) {
-                                        ForEach(visibleEntries) { entry in
-                                            HistoryRow(
-                                                entry: entry,
-                                                audioURL: historyStore.audioURL(for: entry),
-                                                isCopied: copiedEntryID == entry.id,
-                                                onCopy: {
-                                                    copyStringToPasteboard(
-                                                        HistoryCorrectionPresentation.correctedText(
-                                                            for: entry.text,
-                                                            snapshots: entry.dictionaryCorrectionSnapshots
-                                                        )
-                                                    )
-                                                    copiedEntryID = entry.id
-                                                    Task {
-                                                        try? await Task.sleep(for: .seconds(1.2))
-                                                        if copiedEntryID == entry.id {
-                                                            copiedEntryID = nil
-                                                        }
-                                                    }
-                                                },
-                                                onShowInfo: {
-                                                    selectedHistoryInfoEntry = entry
-                                                },
-                                                onDelete: {
-                                                    copiedEntryID = nil
-                                                    historyStore.delete(id: entry.id)
-                                                }
-                                            )
-                                            .onAppear {
-                                                if entry.id == visibleEntries.last?.id {
-                                                    loadNextPageIfNeeded()
-                                                }
-                                            }
-                                        }
-
-                                        if hasMoreFilteredEntries {
-                                            Button(localized("Load More")) {
-                                                loadNextPageIfNeeded()
-                                            }
-                                            .buttonStyle(SettingsPillButtonStyle())
-                                            .padding(.top, 4)
-                                        }
-                                    }
-                                }
-                                .frame(maxHeight: .infinity, alignment: .top)
+                                historyList
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -252,6 +182,14 @@ struct HistorySettingsView: View {
             )
             .frame(minWidth: 520, idealWidth: 620, minHeight: 480, idealHeight: 640)
         }
+        .sheet(isPresented: $showHistorySearchDialog) {
+            SettingsSearchDialog(
+                title: localized("Search History"),
+                placeholder: localized("Search text, title, app, or dictionary terms"),
+                query: $historySearchText,
+                isPresented: $showHistorySearchDialog
+            )
+        }
         .alert(item: $pendingBulkDeletionTarget) { target in
             Alert(
                 title: Text(bulkDeletionTitle(for: target)),
@@ -266,40 +204,90 @@ struct HistorySettingsView: View {
             if !HistoryRetentionPeriod.allCases.contains(where: { $0.rawValue == historyRetentionPeriodRaw }) {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.ninetyDays.rawValue
             }
-            resetVisibleItemLimit()
             refreshHistoryAudioStorageDisplayPath()
             refreshHistoryAudioStorageStats()
             historyStore.reloadAsync()
         }
         .onChange(of: historyCleanupEnabled) { _, _ in
-            resetVisibleItemLimit()
             historyStore.reloadAsync()
         }
         .onChange(of: historyRetentionPeriodRaw) { _, newValue in
             if !HistoryRetentionPeriod.allCases.contains(where: { $0.rawValue == newValue }) {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.ninetyDays.rawValue
             }
-            resetVisibleItemLimit()
             historyStore.reloadAsync()
         }
-        .onChange(of: selectedFilter) { _, _ in
-            resetVisibleItemLimit()
-        }
         .onReceive(historyStore.$entries) { _ in
-            visibleItemLimit = HistorySettingsData.normalizedVisibleLimit(
-                currentLimit: visibleItemLimit,
-                pageSize: Self.pageSize,
-                totalCount: filteredEntries.count
-            )
             refreshHistoryAudioStorageStats()
         }
-        .onReceive(noteStore.$items) { _ in
-            visibleItemLimit = HistorySettingsData.normalizedVisibleLimit(
-                currentLimit: visibleItemLimit,
-                pageSize: Self.pageSize,
-                totalCount: allNotes.count
+    }
+
+    private var notesList: some View {
+        VirtualizedVerticalList(
+            items: visibleNotes,
+            rowHeight: 94,
+            rowSpacing: 8
+        ) { item in
+            NoteHistoryRow(
+                item: item,
+                isCopied: copiedNoteID == item.id,
+                onCopy: {
+                    copyStringToPasteboard(item.text)
+                    copiedNoteID = item.id
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.2))
+                        if copiedNoteID == item.id {
+                            copiedNoteID = nil
+                        }
+                    }
+                },
+                onToggleCompletion: {
+                    _ = noteStore.updateCompletion(!item.isCompleted, for: item.id)
+                },
+                onDelete: {
+                    copiedNoteID = nil
+                    noteStore.delete(id: item.id)
+                }
             )
         }
+        .frame(minHeight: 260, idealHeight: 480, maxHeight: 580, alignment: .top)
+    }
+
+    private var historyList: some View {
+        VirtualizedVerticalList(
+            items: visibleEntries,
+            rowHeight: 104,
+            rowSpacing: 8
+        ) { entry in
+            HistoryRow(
+                entry: entry,
+                audioURL: historyStore.audioURL(for: entry),
+                isCopied: copiedEntryID == entry.id,
+                onCopy: {
+                    copyStringToPasteboard(
+                        HistoryCorrectionPresentation.correctedText(
+                            for: entry.text,
+                            snapshots: entry.dictionaryCorrectionSnapshots
+                        )
+                    )
+                    copiedEntryID = entry.id
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.2))
+                        if copiedEntryID == entry.id {
+                            copiedEntryID = nil
+                        }
+                    }
+                },
+                onShowInfo: {
+                    selectedHistoryInfoEntry = entry
+                },
+                onDelete: {
+                    copiedEntryID = nil
+                    historyStore.delete(id: entry.id)
+                }
+            )
+        }
+        .frame(minHeight: 260, idealHeight: 480, maxHeight: 580, alignment: .top)
     }
 
     private func scrollToNavigationTargetIfNeeded(using proxy: ScrollViewProxy) {
@@ -317,14 +305,9 @@ struct HistorySettingsView: View {
         }
     }
 
-    private func resetVisibleItemLimit() {
-        visibleItemLimit = Self.pageSize
-    }
-
     private func confirmBulkDeletion(_ target: HistoryBulkDeletionTarget) {
         copiedEntryID = nil
         copiedNoteID = nil
-        resetVisibleItemLimit()
         switch target {
         case .history:
             historyStore.clearAll()
@@ -349,25 +332,6 @@ struct HistorySettingsView: View {
         case .notes:
             return localized("This will permanently delete all notes.")
         }
-    }
-
-    private func loadNextPageIfNeeded() {
-        if isNoteTabSelected {
-            guard hasMoreVisibleNotes else { return }
-            visibleItemLimit = HistorySettingsData.nextVisibleLimit(
-                currentLimit: visibleItemLimit,
-                pageSize: Self.pageSize,
-                totalCount: allNotes.count
-            )
-            return
-        }
-
-        guard hasMoreFilteredEntries else { return }
-        visibleItemLimit = HistorySettingsData.nextVisibleLimit(
-            currentLimit: visibleItemLimit,
-            pageSize: Self.pageSize,
-            totalCount: filteredEntries.count
-        )
     }
 
     private func openHistoryAudioStorageInFinder() {

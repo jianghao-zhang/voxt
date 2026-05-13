@@ -35,20 +35,14 @@ struct DictionarySettingsView: View {
     @State private var dictionaryTransferMessage: String?
     @State private var suggestionActionMessage: String?
     @State private var pendingHistoryScanCount = 0
-    @State private var visibleEntryLimit = Self.dictionaryPageSize
-
-    private static let dictionaryPageSize = 80
+    @State private var dictionarySearchText = ""
+    @State private var showDictionarySearchDialog = false
 
     private var visibleEntries: [DictionaryEntry] {
-        dictionaryStore.filteredEntries(for: selectedFilter)
-    }
-
-    private var pagedVisibleEntries: [DictionaryEntry] {
-        Array(visibleEntries.prefix(visibleEntryLimit))
-    }
-
-    private var hasMoreVisibleEntries: Bool {
-        visibleEntryLimit < visibleEntries.count
+        DictionaryEntryCollection.searchEntries(
+            dictionaryStore.filteredEntries(for: selectedFilter),
+            query: dictionarySearchText
+        )
     }
 
     private var localHistoryScanModelOptions: [DictionaryHistoryScanModelOption] {
@@ -116,15 +110,17 @@ struct DictionarySettingsView: View {
                 onCancelRunning: requestSuggestionIngestCancellation
             )
         }
+        .sheet(isPresented: $showDictionarySearchDialog) {
+            SettingsSearchDialog(
+                title: localized("Search Dictionary"),
+                placeholder: localized("Search terms, aliases, or groups"),
+                query: $dictionarySearchText,
+                isPresented: $showDictionarySearchDialog
+            )
+        }
         .onAppear(perform: reloadContentAsync)
         .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
             reloadContentAsync()
-        }
-        .onChange(of: selectedFilter) { _, _ in
-            resetVisibleEntryLimit()
-        }
-        .onChange(of: dictionaryStore.entries.count) { _, _ in
-            resetVisibleEntryLimit()
         }
         .alert(localized("Delete All Dictionary Terms?"), isPresented: $showClearAllConfirmation) {
             Button(localized("Delete"), role: .destructive) {
@@ -149,15 +145,6 @@ struct DictionarySettingsView: View {
                 proxy.scrollTo(section.rawValue, anchor: .top)
             }
         }
-    }
-
-    private func resetVisibleEntryLimit() {
-        visibleEntryLimit = Self.dictionaryPageSize
-    }
-
-    private func loadNextDictionaryPageIfNeeded() {
-        guard hasMoreVisibleEntries else { return }
-        visibleEntryLimit = min(visibleEntryLimit + Self.dictionaryPageSize, visibleEntries.count)
     }
 
     private func refreshPendingHistoryScanCountAsync() {
@@ -191,19 +178,19 @@ struct DictionarySettingsView: View {
     private var dictionaryListCard: some View {
         DictionaryEntriesCard(
             selectedFilter: $selectedFilter,
-            pagedVisibleEntries: pagedVisibleEntries,
             visibleEntries: visibleEntries,
-            hasMoreVisibleEntries: hasMoreVisibleEntries,
+            searchText: dictionarySearchText,
             dictionaryTransferMessage: dictionaryTransferMessage,
             scopeLabel: scopeLabel(for:),
             scopeIsMissing: { entry in
                 entry.groupID != nil && groupName(for: entry.groupID) == nil
             },
+            onSearch: { showDictionarySearchDialog = true },
+            onClearSearch: { dictionarySearchText = "" },
             onCreate: { dialog = .create },
             onClearAll: { showClearAllConfirmation = true },
             onEdit: { entry in dialog = .edit(entry) },
-            onDelete: { entry in dictionaryStore.delete(id: entry.id) },
-            onLoadMore: loadNextDictionaryPageIfNeeded
+            onDelete: { entry in dictionaryStore.delete(id: entry.id) }
         )
     }
 
@@ -260,7 +247,6 @@ struct DictionarySettingsView: View {
 
     private func refreshLocalContentState() {
         reloadGroups()
-        resetVisibleEntryLimit()
         historyScanModelOptions = availableHistoryScanModels()
         automaticLearningPromptDraft = AppPromptDefaults.resolvedStoredText(
             storedAutomaticLearningPrompt,

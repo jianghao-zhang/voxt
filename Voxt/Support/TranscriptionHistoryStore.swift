@@ -303,7 +303,7 @@ final class TranscriptionHistoryStore: ObservableObject {
     private var loadedCount = 0
     private var reloadGeneration = 0
     private let pageSize = 40
-    private let maxStoredEntries = 1000
+    private let maxStoredEntries = 20_000
 
     private let fileManager = FileManager.default
     private let defaults = UserDefaults.standard
