@@ -6,6 +6,44 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-05-13
+
+### English
+
+#### Changed
+- Updated the prompt system with simpler template variables. If you customized prompts, reset them to the new defaults before editing again.
+- Improved transcription capture, long-form recognition, and LLM execution planning so transcript, translation, dictionary, and rewrite flows share more reliable text handling.
+- Folded the deprecated Meeting workflow into transcript records and removed the separate Meeting entry points.
+- Refined oMLX and remote model configuration, including localization, compatibility checks, and provider option handling.
+- Removed the Phi 3.5 MoE local model option from the catalog.
+
+#### Fixed
+- Fixed fn combination tap hotkeys so they no longer fall through into unrelated tap shortcut behavior.
+
+### 简体中文
+
+#### 改进
+- 更新了提示词体系，并大幅精简了模板变量。如果你自定义过提示词，建议先重置为新版默认提示词后再继续调整。
+- 改进了转录采集、长音频识别与 LLM 执行规划，让转录、翻译、词典和改写流程共用更稳定的文本处理链路。
+- 将已废弃的会议工作流收敛到转录记录中，并移除了独立的会议入口。
+- 优化了 oMLX 与远端模型配置，包括多语言文案、兼容性检查和 provider 选项处理。
+- 从本地模型目录中移除了 Phi 3.5 MoE 选项。
+
+#### 修复
+- 修复了 fn 组合键点击热键会继续触发其他点击快捷键行为的问题。
+
+### 日本語
+
+#### 変更
+- プロンプト体系を更新し、テンプレート変数を大幅に簡素化しました。カスタムプロンプトを使っている場合は、新しい既定プロンプトにリセットしてから再編集することをおすすめします。
+- 文字起こしキャプチャ、長時間認識、LLM 実行計画を改善し、文字起こし、翻訳、辞書、リライトのテキスト処理がより安定するようにしました。
+- 廃止予定だった Meeting ワークフローを文字起こし履歴へ統合し、独立した Meeting 入口を削除しました。
+- oMLX とリモートモデル設定を改善し、ローカライズ、互換性チェック、provider オプション処理を調整しました。
+- ローカルモデル一覧から Phi 3.5 MoE オプションを削除しました。
+
+#### 修正
+- fn 組み合わせのタップホットキーが、別のタップショートカット動作へ続けて処理される問題を修正しました。
+
 ## [1.11.1] - 2026-05-10
 
 ### English
