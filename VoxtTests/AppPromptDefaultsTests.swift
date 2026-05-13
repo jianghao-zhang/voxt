@@ -17,10 +17,17 @@ final class AppPromptDefaultsTests: XCTestCase {
         XCTAssertContains(englishPrompt, "{{USER_MAIN_LANGUAGE}}")
         XCTAssertContains(englishPrompt, "mixed-language")
         XCTAssertContains(englishPrompt, "numbered list")
+        XCTAssertContains(englishPrompt, "Resolve self-corrections first")
+        XCTAssertContains(englishPrompt, "Buy apples and bananas, and get some loquats.")
         XCTAssertContains(chinesePrompt, "中文与英文连续且无空格")
         XCTAssertContains(chinesePrompt, "序号列表")
+        XCTAssertContains(chinesePrompt, "优先处理自我修正")
+        XCTAssertContains(chinesePrompt, "不不不")
+        XCTAssertContains(chinesePrompt, "你帮我买一些水果，比如苹果、香蕉、梨，帮我带一点枇杷。")
         XCTAssertContains(japanesePrompt, "中国語と英語")
         XCTAssertContains(japanesePrompt, "番号付きリスト")
+        XCTAssertContains(japanesePrompt, "まず自己修正を解決")
+        XCTAssertContains(japanesePrompt, "びわを少し買って")
     }
 
     func testTranslationDefaultPromptDoesNotEmbedSourceText() {

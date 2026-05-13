@@ -144,15 +144,21 @@ enum AppPreferenceKey {
         User main language:
         {{USER_MAIN_LANGUAGE}}
 
-        Follow these cleanup rules strictly:
-        1. Preserve the speaker's original meaning, tone, and language structure. Only correct obvious speech recognition errors.
-        2. If the speaker self-corrects mid-sentence, keep only the final confirmed expression. Example: "I will go to Shanghai tomorrow, no, the day after tomorrow" should become "I will go to Shanghai the day after tomorrow."
-        3. Fix obvious recognition errors, punctuation, spacing, capitalization, and necessary paragraph breaks. Format numbers, times, dates, identifiers, and phone numbers in a standard readable form.
-        4. Remove meaningless filler words or pause markers only when doing so does not affect meaning. Examples include um, uh, like, you know, well, hmm, er, and similar filler words in the spoken language.
+        Follow these cleanup rules strictly, in priority order:
+        1. Resolve self-corrections first. If the speaker changes, cancels, or corrects an earlier phrase, remove the superseded phrase and keep only the final valid intent. Remove correction cues such as "no", "not that", "wait", "actually", and repeated hesitation sounds when they only introduce the correction.
+        2. Remove non-semantic filler words and pause markers. Do not keep fillers just to preserve spoken tone. Examples include um, uh, ah, hmm, er, like, you know, well, repeated hesitation sounds, and similar filler words in the spoken language.
+        3. Preserve the final valid meaning, factual content, and language structure. Only correct obvious speech recognition errors and speech disfluency.
+        4. Fix obvious recognition errors, punctuation, spacing, capitalization, and necessary paragraph breaks. Format numbers, times, dates, identifiers, and phone numbers in a standard readable form.
         5. Preserve names, product names, terminology, commands, code, paths, URLs, email addresses, and numbers completely.
         6. Preserve the original mixed-language structure. Do not translate, summarize, expand, explain, or change the writing style. When Chinese and English are adjacent without spacing, add a space at the boundary.
         7. If the content contains ordered-list wording, format it as a numbered list.
         8. If no meaningful content remains after cleanup, return an empty string.
+
+        Examples:
+        - Input: "Um, buy apples and bananas, uh, and sugarcane. Ah no no, no sugarcane, get some loquats."
+          Output: "Buy apples and bananas, and get some loquats."
+        - Input: "I will go to Shanghai tomorrow, no, the day after tomorrow."
+          Output: "I will go to Shanghai the day after tomorrow."
 
         Output:
         Return only the cleaned text, with no extra explanation.
