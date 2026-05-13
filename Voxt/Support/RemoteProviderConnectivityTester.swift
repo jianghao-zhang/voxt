@@ -48,7 +48,7 @@ struct RemoteProviderConnectivityTester {
             return try await testASRMultipartReachability(
                 endpoint: endpoint,
                 headers: ["Authorization": "Bearer \(configuration.apiKey)"],
-                model: configuration.model.isEmpty ? "whisper-1" : configuration.model
+                model: configuration.model.isEmpty ? RemoteASRProvider.openAIWhisper.suggestedModel : configuration.model
             )
         case .glmASR:
             guard !configuration.apiKey.isEmpty else {
@@ -429,8 +429,10 @@ struct RemoteProviderConnectivityTester {
             }
             if provider.usesResponsesAPI {
                 return try await testResponsesReachability(
+                    provider: provider,
                     endpoint: endpoint,
                     headers: headers,
+                    configuration: configuration,
                     model: model
                 )
             }
@@ -527,14 +529,26 @@ struct RemoteProviderConnectivityTester {
     }
 
     private func testResponsesReachability(
+        provider: RemoteLLMProvider,
         endpoint: String,
         headers: [String: String],
+        configuration: RemoteProviderConfiguration,
         model: String
     ) async throws -> String {
-        let body: [String: Any] = [
-            "model": model,
-            "input": "ping"
-        ]
+        let runtimeClient = RemoteLLMRuntimeClient()
+        let request = try runtimeClient.makeResponsesRequest(
+            provider: provider,
+            endpointValue: endpoint,
+            model: model,
+            systemPrompt: "",
+            inputPayload: "ping",
+            configuration: configuration,
+            previousResponseID: nil,
+            tuning: .init(maxTokens: 32, temperature: 0.2, topP: 0.9),
+            textFormat: nil,
+            streamingEnabled: false
+        )
+        let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any] ?? [:]
         return try await testJSONPOSTReachability(endpoint: endpoint, headers: headers, body: body)
     }
 

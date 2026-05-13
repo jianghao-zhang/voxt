@@ -83,65 +83,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertEqual(DoubaoASRConfiguration.finalStreamingSequence(nextAudioSequence: 16), -16)
     }
 
-    func testAliyunFunRealtimeControlPayloadUsesDocumentedDuplexEnvelope() throws {
-        let payload = AliyunMeetingASRConfiguration.funRealtimeControlPayload(
-            action: "run-task",
-            taskID: "task123",
-            model: "fun-asr-realtime",
-            parameters: [
-                "sample_rate": 16000,
-                "format": "pcm"
-            ]
-        )
-
-        let header = try XCTUnwrap(payload["header"] as? [String: Any])
-        let body = try XCTUnwrap(payload["payload"] as? [String: Any])
-        XCTAssertEqual(header["action"] as? String, "run-task")
-        XCTAssertEqual(header["task_id"] as? String, "task123")
-        XCTAssertEqual(header["streaming"] as? String, "duplex")
-        XCTAssertEqual(body["model"] as? String, "fun-asr-realtime")
-        XCTAssertEqual((body["input"] as? [String: Any])?.isEmpty, true)
-    }
-
-    func testAliyunFunRealtimeFinishPayloadKeepsEmptyInputObject() throws {
-        let payload = AliyunMeetingASRConfiguration.funRealtimeControlPayload(
-            action: "finish-task",
-            taskID: "task123"
-        )
-
-        let header = try XCTUnwrap(payload["header"] as? [String: Any])
-        let body = try XCTUnwrap(payload["payload"] as? [String: Any])
-        XCTAssertEqual(header["streaming"] as? String, "duplex")
-        XCTAssertEqual((body["input"] as? [String: Any])?.isEmpty, true)
-    }
-
-    func testAliyunRealtimeSocketEventPrefersHeaderEvent() {
-        let object: [String: Any] = [
-            "header": [
-                "event": "task-started"
-            ],
-            "event": "ignored-top-level"
-        ]
-
-        XCTAssertEqual(
-            AliyunMeetingASRConfiguration.realtimeSocketEvent(from: object),
-            "task-started"
-        )
-    }
-
-    func testAliyunRealtimeSocketErrorMessageReadsHeaderFallback() {
-        let object: [String: Any] = [
-            "header": [
-                "error_message": "task failed from header"
-            ]
-        ]
-
-        XCTAssertEqual(
-            AliyunMeetingASRConfiguration.realtimeSocketErrorMessage(from: object),
-            "task failed from header"
-        )
-    }
-
     func testAliyunASRModelOptionsIncludeOmniRealtimeModels() {
         let ids = Set(RemoteASRProvider.aliyunBailianASR.modelOptions.map(\.id))
         XCTAssertTrue(ids.contains("qwen3.5-omni-flash-realtime"))
@@ -212,14 +153,12 @@ final class RemoteModelConfigurationTests: XCTestCase {
             RemoteASRProvider.openAIWhisper.rawValue: TestFactories.makeRemoteConfiguration(
                 providerID: RemoteASRProvider.openAIWhisper.rawValue,
                 model: "whisper-1",
-                meetingModel: "",
                 endpoint: "https://example.com/asr",
                 apiKey: "secret"
             ),
             RemoteASRProvider.doubaoASR.rawValue: TestFactories.makeRemoteConfiguration(
                 providerID: RemoteASRProvider.doubaoASR.rawValue,
                 model: DoubaoASRConfiguration.modelV2,
-                meetingModel: DoubaoASRConfiguration.meetingModelTurbo,
                 appID: "app-id",
                 accessToken: "token",
                 doubaoDictionaryMode: DoubaoDictionaryMode.off.rawValue,
@@ -230,7 +169,10 @@ final class RemoteModelConfigurationTests: XCTestCase {
                 providerID: RemoteLLMProvider.openAI.rawValue,
                 model: "gpt-5.2",
                 endpoint: "https://example.com/llm",
-                apiKey: "secret"
+                apiKey: "secret",
+                openAIReasoningEffort: OpenAIReasoningEffort.high.rawValue,
+                openAITextVerbosity: OpenAITextVerbosity.low.rawValue,
+                openAIMaxOutputTokens: 4096
             )
         ]
 
@@ -293,6 +235,36 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertFalse(configuration.isConfigured)
     }
 
+    func testOpenAIModelCatalogUsesOfficialModelIDs() {
+        XCTAssertEqual(RemoteLLMProvider.openAI.suggestedModel, "gpt-5.2")
+
+        let ids = RemoteLLMProvider.openAI.modelOptions.map(\.id)
+        XCTAssertTrue(ids.contains("gpt-5.2"))
+        XCTAssertTrue(ids.contains("gpt-5.2-pro"))
+        XCTAssertTrue(ids.contains("gpt-5.1"))
+        XCTAssertFalse(ids.contains("gpt-5.5"))
+        XCTAssertFalse(ids.contains("gpt-5.4"))
+    }
+
+    func testOpenAIReasoningEffortOptionsFollowModelSupport() {
+        XCTAssertEqual(
+            OpenAIReasoningEffort.supportedCases(forModel: "gpt-5.2"),
+            [.automatic, .none, .low, .medium, .high, .xhigh]
+        )
+        XCTAssertEqual(
+            OpenAIReasoningEffort.supportedCases(forModel: "gpt-5.2-pro"),
+            [.automatic, .medium, .high, .xhigh]
+        )
+        XCTAssertEqual(
+            OpenAIReasoningEffort.supportedCases(forModel: "gpt-5.1"),
+            [.automatic, .none, .low, .medium, .high]
+        )
+        XCTAssertEqual(
+            OpenAIReasoningEffort.supportedCases(forModel: "gpt-5"),
+            [.automatic, .minimal, .low, .medium, .high]
+        )
+    }
+
     func testLoadSaveRoundTripPreservesOllamaConfigurationFields() {
         let stored: [String: RemoteProviderConfiguration] = [
             RemoteLLMProvider.ollama.rawValue: TestFactories.makeRemoteConfiguration(
@@ -349,12 +321,12 @@ final class RemoteModelConfigurationTests: XCTestCase {
 
         XCTAssertEqual(resolved.providerID, RemoteLLMProvider.anthropic.rawValue)
         XCTAssertEqual(resolved.model, RemoteLLMProvider.anthropic.suggestedModel)
-        XCTAssertEqual(resolved.meetingModel, "")
         XCTAssertEqual(resolved.endpoint, "")
         XCTAssertFalse(resolved.searchEnabled)
     }
 
     func testResponsesProviderCapabilitiesAreConfiguredPerProvider() {
+        XCTAssertTrue(RemoteLLMProvider.openAI.usesResponsesAPI)
         XCTAssertTrue(RemoteLLMProvider.aliyunBailian.usesResponsesAPI)
         XCTAssertTrue(RemoteLLMProvider.volcengine.usesResponsesAPI)
         XCTAssertTrue(RemoteLLMProvider.aliyunBailian.supportsHostedSearch)
@@ -401,7 +373,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
           {
             "providerID": "aliyunBailian",
             "model": "qwen-plus-latest",
-            "meetingModel": "",
             "endpoint": "",
             "apiKey": "",
             "appID": "",
@@ -421,7 +392,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
           {
             "providerID": "volcengine",
             "model": "doubao-1-5-pro",
-            "meetingModel": "",
             "endpoint": "",
             "apiKey": "",
             "appID": "",
@@ -441,7 +411,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
           {
             "providerID": "aliyunBailian",
             "model": "qwen-plus-latest",
-            "meetingModel": "",
             "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "apiKey": "",
             "appID": "",
@@ -464,7 +433,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
           {
             "providerID": "volcengine",
             "model": "doubao-1-5-pro",
-            "meetingModel": "",
             "endpoint": "https://ark.cn-beijing.volces.com/api/v3/models",
             "apiKey": "",
             "appID": "",
@@ -481,6 +449,28 @@ final class RemoteModelConfigurationTests: XCTestCase {
         )
     }
 
+    func testDecodeLegacyOpenAIEndpointMigratesToResponsesURL() {
+        let legacyJSON = """
+        [
+          {
+            "providerID": "openAI",
+            "model": "gpt-5.2",
+            "endpoint": "https://api.openai.com/v1/chat/completions",
+            "apiKey": "",
+            "appID": "",
+            "accessToken": ""
+          }
+        ]
+        """
+
+        let loaded = RemoteModelConfigurationStore.loadConfigurations(from: legacyJSON)
+
+        XCTAssertEqual(
+            loaded["openAI"]?.endpoint,
+            "https://api.openai.com/v1/responses"
+        )
+    }
+
     func testMigrateLegacyLLMEndpointsRewritesPersistedLegacyURLs() {
         let suiteName = "RemoteModelConfigurationTests.migrateLegacyLLMEndpoints.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -490,9 +480,16 @@ final class RemoteModelConfigurationTests: XCTestCase {
             """
             [
               {
+                "providerID": "openAI",
+                "model": "gpt-5.2",
+                "endpoint": "https://api.openai.com/v1/models",
+                "apiKey": "",
+                "appID": "",
+                "accessToken": ""
+              },
+              {
                 "providerID": "aliyunBailian",
                 "model": "qwen-plus-latest",
-                "meetingModel": "",
                 "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
                 "apiKey": "",
                 "appID": "",
@@ -501,7 +498,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
               {
                 "providerID": "volcengine",
                 "model": "doubao-1-5-pro",
-                "meetingModel": "",
                 "endpoint": "https://ark.cn-beijing.volces.com/api/v3/models",
                 "apiKey": "",
                 "appID": "",
@@ -518,6 +514,10 @@ final class RemoteModelConfigurationTests: XCTestCase {
             from: defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? ""
         )
 
+        XCTAssertEqual(
+            migrated["openAI"]?.endpoint,
+            "https://api.openai.com/v1/responses"
+        )
         XCTAssertEqual(
             migrated["aliyunBailian"]?.endpoint,
             "https://dashscope.aliyuncs.com/compatible-mode/v1/responses"
@@ -538,7 +538,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
           {
             "providerID": "openAI",
             "model": "gpt-5.2",
-            "meetingModel": "",
             "endpoint": "https://example.com/responses",
             "apiKey": "",
             "appID": "",
@@ -567,14 +566,12 @@ final class RemoteModelConfigurationTests: XCTestCase {
             RemoteASRProvider.doubaoASR.rawValue: TestFactories.makeRemoteConfiguration(
                 providerID: RemoteASRProvider.doubaoASR.rawValue,
                 model: DoubaoASRConfiguration.modelV2,
-                meetingModel: DoubaoASRConfiguration.meetingModelTurbo,
                 appID: "doubao-app",
                 accessToken: "doubao-token"
             ),
             RemoteASRProvider.aliyunBailianASR.rawValue: TestFactories.makeRemoteConfiguration(
                 providerID: RemoteASRProvider.aliyunBailianASR.rawValue,
                 model: "fun-asr-realtime",
-                meetingModel: "qwen3-asr-flash-filetrans",
                 endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
                 apiKey: "aliyun-key"
             )
@@ -584,7 +581,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
         let updatedAliyun = TestFactories.makeRemoteConfiguration(
             providerID: RemoteASRProvider.aliyunBailianASR.rawValue,
             model: "qwen3-asr-flash-realtime",
-            meetingModel: "qwen3-asr-flash-filetrans",
             endpoint: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
             apiKey: "aliyun-key-updated"
         )
@@ -600,60 +596,6 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertEqual(loaded[RemoteASRProvider.doubaoASR.rawValue]?.accessToken, "doubao-token")
     }
 
-    func testAliyunMeetingFileTranscriptionUsesAsyncEndpoints() {
-        XCTAssertEqual(
-            AliyunMeetingASRConfiguration.resolvedTranscriptionEndpoint(
-                "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
-                model: "qwen3-asr-flash-filetrans"
-            ),
-            "wss://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"
-                .replacingOccurrences(of: "wss://", with: "https://")
-        )
-        XCTAssertEqual(
-            AliyunMeetingASRConfiguration.resolvedUploadPolicyEndpoint(
-                "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
-                model: "qwen3-asr-flash-filetrans"
-            ),
-            "https://dashscope.aliyuncs.com/api/v1/uploads"
-        )
-        XCTAssertEqual(
-            AliyunMeetingASRConfiguration.taskQueryMethod(for: "qwen3-asr-flash-filetrans"),
-            .get
-        )
-    }
-
-    func testAliyunMeetingUSShortAudioUsesCompatibleEndpoint() {
-        XCTAssertEqual(
-            AliyunMeetingASRConfiguration.resolvedCompatibleEndpoint(
-                "",
-                model: "qwen3-asr-flash-us"
-            ),
-            "https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions"
-        )
-        XCTAssertNil(
-            AliyunMeetingASRConfiguration.validationError(
-                model: "qwen3-asr-flash-us",
-                endpoint: "https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions"
-            )
-        )
-    }
-
-    func testAliyunMeetingFileTranscriptionRejectsUSRegion() {
-        XCTAssertNotNil(
-            AliyunMeetingASRConfiguration.validationError(
-                model: "qwen3-asr-flash-filetrans",
-                endpoint: "https://dashscope-us.aliyuncs.com/api/v1/services/audio/asr/transcription"
-            )
-        )
-        XCTAssertEqual(
-            AliyunMeetingASRConfiguration.endpointPresets(for: "qwen3-asr-flash-filetrans").map(\.url),
-            [
-                "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
-                "https://dashscope-intl.aliyuncs.com/api/v1/services/audio/asr/transcription"
-            ]
-        )
-    }
-
     func testRemoteASRTextSanitizerRejectsIdentifierLikeStrings() {
         XCTAssertTrue(RemoteASRTextSanitizer.isLikelyIdentifierText("9ff6a1a4-f758-4a87-b761-11508533c499"))
         XCTAssertTrue(RemoteASRTextSanitizer.isLikelyIdentifierText("abc123ef456789ab_cdef1234567890"))
@@ -666,46 +608,4 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertFalse(RemoteASRTextSanitizer.isLikelyIdentifierText("hello world 2026"))
     }
 
-    func testRealtimeMeetingProvidersSkipDedicatedMeetingModelRequirement() {
-        let doubaoRealtime = RemoteProviderConfiguration(
-            providerID: RemoteASRProvider.doubaoASR.rawValue,
-            model: DoubaoASRConfiguration.modelV2,
-            endpoint: "",
-            apiKey: "",
-            appID: "app-id",
-            accessToken: "token"
-        )
-        XCTAssertFalse(
-            RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(
-                .doubaoASR,
-                configuration: doubaoRealtime
-            )
-        )
-
-        let aliyunRealtime = RemoteProviderConfiguration(
-            providerID: RemoteASRProvider.aliyunBailianASR.rawValue,
-            model: "fun-asr-realtime",
-            endpoint: "",
-            apiKey: "token"
-        )
-        XCTAssertFalse(
-            RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(
-                .aliyunBailianASR,
-                configuration: aliyunRealtime
-            )
-        )
-
-        let aliyunFile = RemoteProviderConfiguration(
-            providerID: RemoteASRProvider.aliyunBailianASR.rawValue,
-            model: "paraformer-v2",
-            endpoint: "",
-            apiKey: "token"
-        )
-        XCTAssertTrue(
-            RemoteASRMeetingConfiguration.requiresDedicatedMeetingModel(
-                .aliyunBailianASR,
-                configuration: aliyunFile
-            )
-        )
-    }
 }

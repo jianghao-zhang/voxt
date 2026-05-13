@@ -57,6 +57,7 @@ struct EnhancementPromptResolver {
 
     static func resolve(_ input: Input) -> Output {
         let fallbackPrompt = resolvedGlobalPrompt(input.globalPrompt)
+        let fallbackDelivery = fallbackDelivery(for: fallbackPrompt)
 
         func makeFallback(reason: GlobalFallbackReason) -> Output {
             Output(
@@ -64,10 +65,9 @@ struct EnhancementPromptResolver {
                     template: fallbackPrompt,
                     rawTranscription: input.rawTranscription,
                     userMainLanguagePromptValue: input.userMainLanguagePromptValue,
-                    userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue,
-                    glossary: input.dictionaryGlossary
+                    userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue
                 ),
-                delivery: .systemPrompt,
+                delivery: fallbackDelivery,
                 promptContext: PromptContext(
                     focusedAppName: input.focusedAppName,
                     matchedGroupID: nil,
@@ -102,10 +102,9 @@ struct EnhancementPromptResolver {
                         template: match.prompt,
                         rawTranscription: input.rawTranscription,
                         userMainLanguagePromptValue: input.userMainLanguagePromptValue,
-                        userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue,
-                        glossary: input.dictionaryGlossary
+                        userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue
                     ),
-                    delivery: .userMessage,
+                    delivery: .systemPrompt,
                     promptContext: PromptContext(
                         focusedAppName: input.focusedAppName,
                         matchedGroupID: match.groupID,
@@ -150,10 +149,9 @@ struct EnhancementPromptResolver {
                         template: prompt,
                         rawTranscription: input.rawTranscription,
                         userMainLanguagePromptValue: input.userMainLanguagePromptValue,
-                        userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue,
-                        glossary: input.dictionaryGlossary
+                        userOtherLanguagesPromptValue: input.userOtherLanguagesPromptValue
                     ),
-                    delivery: .userMessage,
+                    delivery: .systemPrompt,
                     promptContext: PromptContext(
                         focusedAppName: input.focusedAppName,
                         matchedGroupID: group.id,
@@ -185,17 +183,20 @@ struct EnhancementPromptResolver {
         return trimmed.isEmpty ? AppPromptDefaults.text(for: .enhancement) : trimmed
     }
 
+    private static func fallbackDelivery(for prompt: String) -> Delivery {
+        prompt.contains(rawTranscriptionTemplateVariable) ? .userMessage : .systemPrompt
+    }
+
     private static func resolvedPrompt(
         template: String,
         rawTranscription: String,
         userMainLanguagePromptValue: String,
-        userOtherLanguagesPromptValue: String,
-        glossary: String?
+        userOtherLanguagesPromptValue: String
     ) -> String {
         let resolved = template
             .replacingOccurrences(of: rawTranscriptionTemplateVariable, with: rawTranscription)
             .replacingOccurrences(of: userMainLanguageTemplateVariable, with: userMainLanguagePromptValue)
-        let promptWithLanguageRules = [
+        return [
             resolved,
             enhancementLanguagePreservationRules(
                 userMainLanguagePromptValue: userMainLanguagePromptValue,
@@ -205,11 +206,6 @@ struct EnhancementPromptResolver {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
-        return DictionaryGlossaryPromptComposer.append(
-            prompt: promptWithLanguageRules,
-            glossary: glossary,
-            purpose: .enhancement
-        )
     }
 
     private static func enhancementLanguagePreservationRules(
@@ -218,17 +214,15 @@ struct EnhancementPromptResolver {
     ) -> String {
         let otherLanguages = normalizedOtherLanguagesPromptValue(userOtherLanguagesPromptValue)
         let otherLanguagesLine = otherLanguages.map {
-            "Other frequently used user languages: \($0)."
-        } ?? "Other frequently used user languages: None."
+            "Other user languages: \($0)."
+        } ?? "Other user languages: None."
 
         return """
-        Runtime language preservation rules:
+        Language rule:
         - User main language: \(userMainLanguagePromptValue).
         - \(otherLanguagesLine)
-        - The user main language is guidance for punctuation, formatting, filler-word cleanup, and semantic disambiguation only.
-        - It is not a target output language and must not trigger translation.
-        - If the raw transcription is in another user language or mixes multiple user languages, preserve the original language distribution and wording.
-        - Enhancement must not translate, summarize, paraphrase, or rewrite the text into the user main language.
+        - Use this only for punctuation, formatting, filler cleanup, and ambiguity resolution.
+        - It is guidance only, not a translation target. Preserve the original language mix.
         """
     }
 

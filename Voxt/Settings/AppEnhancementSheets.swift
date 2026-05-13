@@ -8,48 +8,115 @@ struct GroupEditorSheet: View {
     let errorMessage: String?
     let onCancel: () -> Void
     let onSave: () -> Void
+    @State private var selectedPresetID = Self.placeholderPresetID
+
+    private static let placeholderPresetID = "choose-template"
+
+    private struct PromptPreset: Identifiable {
+        let id: String
+        let title: String
+        let prompt: String
+    }
+
+    private var presets: [PromptPreset] {
+        [
+            PromptPreset(
+                id: "slack",
+                title: AppLocalization.localizedString("Slack / Chat"),
+                prompt: AppLocalization.localizedString("Slack / Chat prompt preset")
+            ),
+            PromptPreset(
+                id: "email",
+                title: AppLocalization.localizedString("Email"),
+                prompt: AppLocalization.localizedString("Email prompt preset")
+            ),
+            PromptPreset(
+                id: "ide",
+                title: AppLocalization.localizedString("IDE / Terminal"),
+                prompt: AppLocalization.localizedString("IDE / Terminal prompt preset")
+            ),
+            PromptPreset(
+                id: "docs",
+                title: AppLocalization.localizedString("Docs / Notes"),
+                prompt: AppLocalization.localizedString("Docs / Notes prompt preset")
+            )
+        ]
+    }
+
+    private var presetOptions: [SettingsMenuOption<String>] {
+        [
+            SettingsMenuOption(
+                value: Self.placeholderPresetID,
+                title: AppLocalization.localizedString("Choose template...")
+            )
+        ] + presets.map { preset in
+            SettingsMenuOption(value: preset.id, title: preset.title)
+        }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(title)
                 .font(.title3.weight(.semibold))
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+                .padding(.bottom, 14)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(AppLocalization.localizedString("Group Name"))
-                    .font(.headline)
-                TextField(AppLocalization.localizedString("Enter group name"), text: $name)
-                    .textFieldStyle(.plain)
-                    .settingsFieldSurface(minHeight: 34)
-            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(AppLocalization.localizedString("Group Name"))
+                            .font(.headline)
+                        TextField(AppLocalization.localizedString("Enter group name"), text: $name)
+                            .textFieldStyle(.plain)
+                            .settingsFieldSurface(minHeight: 34)
+                    }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(AppLocalization.localizedString("Prompt"))
-                    .font(.headline)
-                PromptEditorView(
-                    text: $prompt,
-                    height: 160,
-                    contentPadding: 8,
-                    variables: [
-                        PromptTemplateVariableDescriptor(
-                            token: AppDelegate.rawTranscriptionTemplateVariable,
-                            tipKey: "Template tip {{RAW_TRANSCRIPTION}}"
-                        ),
-                        PromptTemplateVariableDescriptor(
-                            token: AppDelegate.userMainLanguageTemplateVariable,
-                            tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(AppLocalization.localizedString("Prompt"))
+                            .font(.headline)
+                        Text(PromptAuthoringGuidance.appEnhancement)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(AppLocalization.localizedString("Starter templates"))
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+
+                            SettingsMenuPicker(
+                                selection: $selectedPresetID,
+                                options: presetOptions,
+                                selectedTitle: AppLocalization.localizedString("Choose template..."),
+                                width: 220
+                            )
+                            .onChange(of: selectedPresetID) { _, newValue in
+                                applyPreset(id: newValue)
+                            }
+                        }
+
+                        PromptEditorView(
+                            text: $prompt,
+                            height: 160,
+                            contentPadding: 8,
+                            variables: ModelSettingsPromptVariables.appEnhancement,
+                            variablesLayout: .twoColumns,
+                            variablesTitle: PromptAuthoringGuidance.optionalVariablesTitle
                         )
-                    ],
-                    variablesLayout: .twoColumns
-                )
+                    }
+
+                    if let errorMessage, !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 14)
             }
 
-            if let errorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            Spacer(minLength: 6)
+            Divider()
 
             SettingsDialogActionRow {
                 Button(AppLocalization.localizedString("Cancel"), action: onCancel)
@@ -60,9 +127,24 @@ struct GroupEditorSheet: View {
                     .buttonStyle(SettingsPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 18)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 24)
+    }
+
+    private func applyPreset(id: String) {
+        guard
+            id != Self.placeholderPresetID,
+            let preset = presets.first(where: { $0.id == id })
+        else {
+            return
+        }
+
+        prompt = preset.prompt
+        DispatchQueue.main.async {
+            selectedPresetID = Self.placeholderPresetID
+        }
     }
 }
 

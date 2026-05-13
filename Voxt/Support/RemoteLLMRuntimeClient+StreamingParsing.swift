@@ -135,6 +135,58 @@ extension RemoteLLMRuntimeClient {
         return nil
     }
 
+    func decodeResponsesObject(from data: Data, response: HTTPURLResponse) throws -> [String: Any] {
+        do {
+            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw responsesDecodeError(
+                    data: data,
+                    response: response,
+                    fallbackDetail: "Responses API returned JSON that is not an object."
+                )
+            }
+            return object
+        } catch let error as NSError where error.domain == "Voxt.RemoteLLM" {
+            throw error
+        } catch {
+            throw responsesDecodeError(
+                data: data,
+                response: response,
+                fallbackDetail: error.localizedDescription
+            )
+        }
+    }
+
+    private func responsesDecodeError(
+        data: Data,
+        response: HTTPURLResponse,
+        fallbackDetail: String
+    ) -> NSError {
+        let contentType = response.value(forHTTPHeaderField: "Content-Type")?
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let preview = String(data: data.prefix(1200), encoding: .utf8) ?? "<non-utf8>"
+        let trimmedPreview = preview.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        let message: String
+        if contentType.contains("text/html") ||
+            trimmedPreview.hasPrefix("<!doctype html") ||
+            trimmedPreview.hasPrefix("<html") {
+            message = "Remote LLM Responses endpoint returned HTML instead of JSON. Check the endpoint URL; it must be an API route compatible with OpenAI Responses, not a gateway console or web page."
+        } else if contentType.contains("text/event-stream") ||
+                    trimmedPreview.hasPrefix("data:") ||
+                    trimmedPreview.hasPrefix("event:") {
+            message = "Remote LLM Responses endpoint returned an event stream for a non-streaming request. The API must return a JSON object when stream is false."
+        } else {
+            message = "Remote LLM Responses endpoint returned invalid JSON: \(fallbackDetail)"
+        }
+
+        return NSError(
+            domain: "Voxt.RemoteLLM",
+            code: -309,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
+    }
+
     func mergedStreamingSnapshot(current: String, next: String) -> String {
         let trimmedNext = next.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedNext.isEmpty else { return current }

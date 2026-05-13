@@ -9,8 +9,12 @@ extension RemoteProviderConfigurationSheet {
         llmProviderForPicker == .omlx
     }
 
+    var isOpenAILLMProvider: Bool {
+        llmProviderForPicker == .openAI
+    }
+
     var showsLargeAdvancedProviderSection: Bool {
-        isOllamaLLMProvider || isOMLXLLMProvider
+        isOpenAILLMProvider || isOllamaLLMProvider || isOMLXLLMProvider
     }
 
     var apiKeyFieldTitle: String {
@@ -105,6 +109,31 @@ extension RemoteProviderConfigurationSheet {
         shouldShowOMLXJSONSchemaField(for: omlxResponseFormat)
     }
 
+    var openAIReasoningEffortMenuOptions: [SettingsMenuOption<String>] {
+        OpenAIReasoningEffort.supportedCases(forModel: resolvedModelValue()).map { option in
+            SettingsMenuOption(value: option.rawValue, title: option.title)
+        }
+    }
+
+    var openAIReasoningEffortSelectedTitle: String {
+        OpenAIReasoningEffort(rawValue: openAIReasoningEffort)?.title
+            ?? OpenAIReasoningEffort.automatic.title
+    }
+
+    var openAITextVerbosityMenuOptions: [SettingsMenuOption<String>] {
+        guard OpenAITextVerbosity.supportsModel(resolvedModelValue()) else {
+            return [SettingsMenuOption(value: OpenAITextVerbosity.automatic.rawValue, title: OpenAITextVerbosity.automatic.title)]
+        }
+        return OpenAITextVerbosity.allCases.map { option in
+            SettingsMenuOption(value: option.rawValue, title: option.title)
+        }
+    }
+
+    var openAITextVerbositySelectedTitle: String {
+        OpenAITextVerbosity(rawValue: openAITextVerbosity)?.title
+            ?? OpenAITextVerbosity.automatic.title
+    }
+
     var currentConfigurationSnapshot: RemoteProviderConfiguration {
         RemoteProviderConfiguration(
             providerID: configuration.providerID,
@@ -115,6 +144,9 @@ extension RemoteProviderConfigurationSheet {
             accessToken: accessToken.trimmingCharacters(in: .whitespacesAndNewlines),
             searchEnabled: (llmProviderForPicker?.supportsHostedSearch == true) ? searchEnabled : false,
             openAIChunkPseudoRealtimeEnabled: isOpenAIASRTest ? openAIChunkPseudoRealtimeEnabled : false,
+            openAIReasoningEffort: isOpenAILLMProvider ? openAIReasoningEffort : OpenAIReasoningEffort.automatic.rawValue,
+            openAITextVerbosity: isOpenAILLMProvider ? openAITextVerbosity : OpenAITextVerbosity.automatic.rawValue,
+            openAIMaxOutputTokens: isOpenAILLMProvider ? parsedOpenAIMaxOutputTokensValue() : nil,
             doubaoDictionaryMode: doubaoDictionaryMode,
             doubaoEnableRequestHotwords: doubaoEnableRequestHotwords,
             doubaoEnableRequestCorrections: doubaoEnableRequestCorrections,
@@ -258,6 +290,13 @@ extension RemoteProviderConfigurationSheet {
         }
     }
 
+    var endpointFieldPlaceholder: String {
+        RemoteProviderConfigurationPolicy.endpointPlaceholder(
+            target: testTarget,
+            resolvedModel: resolvedModelValue()
+        )
+    }
+
     func testConnection() {
         guard let snapshot = validatedCurrentConfigurationSnapshot() else { return }
         runConnectionTest(for: testTarget, modelForLog: snapshot.model, snapshot: snapshot)
@@ -293,6 +332,11 @@ extension RemoteProviderConfigurationSheet {
                 responseFormat: omlxResponseFormat,
                 jsonSchema: omlxJSONSchema,
                 extraBodyJSON: omlxExtraBodyJSON
+            )
+        }
+        if isOpenAILLMProvider {
+            return validationMessageForOpenAISettings(
+                maxOutputTokensText: openAIMaxOutputTokensText
             )
         }
         return nil
@@ -377,6 +421,15 @@ extension RemoteProviderConfigurationSheet {
         return nil
     }
 
+    func validationMessageForOpenAISettings(maxOutputTokensText: String) -> String? {
+        let trimmed = maxOutputTokensText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let value = Int(trimmed), value > 0 else {
+            return AppLocalization.localizedString("Max Output Tokens must be a positive integer.")
+        }
+        return nil
+    }
+
     func validateJSONObjectField(_ value: String, fieldName: String, requiresValue: Bool) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -396,6 +449,12 @@ extension RemoteProviderConfigurationSheet {
 
     func parsedOllamaTopLogprobsValue() -> Int? {
         let trimmed = ollamaTopLogprobsText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return Int(trimmed)
+    }
+
+    func parsedOpenAIMaxOutputTokensValue() -> Int? {
+        let trimmed = openAIMaxOutputTokensText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return Int(trimmed)
     }

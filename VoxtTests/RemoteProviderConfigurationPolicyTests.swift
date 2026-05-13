@@ -22,9 +22,10 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
                 configuredModel: "whisper-1"
             ),
             [
-                "whisper-1",
                 "gpt-4o-mini-transcribe",
                 "gpt-4o-transcribe",
+                "gpt-4o-transcribe-diarize",
+                "whisper-1",
                 RemoteProviderConfigurationPolicy.customModelOptionID
             ]
         )
@@ -241,6 +242,19 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
         )
     }
 
+    func testOpenAISheetValidationRejectsInvalidMaxOutputTokens() {
+        let sheet = makeSheet(
+            target: .llm(.openAI),
+            model: "gpt-5.2"
+        )
+
+        XCTAssertEqual(
+            sheet.validationMessageForOpenAISettings(maxOutputTokensText: "0"),
+            AppLocalization.localizedString("Max Output Tokens must be a positive integer.")
+        )
+        XCTAssertNil(sheet.validationMessageForOpenAISettings(maxOutputTokensText: "4096"))
+    }
+
     func testSelectingCustomProviderModelPrefillsCurrentBuiltinModel() {
         let customModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
             previousResolvedModel: "gpt-4o-transcribe",
@@ -277,40 +291,6 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
             ),
             "gpt-4o-transcribe-preview"
         )
-    }
-
-    func testSelectingCustomMeetingModelPrefillsCurrentBuiltinModel() {
-        let customMeetingModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
-            previousResolvedModel: "qwen3-asr-flash",
-            newSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
-            currentCustomModelID: "",
-            supportsCustomSelection: true
-        )
-        let resolvedSelection = RemoteProviderConfigurationPolicy.resolvedMeetingSelection(
-            selectedMeetingModel: RemoteProviderConfigurationPolicy.customModelOptionID,
-            configuredMeetingModel: "qwen3-asr-flash-filetrans",
-            meetingOptionIDs: RemoteASRMeetingConfiguration.meetingModelOptions(for: .aliyunBailianASR).map(\.id)
-        )
-
-        XCTAssertEqual(customMeetingModelID, "qwen3-asr-flash")
-        XCTAssertEqual(resolvedSelection, RemoteProviderConfigurationPolicy.customModelOptionID)
-    }
-
-    func testSelectingCustomMeetingModelKeepsExistingCustomValue() {
-        let customMeetingModelID = RemoteProviderConfigurationPolicy.nextCustomModelID(
-            previousResolvedModel: "qwen3-asr-flash",
-            newSelection: RemoteProviderConfigurationPolicy.customModelOptionID,
-            currentCustomModelID: "qwen3-asr-flash-2026-03-01",
-            supportsCustomSelection: true
-        )
-        let resolvedSelection = RemoteProviderConfigurationPolicy.resolvedMeetingSelection(
-            selectedMeetingModel: RemoteProviderConfigurationPolicy.customModelOptionID,
-            configuredMeetingModel: "qwen3-asr-flash-filetrans",
-            meetingOptionIDs: RemoteASRMeetingConfiguration.meetingModelOptions(for: .aliyunBailianASR).map(\.id)
-        )
-
-        XCTAssertEqual(customMeetingModelID, "qwen3-asr-flash-2026-03-01")
-        XCTAssertEqual(resolvedSelection, RemoteProviderConfigurationPolicy.customModelOptionID)
     }
 
     func testAliyunEndpointPresetsDependOnModelType() {
@@ -357,6 +337,23 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
         )
     }
 
+    func testEndpointPlaceholderShowsResolvedProviderDefault() {
+        XCTAssertEqual(
+            RemoteProviderConfigurationPolicy.endpointPlaceholder(
+                target: .llm(.openAI),
+                resolvedModel: "gpt-5.2"
+            ),
+            "https://api.openai.com/v1/responses"
+        )
+        XCTAssertEqual(
+            RemoteProviderConfigurationPolicy.endpointPlaceholder(
+                target: .asr(.openAIWhisper),
+                resolvedModel: "gpt-4o-mini-transcribe"
+            ),
+            "https://api.openai.com/v1/audio/transcriptions"
+        )
+    }
+
     func testAliyunASREndpointRemapsRegionWhenSwitchingModelFamilies() {
         let endpoint = RemoteProviderConfigurationPolicy.remappedEndpointOnModelChange(
             target: .asr(.aliyunBailianASR),
@@ -392,8 +389,7 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
 
     private func makeSheet(
         target: RemoteProviderTestTarget,
-        model: String,
-        meetingModel: String = ""
+        model: String
     ) -> RemoteProviderConfigurationSheet {
         RemoteProviderConfigurationSheet(
             providerTitle: providerTitle(for: target),
@@ -403,7 +399,6 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
             configuration: RemoteProviderConfiguration(
                 providerID: providerID(for: target),
                 model: model,
-                meetingModel: meetingModel,
                 endpoint: "",
                 apiKey: ""
             ),
@@ -413,7 +408,7 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
 
     private func providerTitle(for target: RemoteProviderTestTarget) -> String {
         switch target {
-        case .asr(let provider), .meetingASR(let provider):
+        case .asr(let provider):
             return provider.title
         case .llm(let provider):
             return provider.title
@@ -422,7 +417,7 @@ final class RemoteProviderConfigurationPolicyTests: XCTestCase {
 
     private func providerID(for target: RemoteProviderTestTarget) -> String {
         switch target {
-        case .asr(let provider), .meetingASR(let provider):
+        case .asr(let provider):
             return provider.rawValue
         case .llm(let provider):
             return provider.rawValue

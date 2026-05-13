@@ -60,6 +60,116 @@ enum OMLXResponseFormat: String, CaseIterable, Identifiable {
     }
 }
 
+enum OpenAIReasoningEffort: String, CaseIterable, Identifiable {
+    case automatic
+    case none
+    case minimal
+    case low
+    case medium
+    case high
+    case xhigh
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic:
+            return AppLocalization.localizedString("Default")
+        case .none:
+            return AppLocalization.localizedString("None")
+        case .minimal:
+            return AppLocalization.localizedString("Minimal")
+        case .low:
+            return AppLocalization.localizedString("Low")
+        case .medium:
+            return AppLocalization.localizedString("Medium")
+        case .high:
+            return AppLocalization.localizedString("High")
+        case .xhigh:
+            return AppLocalization.localizedString("Extra High")
+        }
+    }
+
+    static func supportedCases(forModel model: String) -> [OpenAIReasoningEffort] {
+        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized == "gpt-5.2-pro" || normalized.hasPrefix("gpt-5.2-pro-") {
+            return [.automatic, .medium, .high, .xhigh]
+        }
+        if normalized == "gpt-5-pro" || normalized.hasPrefix("gpt-5-pro-") {
+            return [.automatic, .high]
+        }
+        if normalized == "gpt-5.2-codex" || normalized.hasPrefix("gpt-5.2-codex-") {
+            return [.automatic, .low, .medium, .high, .xhigh]
+        }
+        if normalized == "gpt-5.1-codex-max" || normalized.hasPrefix("gpt-5.1-codex-max-") {
+            return [.automatic, .none, .medium, .high, .xhigh]
+        }
+        if normalized == "gpt-5.2" || normalized.hasPrefix("gpt-5.2-") {
+            return [.automatic, .none, .low, .medium, .high, .xhigh]
+        }
+        if normalized == "gpt-5.1" || normalized.hasPrefix("gpt-5.1-") {
+            return [.automatic, .none, .low, .medium, .high]
+        }
+        if normalized.hasPrefix("gpt-5") {
+            return [.automatic, .minimal, .low, .medium, .high]
+        }
+        if normalized.hasPrefix("o1") ||
+            normalized.hasPrefix("o3") ||
+            normalized.hasPrefix("o4") {
+            return [.automatic, .low, .medium, .high]
+        }
+        return [.automatic]
+    }
+
+    static func apiValue(selection: String, model: String) -> String? {
+        guard let value = OpenAIReasoningEffort(rawValue: selection),
+              value != .automatic,
+              supportedCases(forModel: model).contains(value)
+        else {
+            return nil
+        }
+        return value.rawValue
+    }
+}
+
+enum OpenAITextVerbosity: String, CaseIterable, Identifiable {
+    case automatic
+    case low
+    case medium
+    case high
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic:
+            return AppLocalization.localizedString("Default")
+        case .low:
+            return AppLocalization.localizedString("Low")
+        case .medium:
+            return AppLocalization.localizedString("Medium")
+        case .high:
+            return AppLocalization.localizedString("High")
+        }
+    }
+
+    static func supportsModel(_ model: String) -> Bool {
+        model.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .hasPrefix("gpt-5")
+    }
+
+    static func apiValue(selection: String, model: String) -> String? {
+        guard supportsModel(model),
+              let value = OpenAITextVerbosity(rawValue: selection),
+              value != .automatic
+        else {
+            return nil
+        }
+        return value.rawValue
+    }
+}
+
 struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     let providerID: String
     var model: String
@@ -69,6 +179,9 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     var accessToken: String
     var searchEnabled: Bool
     var openAIChunkPseudoRealtimeEnabled: Bool
+    var openAIReasoningEffort: String
+    var openAITextVerbosity: String
+    var openAIMaxOutputTokens: Int?
     var doubaoDictionaryMode: String
     var doubaoEnableRequestHotwords: Bool
     var doubaoEnableRequestCorrections: Bool
@@ -116,6 +229,14 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         OMLXResponseFormat(rawValue: omlxResponseFormat) ?? .plain
     }
 
+    var openAIReasoningEffortValue: OpenAIReasoningEffort {
+        OpenAIReasoningEffort(rawValue: openAIReasoningEffort) ?? .automatic
+    }
+
+    var openAITextVerbosityValue: OpenAITextVerbosity {
+        OpenAITextVerbosity(rawValue: openAITextVerbosity) ?? .automatic
+    }
+
     init(
         providerID: String,
         model: String,
@@ -125,6 +246,9 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         accessToken: String = "",
         searchEnabled: Bool = false,
         openAIChunkPseudoRealtimeEnabled: Bool = false,
+        openAIReasoningEffort: String = OpenAIReasoningEffort.automatic.rawValue,
+        openAITextVerbosity: String = OpenAITextVerbosity.automatic.rawValue,
+        openAIMaxOutputTokens: Int? = nil,
         doubaoDictionaryMode: String = DoubaoDictionaryMode.requestScoped.rawValue,
         doubaoEnableRequestHotwords: Bool = true,
         doubaoEnableRequestCorrections: Bool = true,
@@ -148,6 +272,9 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         self.accessToken = accessToken
         self.searchEnabled = searchEnabled
         self.openAIChunkPseudoRealtimeEnabled = openAIChunkPseudoRealtimeEnabled
+        self.openAIReasoningEffort = openAIReasoningEffort
+        self.openAITextVerbosity = openAITextVerbosity
+        self.openAIMaxOutputTokens = openAIMaxOutputTokens
         self.doubaoDictionaryMode = doubaoDictionaryMode
         self.doubaoEnableRequestHotwords = doubaoEnableRequestHotwords
         self.doubaoEnableRequestCorrections = doubaoEnableRequestCorrections
@@ -173,6 +300,9 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         case accessToken
         case searchEnabled
         case openAIChunkPseudoRealtimeEnabled
+        case openAIReasoningEffort
+        case openAITextVerbosity
+        case openAIMaxOutputTokens
         case doubaoDictionaryMode
         case doubaoEnableRequestHotwords
         case doubaoEnableRequestCorrections
@@ -200,6 +330,9 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         let defaultSearchEnabled = RemoteLLMProvider(rawValue: providerID)?.defaultSearchEnabled ?? false
         searchEnabled = try container.decodeIfPresent(Bool.self, forKey: .searchEnabled) ?? defaultSearchEnabled
         openAIChunkPseudoRealtimeEnabled = try container.decodeIfPresent(Bool.self, forKey: .openAIChunkPseudoRealtimeEnabled) ?? false
+        openAIReasoningEffort = try container.decodeIfPresent(String.self, forKey: .openAIReasoningEffort) ?? OpenAIReasoningEffort.automatic.rawValue
+        openAITextVerbosity = try container.decodeIfPresent(String.self, forKey: .openAITextVerbosity) ?? OpenAITextVerbosity.automatic.rawValue
+        openAIMaxOutputTokens = try container.decodeIfPresent(Int.self, forKey: .openAIMaxOutputTokens)
         doubaoDictionaryMode = try container.decodeIfPresent(String.self, forKey: .doubaoDictionaryMode) ?? DoubaoDictionaryMode.requestScoped.rawValue
         doubaoEnableRequestHotwords = try container.decodeIfPresent(Bool.self, forKey: .doubaoEnableRequestHotwords) ?? true
         doubaoEnableRequestCorrections = try container.decodeIfPresent(Bool.self, forKey: .doubaoEnableRequestCorrections) ?? true

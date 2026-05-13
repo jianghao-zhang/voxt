@@ -99,20 +99,32 @@ extension RemoteLLMRuntimeClient {
         request.httpMethod = "POST"
         request.timeoutInterval = requestTimeoutInterval(for: provider)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("text/event-stream, application/json", forHTTPHeaderField: "Accept")
+        request.setValue(
+            streamingEnabled ? "text/event-stream, application/json" : "application/json",
+            forHTTPHeaderField: "Accept"
+        )
 
         let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
+        let maxOutputTokens: Int
+        if provider == .openAI, let configuredMaxOutputTokens = configuration.openAIMaxOutputTokens, configuredMaxOutputTokens > 0 {
+            maxOutputTokens = configuredMaxOutputTokens
+        } else {
+            maxOutputTokens = tuning.maxTokens
+        }
+
         var payload: [String: Any] = [
             "model": model,
             "stream": streamingEnabled,
-            "max_output_tokens": tuning.maxTokens,
-            "temperature": tuning.temperature,
-            "top_p": tuning.topP
+            "max_output_tokens": maxOutputTokens
         ]
+        if provider != .openAI {
+            payload["temperature"] = tuning.temperature
+            payload["top_p"] = tuning.topP
+        }
 
         let trimmedSystemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedSystemPrompt.isEmpty {
@@ -127,8 +139,26 @@ extension RemoteLLMRuntimeClient {
             payload["input"] = inputPayload
         }
 
-        if let textFormat {
-            payload["text"] = textFormat
+        if provider == .openAI,
+           let reasoningEffort = OpenAIReasoningEffort.apiValue(
+            selection: configuration.openAIReasoningEffort,
+            model: model
+           ) {
+            payload["reasoning"] = [
+                "effort": reasoningEffort
+            ]
+        }
+
+        var textPayload = textFormat ?? [:]
+        if provider == .openAI,
+           let verbosity = OpenAITextVerbosity.apiValue(
+            selection: configuration.openAITextVerbosity,
+            model: model
+           ) {
+            textPayload["verbosity"] = verbosity
+        }
+        if !textPayload.isEmpty {
+            payload["text"] = textPayload
         }
 
         if configuration.searchEnabled && provider.supportsHostedSearch {
