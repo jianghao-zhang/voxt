@@ -650,6 +650,9 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 clearActiveCorrectionPassIfNeeded(passID: activePassID)
             }
         }
+        if stage == .intermediate {
+            guard isRecording, revision == sessionRevision else { return nil }
+        }
 
         let passID = UUID()
         let passTask = Task<String?, Never> { [weak self] in

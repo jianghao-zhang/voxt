@@ -475,12 +475,6 @@ extension AppDelegate {
                         self.whisperTranscriber?.forceIntermediateTranscription()
                     }
 
-                    if (self.transcriptionEngine == .mlxAudio || self.transcriptionEngine == .whisperKit),
-                       silentDuration >= 4.0,
-                       !self.didTriggerPauseLLM {
-                        self.didTriggerPauseLLM = true
-                        self.startPauseLLMIfNeeded()
-                    }
                 }
 
                 if self.shouldStopRecordingForVoiceEndCommand() {

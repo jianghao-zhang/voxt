@@ -41,18 +41,19 @@ struct PagedVerticalList<Item: Identifiable, Row: View>: NSViewRepresentable {
     let onLoadMore: () -> Void
     @ViewBuilder let row: (Item) -> Row
 
-    private var state: PagedVerticalListState {
+    private var state: PagedVerticalListState<Item> {
         PagedVerticalListState(
-            rows: items.map { item in AnyView(row(item)) },
+            items: items,
             totalCount: totalCount,
             rowHeight: rowHeight,
             rowSpacing: rowSpacing,
             isLoading: isLoading,
-            onLoadMore: onLoadMore
+            onLoadMore: onLoadMore,
+            row: { item in AnyView(row(item)) }
         )
     }
 
-    func makeCoordinator() -> PagedVerticalListCoordinator {
+    func makeCoordinator() -> PagedVerticalListCoordinator<Item> {
         PagedVerticalListCoordinator(state: state)
     }
 
@@ -100,20 +101,20 @@ struct PagedVerticalList<Item: Identifiable, Row: View>: NSViewRepresentable {
 
 }
 
-final class PagedVerticalListCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
-    var state: PagedVerticalListState
+final class PagedVerticalListCoordinator<Item: Identifiable>: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    var state: PagedVerticalListState<Item>
     weak var tableView: NSTableView?
     weak var scrollView: NSScrollView?
     private var lastLoadMoreItemCount = -1
     private var lastKnownTotalCount = -1
 
-    init(state: PagedVerticalListState) {
+    init(state: PagedVerticalListState<Item>) {
         self.state = state
         lastKnownTotalCount = state.totalCount
     }
 
-    func update(state newState: PagedVerticalListState) {
-        if newState.rows.count < state.rows.count || newState.totalCount != lastKnownTotalCount {
+    func update(state newState: PagedVerticalListState<Item>) {
+        if newState.items.count < state.items.count || newState.totalCount != lastKnownTotalCount {
             lastLoadMoreItemCount = -1
         }
         state = newState
@@ -121,7 +122,7 @@ final class PagedVerticalListCoordinator: NSObject, NSTableViewDataSource, NSTab
     }
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        state.rows.count + (showsFooter ? 1 : 0)
+        state.items.count + (showsFooter ? 1 : 0)
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
@@ -136,12 +137,13 @@ final class PagedVerticalListCoordinator: NSObject, NSTableViewDataSource, NSTab
             )
         }
 
-        guard state.rows.indices.contains(rowIndex) else { return nil }
+        guard state.items.indices.contains(rowIndex) else { return nil }
         requestNextPageIfNeeded(displaying: rowIndex)
+        let item = state.items[rowIndex]
         return hostedCell(
             in: tableView,
             rootView: AnyView(
-                state.rows[rowIndex]
+                state.row(item)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: state.rowHeight)
             )
@@ -149,11 +151,11 @@ final class PagedVerticalListCoordinator: NSObject, NSTableViewDataSource, NSTab
     }
 
     private var showsFooter: Bool {
-        state.isLoading || state.rows.count < state.totalCount
+        state.isLoading || state.items.count < state.totalCount
     }
 
     private func isFooterRow(_ rowIndex: Int) -> Bool {
-        showsFooter && rowIndex == state.rows.count
+        showsFooter && rowIndex == state.items.count
     }
 
     @ViewBuilder
@@ -172,10 +174,10 @@ final class PagedVerticalListCoordinator: NSObject, NSTableViewDataSource, NSTab
     }
 
     private func requestNextPageIfNeeded(displaying rowIndex: Int) {
-        guard !state.isLoading, state.rows.count < state.totalCount else { return }
-        guard rowIndex >= max(0, state.rows.count - 12) else { return }
-        guard lastLoadMoreItemCount != state.rows.count else { return }
-        lastLoadMoreItemCount = state.rows.count
+        guard !state.isLoading, state.items.count < state.totalCount else { return }
+        guard rowIndex >= max(0, state.items.count - 12) else { return }
+        guard lastLoadMoreItemCount != state.items.count else { return }
+        lastLoadMoreItemCount = state.items.count
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.state.onLoadMore()
@@ -193,11 +195,12 @@ final class PagedVerticalListCoordinator: NSObject, NSTableViewDataSource, NSTab
     }
 }
 
-struct PagedVerticalListState {
-    let rows: [AnyView]
+struct PagedVerticalListState<Item: Identifiable> {
+    let items: [Item]
     let totalCount: Int
     let rowHeight: CGFloat
     let rowSpacing: CGFloat
     let isLoading: Bool
     let onLoadMore: () -> Void
+    let row: (Item) -> AnyView
 }

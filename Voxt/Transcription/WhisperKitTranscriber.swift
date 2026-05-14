@@ -257,7 +257,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         case stopFinalRealtime
         case stopFinalOffline
 
-        var isStopFinal: Bool {
+        nonisolated var isStopFinal: Bool {
             switch self {
             case .stopFinalRealtime, .stopFinalOffline:
                 return true
@@ -1812,6 +1812,11 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
             }
             if activeInferencePassID == activePassID {
                 clearActiveInferencePassIfNeeded(passID: activePassID)
+            }
+        }
+        if !passKind.isStopFinal {
+            guard isRecording, revision == sessionRevision else {
+                throw CancellationError()
             }
         }
 
