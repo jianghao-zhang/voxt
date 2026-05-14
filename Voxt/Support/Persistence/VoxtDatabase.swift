@@ -20,8 +20,10 @@ final class VoxtDatabase: @unchecked Sendable {
             }
 
             dbQueue = try DatabaseQueue(path: resolvedURL.path, configuration: configuration)
-            try dbQueue.write { db in
+            try dbQueue.writeWithoutTransaction { db in
                 try db.execute(sql: "PRAGMA journal_mode = WAL")
+            }
+            try dbQueue.write { db in
                 try db.execute(sql: "PRAGMA foreign_keys = ON")
             }
             try Self.migrator.migrate(dbQueue)
