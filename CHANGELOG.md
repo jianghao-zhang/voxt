@@ -6,6 +6,53 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.3] - 2026-05-14
+
+### English
+
+#### Added
+- Added SQLite-backed dictionary and transcription history storage for faster large-list browsing and searching.
+
+#### Changed
+- Optimized the default prompts and cleanup rules for more reliable transcription handling.
+- Improved history and dictionary performance, including lower idle overhead and fewer full dictionary scans during recognition.
+- History and dictionary data now migrates into the new storage format on first use; opening history for the first time may be slow, with later launches expected to improve.
+- Reduced idle CPU usage in model settings, model catalog refresh, and transcription polling.
+
+#### Fixed
+- Fixed ASR prompt echoes so prompt text is less likely to appear in the recording overlay output.
+- The rewrite follow-up overlay now hides the continue button while follow-up recording is active.
+
+### 简体中文
+
+#### 新增
+- 新增基于 SQLite 的词典与转录历史存储，大量记录下的浏览和搜索更快。
+
+#### 改进
+- 优化了默认提示词与清理规则，让转录文本处理更可靠。
+- 优化了历史记录和词典性能，包括降低空闲开销，并减少识别过程中的全量词典扫描。
+- 历史记录和词典数据会在首次使用时迁移到新的存储格式；首次打开历史记录可能较慢，后续启动和使用会改善。
+- 降低了模型设置、模型目录刷新和转录轮询的空闲 CPU 占用。
+
+#### 修复
+- 修复了 ASR 提示词回显问题，提示词文本不再容易出现在录音浮窗输出中。
+- 改写追问录音进行中时，现在会隐藏继续按钮。
+
+### 日本語
+
+#### 追加
+- SQLite ベースの辞書と文字起こし履歴ストレージを追加し、大量の履歴でも閲覧と検索が速くなりました。
+
+#### 変更
+- 既定のプロンプトとクリーンアップルールを最適化し、文字起こしテキストの処理をより安定させました。
+- 履歴と辞書のパフォーマンスを改善し、待機中の負荷を減らし、認識中の辞書全件スキャンを抑えました。
+- 履歴と辞書データは初回利用時に新しい保存形式へ移行されます。初めて履歴を開くと時間がかかる場合がありますが、その後の起動と利用は改善されます。
+- モデル設定、モデルカタログ更新、文字起こしポーリングの待機中 CPU 使用率を下げました。
+
+#### 修正
+- ASR プロンプトのエコーを修正し、プロンプト文が録音オーバーレイ出力に表示されにくくなりました。
+- リライトの追加録音中は、続行ボタンを非表示にするようにしました。
+
 ## [1.11.2] - 2026-05-13
 
 ### English
