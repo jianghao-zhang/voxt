@@ -140,6 +140,7 @@
 "No history yet." = "暂无历史记录。";
 "Load More" = "加载更多";
 "Copied" = "已复制";
+"Copied to clipboard" = "已复制到剪贴板";
 "Completed" = "已完成";
 "Incomplete" = "未完成";
 "Just now" = "刚刚";

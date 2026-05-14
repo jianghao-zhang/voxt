@@ -30,6 +30,8 @@ struct HistorySettingsView: View {
     @ObservedObject var dictionaryStore: DictionaryStore
     @ObservedObject var dictionarySuggestionStore: DictionarySuggestionStore
     let navigationRequest: SettingsNavigationRequest?
+    @State private var copyToastMessage = ""
+    @State private var copyToastDismissTask: Task<Void, Never>?
     @State private var copiedEntryID: UUID?
     @State private var copiedNoteID: UUID?
     @State private var selectedFilter: HistoryFilterTab = .transcription
@@ -157,6 +159,16 @@ struct HistorySettingsView: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
+        .overlay(alignment: .top) {
+            if !copyToastMessage.isEmpty {
+                ModelDebugToast(message: copyToastMessage) {
+                    dismissCopyToast()
+                }
+                .padding(.top, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: copyToastMessage)
         .sheet(isPresented: $isHistoryAudioSettingsPresented) {
             HistoryAudioSettingsSheet(
                 historyCleanupEnabled: $historyCleanupEnabled,
@@ -226,6 +238,9 @@ struct HistorySettingsView: View {
             refreshHistoryAudioStorageStats()
             reloadHistoryEntries(reset: true)
         }
+        .onDisappear {
+            dismissCopyToast()
+        }
     }
 
     private var notesList: some View {
@@ -240,6 +255,7 @@ struct HistorySettingsView: View {
                 onCopy: {
                     copyStringToPasteboard(item.text)
                     copiedNoteID = item.id
+                    showCopyToast()
                     Task {
                         try? await Task.sleep(for: .seconds(1.2))
                         if copiedNoteID == item.id {
@@ -282,6 +298,7 @@ struct HistorySettingsView: View {
                         )
                     )
                     copiedEntryID = entry.id
+                    showCopyToast()
                     Task {
                         try? await Task.sleep(for: .seconds(1.2))
                         if copiedEntryID == entry.id {
@@ -333,6 +350,7 @@ struct HistorySettingsView: View {
     private func confirmBulkDeletion(_ target: HistoryBulkDeletionTarget) {
         copiedEntryID = nil
         copiedNoteID = nil
+        dismissCopyToast()
         switch target {
         case .history:
             historyStore.clearAll()
@@ -489,5 +507,24 @@ struct HistorySettingsView: View {
             )
         }
         refreshHistoryAudioStorageStats()
+    }
+
+    private func showCopyToast() {
+        showCopyToast(localized("Copied to clipboard"))
+    }
+
+    private func showCopyToast(_ message: String, duration: TimeInterval = 2.2) {
+        copyToastDismissTask?.cancel()
+        copyToastMessage = message
+        copyToastDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            copyToastMessage = ""
+        }
+    }
+
+    private func dismissCopyToast() {
+        copyToastDismissTask?.cancel()
+        copyToastMessage = ""
     }
 }

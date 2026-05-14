@@ -138,6 +138,7 @@
 "No history yet." = "履歴はまだありません。";
 "Load More" = "さらに読み込む";
 "Copied" = "コピー済み";
+"Copied to clipboard" = "クリップボードにコピーしました";
 "Completed" = "完了";
 "Incomplete" = "未完了";
 "Just now" = "たった今";
