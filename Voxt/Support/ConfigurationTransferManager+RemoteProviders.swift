@@ -26,6 +26,7 @@ struct SanitizedRemoteProviderConfiguration: Codable {
     var omlxJSONSchema: String
     var omlxIncludeUsageStreamOptions: Bool
     var omlxExtraBodyJSON: String
+    var generationSettings: LLMGenerationSettings
 
     enum CodingKeys: String, CodingKey {
         case providerID
@@ -53,6 +54,7 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         case omlxJSONSchema
         case omlxIncludeUsageStreamOptions
         case omlxExtraBodyJSON
+        case generationSettings
     }
 
     init(
@@ -80,7 +82,8 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         omlxResponseFormat: String,
         omlxJSONSchema: String,
         omlxIncludeUsageStreamOptions: Bool,
-        omlxExtraBodyJSON: String
+        omlxExtraBodyJSON: String,
+        generationSettings: LLMGenerationSettings
     ) {
         self.providerID = providerID
         self.model = model
@@ -107,6 +110,7 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         self.omlxJSONSchema = omlxJSONSchema
         self.omlxIncludeUsageStreamOptions = omlxIncludeUsageStreamOptions
         self.omlxExtraBodyJSON = omlxExtraBodyJSON
+        self.generationSettings = generationSettings
     }
 
     init(from decoder: Decoder) throws {
@@ -137,6 +141,19 @@ struct SanitizedRemoteProviderConfiguration: Codable {
         omlxJSONSchema = try container.decodeIfPresent(String.self, forKey: .omlxJSONSchema) ?? ""
         omlxIncludeUsageStreamOptions = try container.decodeIfPresent(Bool.self, forKey: .omlxIncludeUsageStreamOptions) ?? false
         omlxExtraBodyJSON = try container.decodeIfPresent(String.self, forKey: .omlxExtraBodyJSON) ?? ""
+        generationSettings = try container.decodeIfPresent(LLMGenerationSettings.self, forKey: .generationSettings)
+            ?? LLMGenerationSettings.legacy(
+                providerID: providerID,
+                openAIReasoningEffort: openAIReasoningEffort,
+                openAIMaxOutputTokens: openAIMaxOutputTokens,
+                ollamaResponseFormat: ollamaResponseFormat,
+                ollamaThinkMode: ollamaThinkMode,
+                ollamaLogprobsEnabled: ollamaLogprobsEnabled,
+                ollamaTopLogprobs: ollamaTopLogprobs,
+                ollamaOptionsJSON: ollamaOptionsJSON,
+                omlxResponseFormat: omlxResponseFormat,
+                omlxExtraBodyJSON: omlxExtraBodyJSON
+            )
     }
 }
 
@@ -169,7 +186,8 @@ extension ConfigurationTransferManager {
                 omlxResponseFormat: $0.omlxResponseFormat,
                 omlxJSONSchema: $0.omlxJSONSchema,
                 omlxIncludeUsageStreamOptions: $0.omlxIncludeUsageStreamOptions,
-                omlxExtraBodyJSON: $0.omlxExtraBodyJSON
+                omlxExtraBodyJSON: $0.omlxExtraBodyJSON,
+                generationSettings: $0.generationSettings
             )
         }
     }
@@ -203,7 +221,8 @@ extension ConfigurationTransferManager {
                     omlxResponseFormat: item.omlxResponseFormat,
                     omlxJSONSchema: item.omlxJSONSchema,
                     omlxIncludeUsageStreamOptions: item.omlxIncludeUsageStreamOptions,
-                    omlxExtraBodyJSON: item.omlxExtraBodyJSON
+                    omlxExtraBodyJSON: item.omlxExtraBodyJSON,
+                    generationSettings: item.generationSettings
                 )
             )
         })

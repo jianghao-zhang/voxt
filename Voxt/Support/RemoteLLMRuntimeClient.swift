@@ -30,6 +30,14 @@ struct RemoteLLMRuntimeClient {
         let maxTokens: Int
         let temperature: Double
         let topP: Double
+
+        func applying(_ settings: LLMGenerationSettings) -> GenerationTuning {
+            GenerationTuning(
+                maxTokens: settings.maxOutputTokens.map { max(1, $0) } ?? maxTokens,
+                temperature: settings.temperature ?? temperature,
+                topP: settings.topP ?? topP
+            )
+        }
     }
 
     private struct StreamingPartialDeliveryState {
@@ -556,7 +564,7 @@ struct RemoteLLMRuntimeClient {
             systemPromptLength: systemPrompt.count,
             userPromptLength: requestContentForLog.count,
             intent: intent
-        )
+        ).applying(configuration.effectiveGenerationSettings(provider: provider))
         let shouldAttemptStreaming = onPartialText != nil && supportsStreaming(provider: provider, intent: intent)
 
         if shouldAttemptStreaming, let onPartialText {
@@ -866,7 +874,7 @@ struct RemoteLLMRuntimeClient {
                 systemPromptLength: systemPrompt.count,
                 userPromptLength: userPrompt.count,
                 intent: intent
-            )
+            ).applying(configuration.effectiveGenerationSettings(provider: provider))
             do {
                 if shouldAttemptStreaming, let onPartialText {
                     do {
@@ -1071,12 +1079,17 @@ struct RemoteLLMRuntimeClient {
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
             var payload: [String: Any] = [
                 "model": model,
-                "max_tokens": 2048,
+                "max_tokens": tuning.maxTokens,
                 "stream": streamingEnabled,
                 "messages": [
                     ["role": "user", "content": userPrompt]
                 ]
             ]
+            applyAnthropicGenerationSettings(
+                to: &payload,
+                settings: configuration.effectiveGenerationSettings(provider: provider),
+                tuning: tuning
+            )
             let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedSystem.isEmpty {
                 payload["system"] = systemPrompt
@@ -1113,6 +1126,11 @@ struct RemoteLLMRuntimeClient {
                     ["parts": [["text": userPrompt]]]
                 ]
             ]
+            applyGoogleGenerationSettings(
+                to: &payload,
+                settings: configuration.effectiveGenerationSettings(provider: provider),
+                tuning: tuning
+            )
             let trimmedSystem = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedSystem.isEmpty {
                 payload["system_instruction"] = ["parts": [["text": systemPrompt]]]
@@ -1127,11 +1145,19 @@ struct RemoteLLMRuntimeClient {
                 throw NSError(domain: "Voxt.RemoteLLM", code: -304, userInfo: [NSLocalizedDescriptionKey: "MiniMax API key is empty."])
             }
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            request.httpBody = try JSONSerialization.data(withJSONObject: [
+            var payload: [String: Any] = [
                 "model": model,
                 "stream": streamingEnabled,
                 "messages": openAICompatibleMessages(systemPrompt: systemPrompt, userPrompt: userPrompt)
-            ])
+            ]
+            try applyOpenAICompatibleGenerationSettings(
+                to: &payload,
+                provider: provider,
+                configuration: configuration,
+                tuning: tuning,
+                responseFormat: openAICompatibleResponseFormat
+            )
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         case .ollama where usesNativeOllamaEndpoint(url):
             let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             if !apiKey.isEmpty {
@@ -1161,6 +1187,13 @@ struct RemoteLLMRuntimeClient {
                 messagesOverride: messagesOverride,
                 tuning: tuning,
                 streamingEnabled: streamingEnabled,
+                responseFormat: openAICompatibleResponseFormat
+            )
+            try applyOpenAICompatibleGenerationSettings(
+                to: &payload,
+                provider: provider,
+                configuration: configuration,
+                tuning: tuning,
                 responseFormat: openAICompatibleResponseFormat
             )
             if provider == .ollama {
@@ -1280,7 +1313,8 @@ struct RemoteLLMRuntimeClient {
         to payload: inout [String: Any],
         configuration: RemoteProviderConfiguration
     ) throws {
-        switch configuration.ollamaResponseFormatValue {
+        let settings = configuration.effectiveGenerationSettings(provider: .ollama)
+        switch settings.responseFormat {
         case .plain:
             break
         case .json:
@@ -1292,13 +1326,17 @@ struct RemoteLLMRuntimeClient {
             )
         }
 
-        switch configuration.ollamaThinkModeValue {
+        switch settings.thinking.mode {
         case .off:
             payload["think"] = false
-        case .on:
+        case .on, .budget:
             payload["think"] = true
-        case .low, .medium, .high:
-            payload["think"] = configuration.ollamaThinkModeValue.rawValue
+        case .effort:
+            if let effort = settings.thinking.effort {
+                payload["think"] = effort
+            }
+        case .providerDefault:
+            break
         }
 
         let keepAlive = configuration.ollamaKeepAlive.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1306,9 +1344,9 @@ struct RemoteLLMRuntimeClient {
             payload["keep_alive"] = keepAlive
         }
 
-        if configuration.ollamaLogprobsEnabled {
+        if settings.logprobs {
             payload["logprobs"] = true
-            if let topLogprobs = configuration.ollamaTopLogprobs {
+            if let topLogprobs = settings.topLogprobs {
                 payload["top_logprobs"] = topLogprobs
             }
         }
@@ -1364,14 +1402,30 @@ struct RemoteLLMRuntimeClient {
         configuration: RemoteProviderConfiguration,
         tuning: GenerationTuning
     ) throws -> [String: Any] {
+        let settings = configuration.effectiveGenerationSettings(provider: .ollama)
         var options: [String: Any] = [
-            "temperature": tuning.temperature,
-            "top_p": tuning.topP,
-            "num_predict": tuning.maxTokens
+            "temperature": settings.temperature ?? tuning.temperature,
+            "top_p": settings.topP ?? tuning.topP,
+            "num_predict": settings.maxOutputTokens.map { max(1, $0) } ?? tuning.maxTokens
         ]
+        if let topK = settings.topK {
+            options["top_k"] = topK
+        }
+        if let minP = settings.minP {
+            options["min_p"] = minP
+        }
+        if let seed = settings.seed {
+            options["seed"] = seed
+        }
+        if let repetitionPenalty = settings.repetitionPenalty {
+            options["repeat_penalty"] = repetitionPenalty
+        }
+        if !settings.stop.isEmpty {
+            options["stop"] = settings.stop
+        }
 
         if let customOptions = try optionalJSONObject(
-            source: configuration.ollamaOptionsJSON,
+            source: settings.extraOptionsJSON,
             fieldName: "Ollama Options JSON"
         ) {
             for (key, value) in customOptions {
@@ -1386,8 +1440,9 @@ struct RemoteLLMRuntimeClient {
         to payload: inout [String: Any],
         configuration: RemoteProviderConfiguration
     ) throws {
+        let settings = configuration.effectiveGenerationSettings(provider: .ollama)
         guard let customOptions = try optionalJSONObject(
-            source: configuration.ollamaOptionsJSON,
+            source: settings.extraOptionsJSON,
             fieldName: "Ollama Options JSON"
         ) else {
             return
@@ -1408,7 +1463,8 @@ struct RemoteLLMRuntimeClient {
         to payload: inout [String: Any],
         configuration: RemoteProviderConfiguration
     ) throws {
-        if configuration.omlxResponseFormatValue == .jsonSchema {
+        let settings = configuration.effectiveGenerationSettings(provider: .omlx)
+        if settings.responseFormat == .jsonSchema {
             payload["response_format"] = [
                 "type": "json_schema",
                 "json_schema": [
@@ -1429,12 +1485,258 @@ struct RemoteLLMRuntimeClient {
         }
 
         if let extraBody = try optionalJSONObject(
-            source: configuration.omlxExtraBodyJSON,
+            source: settings.extraBodyJSON,
             fieldName: AppLocalization.localizedString("oMLX Extra Body JSON")
         ) {
             for (key, value) in extraBody {
                 payload[key] = value
             }
+        }
+    }
+
+    func applyAnthropicGenerationSettings(
+        to payload: inout [String: Any],
+        settings: LLMGenerationSettings,
+        tuning: GenerationTuning
+    ) {
+        var maxTokens = settings.maxOutputTokens.map { max(1, $0) } ?? tuning.maxTokens
+        if settings.thinking.mode == .budget,
+           let budget = settings.thinking.budgetTokens {
+            maxTokens = max(maxTokens, budget + 1)
+        }
+        payload["max_tokens"] = maxTokens
+        if let temperature = settings.temperature {
+            payload["temperature"] = temperature
+        }
+        if let topP = settings.topP {
+            payload["top_p"] = topP
+        }
+        if let topK = settings.topK {
+            payload["top_k"] = topK
+        }
+        if !settings.stop.isEmpty {
+            payload["stop_sequences"] = settings.stop
+        }
+        switch settings.thinking.mode {
+        case .budget:
+            guard let budget = settings.thinking.budgetTokens else { break }
+            var thinking: [String: Any] = [
+                "type": "enabled",
+                "budget_tokens": budget,
+                "display": "omitted"
+            ]
+            payload["thinking"] = thinking
+        case .off:
+            payload["thinking"] = ["type": "disabled"]
+        case .on, .providerDefault, .effort:
+            break
+        }
+    }
+
+    func applyGoogleGenerationSettings(
+        to payload: inout [String: Any],
+        settings: LLMGenerationSettings,
+        tuning: GenerationTuning
+    ) {
+        var generationConfig: [String: Any] = [
+            "maxOutputTokens": settings.maxOutputTokens.map { max(1, $0) } ?? tuning.maxTokens,
+            "temperature": settings.temperature ?? tuning.temperature,
+            "topP": settings.topP ?? tuning.topP
+        ]
+        if let topK = settings.topK {
+            generationConfig["topK"] = topK
+        }
+        if !settings.stop.isEmpty {
+            generationConfig["stopSequences"] = settings.stop
+        }
+        switch settings.responseFormat {
+        case .plain:
+            break
+        case .json, .jsonSchema:
+            generationConfig["responseMimeType"] = "application/json"
+        }
+        switch settings.thinking.mode {
+        case .off:
+            generationConfig["thinkingConfig"] = ["thinkingBudget": 0]
+        case .budget:
+            if let budget = settings.thinking.budgetTokens {
+                generationConfig["thinkingConfig"] = ["thinkingBudget": budget]
+            }
+        case .on, .providerDefault, .effort:
+            break
+        }
+        payload["generationConfig"] = generationConfig
+    }
+
+    func applyOpenAICompatibleGenerationSettings(
+        to payload: inout [String: Any],
+        provider: RemoteLLMProvider,
+        configuration: RemoteProviderConfiguration,
+        tuning: GenerationTuning,
+        responseFormat: OpenAICompatibleResponseFormat?
+    ) throws {
+        let settings = configuration.effectiveGenerationSettings(provider: provider)
+        payload["max_tokens"] = settings.maxOutputTokens.map { max(1, $0) } ?? tuning.maxTokens
+        if let temperature = settings.temperature {
+            payload["temperature"] = temperature
+        }
+        if let topP = settings.topP {
+            payload["top_p"] = topP
+        }
+        if let seed = settings.seed {
+            payload["seed"] = seed
+        }
+        if !settings.stop.isEmpty {
+            payload["stop"] = settings.stop
+        }
+        if let presencePenalty = settings.presencePenalty {
+            payload["presence_penalty"] = presencePenalty
+        }
+        if let frequencyPenalty = settings.frequencyPenalty {
+            payload["frequency_penalty"] = frequencyPenalty
+        }
+        if settings.logprobs {
+            payload["logprobs"] = true
+            if let topLogprobs = settings.topLogprobs {
+                payload["top_logprobs"] = topLogprobs
+            }
+        }
+
+        switch settings.responseFormat {
+        case .plain:
+            break
+        case .json:
+            payload["response_format"] = ["type": "json_object"]
+        case .jsonSchema:
+            if payload["response_format"] == nil {
+                payload["response_format"] = ["type": "json_object"]
+            }
+        }
+
+        if responseFormat == .jsonObject {
+            payload["response_format"] = ["type": "json_object"]
+        }
+
+        applyOpenAICompatibleThinkingSettings(
+            to: &payload,
+            provider: provider,
+            settings: settings
+        )
+        try applyCommonExtraBody(
+            to: &payload,
+            settings: settings,
+            fieldName: AppLocalization.localizedString("Extra Body JSON")
+        )
+    }
+
+    func applyOpenAICompatibleThinkingSettings(
+        to payload: inout [String: Any],
+        provider: RemoteLLMProvider,
+        settings: LLMGenerationSettings
+    ) {
+        switch provider {
+        case .openrouter:
+            var reasoning: [String: Any] = ["exclude": !settings.thinking.exposeReasoning]
+            switch settings.thinking.mode {
+            case .effort:
+                if let effort = settings.thinking.effort { reasoning["effort"] = effort }
+            case .budget:
+                if let budget = settings.thinking.budgetTokens { reasoning["max_tokens"] = budget }
+            case .off:
+                reasoning["enabled"] = false
+            case .on:
+                reasoning["enabled"] = true
+            case .providerDefault:
+                break
+            }
+            payload["reasoning"] = reasoning
+        case .deepseek:
+            switch settings.thinking.mode {
+            case .off:
+                payload["thinking"] = ["type": "disabled"]
+            case .on, .budget:
+                var thinking: [String: Any] = ["type": "enabled"]
+                if let budget = settings.thinking.budgetTokens {
+                    thinking["budget_tokens"] = budget
+                }
+                payload["thinking"] = thinking
+            case .effort:
+                if let effort = settings.thinking.effort {
+                    payload["reasoning_effort"] = effort
+                }
+            case .providerDefault:
+                break
+            }
+        case .zai, .volcengine, .aliyunBailian:
+            switch settings.thinking.mode {
+            case .off:
+                payload["thinking"] = ["type": "disabled"]
+                if provider == .aliyunBailian {
+                    payload["enable_thinking"] = false
+                }
+            case .on:
+                payload["thinking"] = ["type": "enabled"]
+                if provider == .aliyunBailian {
+                    payload["enable_thinking"] = true
+                }
+            case .budget:
+                if provider == .aliyunBailian {
+                    payload["enable_thinking"] = true
+                    if let budget = settings.thinking.budgetTokens {
+                        payload["thinking_budget"] = budget
+                    }
+                } else {
+                    var thinking: [String: Any] = ["type": "enabled"]
+                    if let budget = settings.thinking.budgetTokens {
+                        thinking["budget_tokens"] = budget
+                    }
+                    payload["thinking"] = thinking
+                }
+            case .effort:
+                if let effort = settings.thinking.effort {
+                    payload["reasoning_effort"] = effort
+                }
+            case .providerDefault:
+                break
+            }
+        case .grok:
+            if settings.thinking.mode == .effort, let effort = settings.thinking.effort {
+                payload["reasoning_effort"] = effort
+            }
+        case .kimi:
+            switch settings.thinking.mode {
+            case .off:
+                payload["thinking"] = ["type": "disabled"]
+            case .on:
+                payload["thinking"] = ["type": "enabled"]
+            case .budget:
+                var thinking: [String: Any] = ["type": "enabled"]
+                if let budget = settings.thinking.budgetTokens {
+                    thinking["budget_tokens"] = budget
+                }
+                payload["thinking"] = thinking
+            case .effort:
+                if let effort = settings.thinking.effort {
+                    payload["reasoning_effort"] = effort
+                }
+            case .providerDefault:
+                break
+            }
+        default:
+            break
+        }
+    }
+
+    func applyCommonExtraBody(
+        to payload: inout [String: Any],
+        settings: LLMGenerationSettings,
+        fieldName: String
+    ) throws {
+        guard let extraBody = try optionalJSONObject(source: settings.extraBodyJSON, fieldName: fieldName) else {
+            return
+        }
+        for (key, value) in extraBody {
+            payload[key] = value
         }
     }
 

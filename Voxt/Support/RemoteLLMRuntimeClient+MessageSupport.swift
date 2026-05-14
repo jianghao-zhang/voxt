@@ -109,12 +109,8 @@ extension RemoteLLMRuntimeClient {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
-        let maxOutputTokens: Int
-        if provider == .openAI, let configuredMaxOutputTokens = configuration.openAIMaxOutputTokens, configuredMaxOutputTokens > 0 {
-            maxOutputTokens = configuredMaxOutputTokens
-        } else {
-            maxOutputTokens = tuning.maxTokens
-        }
+        let generationSettings = configuration.effectiveGenerationSettings(provider: provider)
+        let maxOutputTokens = generationSettings.maxOutputTokens.map { max(1, $0) } ?? tuning.maxTokens
 
         var payload: [String: Any] = [
             "model": model,
@@ -139,15 +135,21 @@ extension RemoteLLMRuntimeClient {
             payload["input"] = inputPayload
         }
 
-        if provider == .openAI,
-           let reasoningEffort = OpenAIReasoningEffort.apiValue(
-            selection: configuration.openAIReasoningEffort,
-            model: model
-           ) {
+        if let reasoningEffort = responsesReasoningEffort(
+            provider: provider,
+            model: model,
+            settings: generationSettings,
+            configuration: configuration
+        ) {
             payload["reasoning"] = [
                 "effort": reasoningEffort
             ]
         }
+        applyResponsesThinkingConfiguration(
+            to: &payload,
+            provider: provider,
+            settings: generationSettings
+        )
 
         var textPayload = textFormat ?? [:]
         if provider == .openAI,
@@ -161,6 +163,12 @@ extension RemoteLLMRuntimeClient {
             payload["text"] = textPayload
         }
 
+        try applyCommonExtraBody(
+            to: &payload,
+            settings: generationSettings,
+            fieldName: AppLocalization.localizedString("Extra Body JSON")
+        )
+
         if configuration.searchEnabled && provider.supportsHostedSearch {
             payload["tools"] = [
                 [
@@ -171,6 +179,73 @@ extension RemoteLLMRuntimeClient {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         return request
+    }
+
+    func responsesReasoningEffort(
+        provider: RemoteLLMProvider,
+        model: String,
+        settings: LLMGenerationSettings,
+        configuration: RemoteProviderConfiguration
+    ) -> String? {
+        if provider == .openAI {
+            if settings.thinking.mode == .effort,
+               let effort = settings.thinking.effort,
+               OpenAIReasoningEffort.apiValue(selection: effort, model: model) != nil {
+                return effort
+            }
+            return OpenAIReasoningEffort.apiValue(
+                selection: configuration.openAIReasoningEffort,
+                model: model
+            )
+        }
+
+        guard settings.thinking.mode == .effort else { return nil }
+        switch provider {
+        case .volcengine:
+            return settings.thinking.effort
+        default:
+            return nil
+        }
+    }
+
+    func applyResponsesThinkingConfiguration(
+        to payload: inout [String: Any],
+        provider: RemoteLLMProvider,
+        settings: LLMGenerationSettings
+    ) {
+        switch provider {
+        case .aliyunBailian:
+            switch settings.thinking.mode {
+            case .off:
+                payload["enable_thinking"] = false
+            case .on, .effort:
+                payload["enable_thinking"] = true
+            case .budget:
+                payload["enable_thinking"] = true
+                if let budget = settings.thinking.budgetTokens {
+                    payload["thinking_budget"] = budget
+                }
+            case .providerDefault:
+                break
+            }
+        case .volcengine:
+            switch settings.thinking.mode {
+            case .off:
+                payload["thinking"] = ["type": "disabled"]
+            case .on:
+                payload["thinking"] = ["type": "enabled"]
+            case .budget:
+                var thinking: [String: Any] = ["type": "enabled"]
+                if let budget = settings.thinking.budgetTokens {
+                    thinking["budget_tokens"] = budget
+                }
+                payload["thinking"] = thinking
+            case .providerDefault, .effort:
+                break
+            }
+        default:
+            break
+        }
     }
 
     func googleSearchToolPayload(for model: String) -> [String: Any] {

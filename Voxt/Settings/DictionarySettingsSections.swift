@@ -11,7 +11,7 @@ struct DictionarySettingsHeaderCard: View {
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 16) {
                     Button(AppLocalization.localizedString("One-Click Ingest")) {
                         onOpenIngest()
@@ -82,25 +82,36 @@ private struct DictionarySettingsHeaderStatus: View {
 
 struct DictionaryEntriesCard: View {
     @Binding var selectedFilter: DictionaryFilter
-    let pagedVisibleEntries: [DictionaryEntry]
     let visibleEntries: [DictionaryEntry]
-    let hasMoreVisibleEntries: Bool
+    let totalEntryCount: Int
+    let searchText: String
     let dictionaryTransferMessage: String?
+    let isLoadingEntries: Bool
     let scopeLabel: (DictionaryEntry) -> String
     let scopeIsMissing: (DictionaryEntry) -> Bool
+    let onSearch: () -> Void
+    let onClearSearch: () -> Void
+    let onLoadMore: () -> Void
     let onCreate: () -> Void
     let onClearAll: () -> Void
     let onEdit: (DictionaryEntry) -> Void
     let onDelete: (DictionaryEntry) -> Void
-    let onLoadMore: () -> Void
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     DictionaryFilterPicker(selectedFilter: $selectedFilter)
 
                     Spacer(minLength: 12)
+
+                    Button {
+                        onSearch()
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .buttonStyle(SettingsCompactIconButtonStyle())
+                    .help(AppLocalization.localizedString("Search Dictionary"))
 
                     Button(AppLocalization.localizedString("Create")) {
                         onCreate()
@@ -111,41 +122,44 @@ struct DictionaryEntriesCard: View {
                         onClearAll()
                     }
                     .buttonStyle(SettingsStatusButtonStyle(tint: .red))
-                    .disabled(visibleEntries.isEmpty)
+                    .disabled(totalEntryCount == 0)
                 }
 
-                if visibleEntries.isEmpty {
-                    Text(AppLocalization.localizedString("No dictionary terms yet."))
+                if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HStack(spacing: 8) {
+                        Text(AppLocalization.format("Filtered by \"%@\"", searchText))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Button(AppLocalization.localizedString("Clear")) {
+                            onClearSearch()
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if visibleEntries.isEmpty && !isLoadingEntries {
+                    Text(emptyStateText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 6) {
-                            ForEach(pagedVisibleEntries) { entry in
-                                DictionaryRow(
-                                    entry: entry,
-                                    scopeLabel: scopeLabel(entry),
-                                    scopeIsMissing: scopeIsMissing(entry),
-                                    onEdit: { onEdit(entry) },
-                                    onDelete: { onDelete(entry) }
-                                )
-                                .onAppear {
-                                    if entry.id == pagedVisibleEntries.last?.id {
-                                        onLoadMore()
-                                    }
-                                }
-                            }
-
-                            if hasMoreVisibleEntries {
-                                Button(AppLocalization.localizedString("Load More")) {
-                                    onLoadMore()
-                                }
-                                .buttonStyle(SettingsPillButtonStyle())
-                                .padding(.top, 4)
-                            }
-                        }
+                    PagedVerticalList(
+                        items: visibleEntries,
+                        totalCount: totalEntryCount,
+                        rowHeight: 56,
+                        rowSpacing: 8,
+                        isLoading: isLoadingEntries,
+                        onLoadMore: onLoadMore
+                    ) { entry in
+                        DictionaryRow(
+                            entry: entry,
+                            scopeLabel: scopeLabel(entry),
+                            scopeIsMissing: scopeIsMissing(entry),
+                            onEdit: { onEdit(entry) },
+                            onDelete: { onDelete(entry) }
+                        )
                     }
-                    .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity, alignment: .top)
                 }
 
                 if let dictionaryTransferMessage, !dictionaryTransferMessage.isEmpty {
@@ -159,5 +173,15 @@ struct DictionaryEntriesCard: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
-}
 
+    private var emptyStateText: String {
+        if !isSearchActive {
+            return AppLocalization.localizedString("No dictionary terms yet.")
+        }
+        return AppLocalization.localizedString("No dictionary terms match this search.")
+    }
+
+    private var isSearchActive: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}

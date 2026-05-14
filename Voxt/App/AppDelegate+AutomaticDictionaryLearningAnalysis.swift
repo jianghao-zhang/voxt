@@ -17,24 +17,24 @@ extension AppDelegate {
         VoxtLog.info(
             "Automatic dictionary learning analysis started. model=\(automaticDictionaryLearningModelDescription(model)), historyEntryID=\(historyEntryID?.uuidString ?? "nil")"
         )
-        let existingTerms = dictionaryStore.entries.map(\.term)
+        let promptExistingTerms = dictionaryStore.allTerms(limit: 20)
         let prompt = AutomaticDictionaryLearningMonitor.buildPrompt(
             template: dictionaryAutoLearningPrompt,
             for: request,
-            existingTerms: existingTerms,
+            existingTerms: promptExistingTerms,
             userMainLanguage: userMainLanguagePromptValue,
             userOtherLanguages: userOtherMainLanguagesPromptValue
         )
         let directCandidateTerms = AutomaticDictionaryLearningMonitor.directCandidateTerms(
             for: request,
-            existingTerms: existingTerms
-        )
+            existingTerms: []
+        ).filter { !dictionaryStore.hasEntry(normalizedTerm: DictionaryStore.normalizeTerm($0), activeGroupID: groupID) }
         let scannedTerms = try await runAutomaticDictionaryLearningPrompt(prompt, model: model)
         let mergedTerms = mergeDictionaryLearningTerms(
             directCandidateTerms,
             scannedTerms,
             excludeExistingTerms: true,
-            existingTerms: existingTerms
+            activeGroupID: groupID
         )
         VoxtLog.info(
             "Automatic dictionary learning candidate terms merged. direct=\(directCandidateTerms.joined(separator: ", ")), model=\(scannedTerms.joined(separator: ", ")), final=\(mergedTerms.joined(separator: ", "))"
@@ -90,7 +90,9 @@ extension AppDelegate {
             return historyStore.entry(id: entry.id) ?? entry
         }
 
-        let existingTerms = dictionaryStore.entries.map(\.term)
+        let promptExistingTerms = dictionaryStore.allTerms(limit: 20)
+        let matchedGroupID = entry.matchedGroupID ?? currentDictionaryScope().groupID
+        let matchedGroupName = entry.matchedGroupName ?? currentDictionaryScope().groupName
         var correctedTerms: [String] = []
         var correctionSnapshots: [DictionaryCorrectionSnapshot] = []
 
@@ -103,14 +105,14 @@ extension AppDelegate {
         case .ready(let request):
             let directCandidateTerms = AutomaticDictionaryLearningMonitor.directCandidateTerms(
                 for: request,
-                existingTerms: existingTerms
-            )
+                existingTerms: []
+            ).filter { !dictionaryStore.hasEntry(normalizedTerm: DictionaryStore.normalizeTerm($0), activeGroupID: matchedGroupID) }
             var scannedTerms: [String] = []
             if let model = try? resolvedAutomaticDictionaryLearningModel() {
                 let prompt = AutomaticDictionaryLearningMonitor.buildPrompt(
                     template: dictionaryAutoLearningPrompt,
                     for: request,
-                    existingTerms: existingTerms,
+                    existingTerms: promptExistingTerms,
                     userMainLanguage: userMainLanguagePromptValue,
                     userOtherLanguages: userOtherMainLanguagesPromptValue
                 )
@@ -125,7 +127,7 @@ extension AppDelegate {
                 directCandidateTerms,
                 scannedTerms,
                 excludeExistingTerms: false,
-                existingTerms: existingTerms
+                activeGroupID: matchedGroupID
             )
             correctionSnapshots = automaticDictionaryLearningHistorySnapshots(
                 request: request,
@@ -135,8 +137,6 @@ extension AppDelegate {
             VoxtLog.info("Manual dictionary correction skipped term analysis: \(reason)")
         }
 
-        let matchedGroupID = entry.matchedGroupID ?? currentDictionaryScope().groupID
-        let matchedGroupName = entry.matchedGroupName ?? currentDictionaryScope().groupName
         let addedTerms = persistAutomaticDictionaryLearningTerms(
             correctedTerms,
             groupID: matchedGroupID,
@@ -193,9 +193,8 @@ extension AppDelegate {
         _ directTerms: [String],
         _ modelTerms: [String],
         excludeExistingTerms: Bool,
-        existingTerms: [String]
+        activeGroupID: UUID?
     ) -> [String] {
-        let existingNormalized = Set(existingTerms.map(DictionaryStore.normalizeTerm))
         var merged: [String] = []
         var seen: Set<String> = []
 
@@ -205,7 +204,8 @@ extension AppDelegate {
                   !seen.contains(normalized) else {
                 continue
             }
-            if excludeExistingTerms, existingNormalized.contains(normalized) {
+            if excludeExistingTerms,
+               dictionaryStore.hasEntry(normalizedTerm: normalized, activeGroupID: activeGroupID) {
                 continue
             }
             seen.insert(normalized)

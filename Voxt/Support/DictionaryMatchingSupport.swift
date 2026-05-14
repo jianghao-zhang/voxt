@@ -187,8 +187,20 @@ private nonisolated func dictionaryExactNormalizedMatchRanges(
     normalizedNeedle: String,
     requireTokenBoundaries: Bool
 ) -> [NSRange] {
-    guard !normalizedNeedle.isEmpty else { return [] }
     let mapping = dictionaryNormalizedMapping(for: text)
+    return dictionaryExactNormalizedMatchRanges(
+        in: mapping,
+        normalizedNeedle: normalizedNeedle,
+        requireTokenBoundaries: requireTokenBoundaries
+    )
+}
+
+private nonisolated func dictionaryExactNormalizedMatchRanges(
+    in mapping: DictionaryNormalizedMapping,
+    normalizedNeedle: String,
+    requireTokenBoundaries: Bool
+) -> [NSRange] {
+    guard !normalizedNeedle.isEmpty else { return [] }
     guard !mapping.text.isEmpty, !mapping.sourceRanges.isEmpty else { return [] }
 
     var matches: [NSRange] = []
@@ -246,6 +258,7 @@ struct DictionaryMatcher {
     nonisolated func recallCandidates(in text: String) -> [DictionaryMatchCandidate] {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
 
+        let normalizedMapping = dictionaryNormalizedMapping(for: text)
         let rawTokens = tokenize(text)
         var bestByID: [String: DictionaryMatchCandidate] = [:]
 
@@ -253,7 +266,12 @@ struct DictionaryMatcher {
             for variant in matchVariants(for: entry) {
                 guard !shouldBlock(variant: variant, entry: entry) else { continue }
 
-                for candidate in exactCandidates(for: entry, variant: variant, text: text) {
+                for candidate in exactCandidates(
+                    for: entry,
+                    variant: variant,
+                    text: text,
+                    normalizedMapping: normalizedMapping
+                ) {
                     let key = candidate.id
                     if let existing = bestByID[key], existing.score >= candidate.score {
                         continue
@@ -454,13 +472,15 @@ struct DictionaryMatcher {
     private nonisolated func exactCandidates(
         for entry: DictionaryEntry,
         variant: DictionaryMatchVariant,
-        text: String
+        text: String,
+        normalizedMapping: DictionaryNormalizedMapping
     ) -> [DictionaryMatchCandidate] {
         guard !variant.normalizedText.isEmpty else { return [] }
+        guard normalizedMapping.text.contains(variant.normalizedText) else { return [] }
         let profile = dictionaryScriptProfile(for: variant.text)
         let requireTokenBoundaries = !profile.containsCJKLike || profile.containsLatin || profile.containsDigit
         let ranges = dictionaryExactNormalizedMatchRanges(
-            in: text,
+            in: normalizedMapping,
             normalizedNeedle: variant.normalizedText,
             requireTokenBoundaries: requireTokenBoundaries
         )

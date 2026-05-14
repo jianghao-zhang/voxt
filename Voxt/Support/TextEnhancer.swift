@@ -142,13 +142,11 @@ class TextEnhancer: TextEnhancing {
     }
 
     private static func normalizeResultText(_ output: String) -> String {
-        var cleaned = output
-        if let regex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: [.caseInsensitive]) {
-            let range = NSRange(location: 0, length: (cleaned as NSString).length)
-            cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
-        }
-        cleaned = unwrapCodeFenceIfNeeded(cleaned)
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        LLMVisibleOutputSanitizer.sanitize(
+            output,
+            fallbackText: "",
+            taskKind: .generic
+        ).text
     }
 
     private static func unwrapCodeFenceIfNeeded(_ text: String) -> String {

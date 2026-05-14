@@ -59,6 +59,8 @@ struct ModelSettingsView: View {
     @AppStorage(AppPreferenceKey.localModelMemoryOptimizationEnabled) var localModelMemoryOptimizationEnabled = true
     @AppStorage(AppPreferenceKey.whisperLocalASRTuningSettings) var whisperLocalASRTuningSettingsRaw = WhisperLocalTuningSettingsStore.defaultStoredValue()
     @AppStorage(AppPreferenceKey.customLLMModelRepo) var customLLMRepo = CustomLLMModelManager.defaultModelRepo
+    @AppStorage(AppPreferenceKey.customLLMGenerationSettings) var customLLMGenerationSettingsRaw = CustomLLMGenerationSettingsStore.defaultStoredValue()
+    @AppStorage(AppPreferenceKey.customLLMGenerationSettingsByRepo) var customLLMGenerationSettingsByRepoRaw = CustomLLMGenerationSettingsStore.defaultByRepoStoredValue()
     @AppStorage(AppPreferenceKey.translationCustomLLMModelRepo) var translationCustomLLMRepo = CustomLLMModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.rewriteCustomLLMModelRepo) var rewriteCustomLLMRepo = CustomLLMModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.translationModelProvider) var translationModelProviderRaw = TranslationModelProvider.customLLM.rawValue
@@ -99,6 +101,8 @@ struct ModelSettingsView: View {
     @State var editingLLMProvider: RemoteLLMProvider?
     @State private var activeASRHintTarget: ASRHintTarget?
     @State var activeLocalASRConfigurationTarget: LocalASRConfigurationTarget?
+    @State var isCustomLLMConfigurationPresented = false
+    @State var customLLMConfigurationRepo: String?
     @State private var isModelDownloadSettingsPresented = false
     @State private var isTestingGlobalDownloadEndpoint = false
     @State private var isTestingChinaDownloadEndpoint = false
@@ -113,7 +117,7 @@ struct ModelSettingsView: View {
     @State var pendingModelRemovalTarget: LocalModelRemovalTarget?
     @State var uninstallingModelTarget: LocalModelRemovalTarget?
 
-    let modelStateRefreshTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    let modelStateRefreshTimer = Timer.publish(every: 2.0, on: .main, in: .common).autoconnect()
 
     var selectedEngine: TranscriptionEngine {
         TranscriptionEngine(rawValue: engineRaw) ?? .mlxAudio
@@ -214,6 +218,7 @@ struct ModelSettingsView: View {
             isDownloadingCustomLLM: isDownloadingCustomLLM,
             isPausedCustomLLM: isPausedCustomLLM,
             isAnotherCustomLLMDownloading: isAnotherCustomLLMDownloading,
+            isCustomLLMInstalled: { customLLMManager.isModelDownloaded(repo: $0) },
             isUninstallingModel: isUninstallingModel,
             isUninstallingWhisperModel: isUninstallingWhisperModel,
             isUninstallingCustomLLM: isUninstallingCustomLLM,
@@ -245,6 +250,10 @@ struct ModelSettingsView: View {
             },
             deleteCustomLLM: requestDeleteCustomLLM,
             openCustomLLMModelDirectory: openCustomLLMModelDirectory,
+            configureCustomLLMGeneration: { repo in
+                customLLMConfigurationRepo = repo
+                isCustomLLMConfigurationPresented = true
+            },
             configureASRProvider: { editingASRProvider = $0 },
             configureLLMProvider: { editingLLMProvider = $0 },
             showASRHintTarget: { activeASRHintTarget = $0 }
@@ -401,6 +410,16 @@ struct ModelSettingsView: View {
         }
         .sheet(item: $activeLocalASRConfigurationTarget) { target in
             localASRConfigurationSheet(for: target)
+        }
+        .sheet(isPresented: $isCustomLLMConfigurationPresented) {
+            let repo = customLLMConfigurationRepo ?? customLLMRepo
+            CustomLLMGenerationSettingsSheet(
+                modelTitle: customLLMManager.displayTitle(for: repo),
+                settings: customLLMGenerationSettingsBinding(for: repo)
+            ) {
+                isCustomLLMConfigurationPresented = false
+                customLLMConfigurationRepo = nil
+            }
         }
         .sheet(isPresented: $isModelDownloadSettingsPresented) {
             modelDownloadSettingsSheet

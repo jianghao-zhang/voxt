@@ -2767,9 +2767,17 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             )
             let normalized = preview.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !normalized.isEmpty else { return }
+            let visibleText = RecordingSessionSupport.textAfterSuppressingPromptEcho(
+                normalized,
+                prompt: hintPayload.prompt
+            )
+            guard !visibleText.isEmpty else {
+                VoxtLog.warning("OpenAI preview transcription suppressed because it matched ASR prompt guidance.")
+                return
+            }
             if normalized != openAIPreviewLastText {
-                openAIPreviewLastText = normalized
-                publishIntermediateTranscription(normalized)
+                openAIPreviewLastText = visibleText
+                publishIntermediateTranscription(visibleText)
             }
         } catch {
             // Preview failures are expected while recorder header is still mutating.
@@ -2778,7 +2786,12 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
     private func publishIntermediateTranscription(_ text: String) {
         guard sessionAllowsRealtimeTextDisplay else { return }
-        transcribedText = text
+        let visibleText = RecordingSessionSupport.textAfterSuppressingPromptEcho(text)
+        guard !visibleText.isEmpty else {
+            VoxtLog.warning("Remote ASR intermediate transcription suppressed because it matched prompt guidance.")
+            return
+        }
+        transcribedText = visibleText
     }
 
     private func normalizeWAVHeaderForSnapshot(at fileURL: URL) {

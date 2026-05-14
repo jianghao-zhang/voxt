@@ -27,7 +27,8 @@ extension AppDelegate {
         mlx.dictionaryEntryProvider = { [weak self] in
             guard let self else { return [] }
             return self.dictionaryStore.activeEntriesForRemoteRequest(
-                activeGroupID: self.activeDictionaryGroupID()
+                activeGroupID: self.activeDictionaryGroupID(),
+                limit: 64
             )
         }
         let sessionID = activeRecordingSessionID
@@ -95,7 +96,8 @@ extension AppDelegate {
         whisper.dictionaryEntryProvider = { [weak self] in
             guard let self else { return [] }
             return self.dictionaryStore.activeEntriesForRemoteRequest(
-                activeGroupID: self.activeDictionaryGroupID()
+                activeGroupID: self.activeDictionaryGroupID(),
+                limit: 64
             )
         }
         let sessionID = activeRecordingSessionID

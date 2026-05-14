@@ -40,7 +40,6 @@ struct SettingsView: View {
     @State private var displayMode: SettingsDisplayMode
     @State private var initializedStaticTabs: Set<SettingsTab>
     @State private var activeModelDownloadCount = 0
-    private let issueRefreshTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
 
     init(
         availableDictionaryHistoryScanModels: @escaping () -> [DictionaryHistoryScanModelOption],
@@ -118,7 +117,11 @@ struct SettingsView: View {
             refreshModelConfigurationBadge()
         }
         .onReceive(modelDownloadBadgeCountPublisher) { count in
+            let previousCount = activeModelDownloadCount
             activeModelDownloadCount = count
+            if previousCount != count {
+                refreshModelConfigurationBadge()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionBadge()
@@ -156,10 +159,6 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtPermissionsDidChange)) { _ in
             refreshPermissionBadge()
-        }
-        .onReceive(issueRefreshTimer) { _ in
-            guard mainWindowState.isVisible else { return }
-            refreshModelConfigurationBadge()
         }
         .onChange(of: mainWindowState.isVisible) { _, isVisible in
             guard isVisible else { return }
@@ -512,11 +511,13 @@ struct SettingsView: View {
     }
 
     private func refreshModelConfigurationBadge() {
-        missingModelConfigurationIssues = ConfigurationTransferManager.missingConfigurationIssues(
+        let issues = ConfigurationTransferManager.missingConfigurationIssues(
             mlxModelManager: mlxModelManager,
             whisperModelManager: whisperModelManager,
             customLLMManager: customLLMManager
         )
+        guard issues != missingModelConfigurationIssues else { return }
+        missingModelConfigurationIssues = issues
     }
 
     private func refreshMicrophoneBadge() {

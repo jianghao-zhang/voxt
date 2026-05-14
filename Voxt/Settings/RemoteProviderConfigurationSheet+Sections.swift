@@ -45,6 +45,15 @@ extension RemoteProviderConfigurationSheet {
         """
     }
 
+    private var extraBodyJSONPlaceholder: String {
+        """
+        {
+          "reasoning": { "effort": "low" },
+          "response_format": { "type": "json_object" }
+        }
+        """
+    }
+
     var modelSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(AppLocalization.localizedString("Model"))
@@ -177,27 +186,174 @@ extension RemoteProviderConfigurationSheet {
         }
     }
 
+    var advancedGenerationSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(AppLocalization.localizedString("Generation Settings"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if shouldShowGenerationThinking {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(AppLocalization.localizedString("Think"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    SettingsMenuPicker(
+                        selection: $generationThinkingMode,
+                        options: generationThinkingModeMenuOptions,
+                        selectedTitle: generationThinkingModeSelectedTitle,
+                        width: 240
+                    )
+
+                    if LLMThinkingMode(rawValue: generationThinkingMode) == .effort {
+                        if generationThinkingEffortMenuOptions.isEmpty {
+                            TextField(AppLocalization.localizedString("e.g. low"), text: $generationThinkingEffort)
+                                .textFieldStyle(.plain)
+                                .settingsFieldSurface(width: 160, minHeight: 34)
+                        } else {
+                            SettingsMenuPicker(
+                                selection: $generationThinkingEffort,
+                                options: generationThinkingEffortMenuOptions,
+                                selectedTitle: generationThinkingEffortSelectedTitle,
+                                width: 180
+                            )
+                        }
+                    }
+
+                    if LLMThinkingMode(rawValue: generationThinkingMode) == .budget {
+                        TextField(AppLocalization.localizedString("Budget tokens"), text: $generationThinkingBudgetText)
+                            .textFieldStyle(.plain)
+                            .settingsFieldSurface(width: 160, minHeight: 34)
+                    }
+                }
+            }
+
+            generationNumericField(
+                title: AppLocalization.localizedString("Max Output Tokens (Optional)"),
+                placeholder: AppLocalization.localizedString("e.g. 4096"),
+                text: $generationMaxOutputTokensText
+            )
+
+            HStack(alignment: .top, spacing: 12) {
+                generationNumericField(
+                    title: AppLocalization.localizedString("Temperature"),
+                    placeholder: "0.2",
+                    text: $generationTemperatureText
+                )
+                generationNumericField(
+                    title: AppLocalization.localizedString("Top P"),
+                    placeholder: "0.9",
+                    text: $generationTopPText
+                )
+            }
+
+            if shouldShowGenerationAdvancedControls {
+                DisclosureGroup(
+                    isExpanded: $generationAdvancedExpanded,
+                    content: {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if generationCapabilities?.supportsResponseFormat == true {
+                                generationResponseFormatSection
+                            }
+
+                            HStack(alignment: .top, spacing: 12) {
+                                if generationCapabilities?.supportsTopK == true {
+                                    generationNumericField(
+                                        title: AppLocalization.localizedString("Top K"),
+                                        placeholder: "40",
+                                        text: $generationTopKText
+                                    )
+                                }
+                                if generationCapabilities?.supportsMinP == true {
+                                    generationNumericField(
+                                        title: AppLocalization.localizedString("Min P"),
+                                        placeholder: "0.05",
+                                        text: $generationMinPText
+                                    )
+                                }
+                            }
+
+                            if generationCapabilities?.supportsSeed == true {
+                                generationNumericField(
+                                    title: AppLocalization.localizedString("Seed"),
+                                    placeholder: "42",
+                                    text: $generationSeedText
+                                )
+                            }
+
+                            if generationCapabilities?.supportsPenalties == true {
+                                generationPenaltyFields
+                            }
+
+                            if generationCapabilities?.supportsLogprobs == true {
+                                generationLogprobsSection
+                            }
+
+                            generationStopSection
+                        }
+                        .padding(.top, 8)
+                    },
+                    label: {
+                        Text(AppLocalization.localizedString("Advanced"))
+                            .font(.subheadline)
+                    }
+                )
+            }
+
+            if shouldShowGenerationExpertControls {
+                DisclosureGroup(
+                    isExpanded: $generationExpertExpanded,
+                    content: {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if generationCapabilities?.supportsExtraBody == true {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(AppLocalization.localizedString("Extra Body JSON"))
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    placeholderPromptEditor(
+                                        text: $generationExtraBodyJSON,
+                                        placeholder: extraBodyJSONPlaceholder,
+                                        height: 112
+                                    )
+                                    Text(AppLocalization.localizedString("Merged into the request body after Voxt defaults, so matching keys override generated values."))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+
+                            if generationCapabilities?.supportsExtraOptions == true {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(AppLocalization.localizedString("Options JSON"))
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    placeholderPromptEditor(
+                                        text: $generationExtraOptionsJSON,
+                                        placeholder: ollamaOptionsJSONPlaceholder,
+                                        height: 112
+                                    )
+                                    Text(AppLocalization.localizedString("Merged into provider options after Voxt defaults, so matching keys override generated values."))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .padding(.top, 8)
+                    },
+                    label: {
+                        Text(AppLocalization.localizedString("Expert"))
+                            .font(.subheadline)
+                    }
+                )
+            }
+        }
+    }
+
     var openAILLMConfigurationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(AppLocalization.localizedString("OpenAI Options"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(AppLocalization.localizedString("Think"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                SettingsMenuPicker(
-                    selection: $openAIReasoningEffort,
-                    options: openAIReasoningEffortMenuOptions,
-                    selectedTitle: openAIReasoningEffortSelectedTitle,
-                    width: 240
-                )
-                Text(AppLocalization.localizedString("Maps to OpenAI reasoning.effort. Leave Default to use the model default; unsupported levels may be rejected by some models."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(AppLocalization.localizedString("Verbosity"))
@@ -210,19 +366,6 @@ extension RemoteProviderConfigurationSheet {
                     width: 240
                 )
             }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(AppLocalization.localizedString("Max Output Tokens (Optional)"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                TextField(AppLocalization.localizedString("e.g. 4096"), text: $openAIMaxOutputTokensText)
-                    .textFieldStyle(.plain)
-                    .settingsFieldSurface(width: 140, minHeight: 34)
-                Text(AppLocalization.localizedString("Overrides Voxt's task token budget for OpenAI Responses, including visible output and reasoning tokens."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 
@@ -233,78 +376,12 @@ extension RemoteProviderConfigurationSheet {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(AppLocalization.localizedString("Response Format"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                SettingsMenuPicker(
-                    selection: $ollamaResponseFormat,
-                    options: ollamaResponseFormatMenuOptions,
-                    selectedTitle: ollamaResponseFormatSelectedTitle,
-                    width: 240
-                )
-            }
-
-            if shouldShowOllamaJSONSchemaField {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(AppLocalization.localizedString("JSON Schema"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    placeholderPromptEditor(
-                        text: $ollamaJSONSchema,
-                        placeholder: ollamaJSONSchemaPlaceholder,
-                        height: 96
-                    )
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(AppLocalization.localizedString("Think"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                SettingsMenuPicker(
-                    selection: $ollamaThinkMode,
-                    options: ollamaThinkModeMenuOptions,
-                    selectedTitle: ollamaThinkModeSelectedTitle,
-                    width: 240
-                )
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
                 Text(AppLocalization.localizedString("Keep Alive"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 TextField(AppLocalization.localizedString("e.g. 5m"), text: $ollamaKeepAlive)
                     .textFieldStyle(.plain)
                     .settingsFieldSurface(minHeight: 34)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle(AppLocalization.localizedString("Logprobs"), isOn: $ollamaLogprobsEnabled)
-                    .toggleStyle(.switch)
-
-                if ollamaLogprobsEnabled {
-                    Text(AppLocalization.localizedString("Top Logprobs (Optional)"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    TextField(AppLocalization.localizedString("e.g. 5"), text: $ollamaTopLogprobsText)
-                        .textFieldStyle(.plain)
-                        .settingsFieldSurface(width: 140, minHeight: 34)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(AppLocalization.localizedString("Options JSON"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                placeholderPromptEditor(
-                    text: $ollamaOptionsJSON,
-                    placeholder: ollamaOptionsJSONPlaceholder,
-                    height: 112
-                )
-                Text(AppLocalization.localizedString("Merged into Ollama native options after Voxt defaults, so matching keys here override temperature, top_p, and num_predict."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -316,31 +393,6 @@ extension RemoteProviderConfigurationSheet {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(AppLocalization.localizedString("Response Format"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                SettingsMenuPicker(
-                    selection: $omlxResponseFormat,
-                    options: omlxResponseFormatMenuOptions,
-                    selectedTitle: omlxResponseFormatSelectedTitle,
-                    width: 240
-                )
-            }
-
-            if shouldShowOMLXJSONSchemaField {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(AppLocalization.localizedString("JSON Schema"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    placeholderPromptEditor(
-                        text: $omlxJSONSchema,
-                        placeholder: omlxJSONSchemaPlaceholder,
-                        height: 96
-                    )
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
                 Toggle(AppLocalization.localizedString("Include Usage In Stream Events"), isOn: $omlxIncludeUsageStreamOptions)
                     .toggleStyle(.switch)
                 Text(AppLocalization.localizedString("Adds stream_options.include_usage for OpenAI-compatible streaming responses."))
@@ -348,21 +400,96 @@ extension RemoteProviderConfigurationSheet {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(AppLocalization.localizedString("Extra Body JSON"))
+    var generationResponseFormatSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(AppLocalization.localizedString("Response Format"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            SettingsMenuPicker(
+                selection: $generationResponseFormat,
+                options: generationResponseFormatMenuOptions,
+                selectedTitle: generationResponseFormatSelectedTitle,
+                width: 240
+            )
+
+            if shouldShowGenerationJSONSchemaField {
+                Text(AppLocalization.localizedString("JSON Schema"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 placeholderPromptEditor(
-                    text: $omlxExtraBodyJSON,
-                    placeholder: omlxExtraBodyJSONPlaceholder,
-                    height: 112
+                    text: isOllamaLLMProvider ? $ollamaJSONSchema : $omlxJSONSchema,
+                    placeholder: isOllamaLLMProvider ? ollamaJSONSchemaPlaceholder : omlxJSONSchemaPlaceholder,
+                    height: 96
                 )
-                Text(AppLocalization.localizedString("Merged into the OpenAI-compatible request after Voxt defaults, so matching keys here override generated values."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    var generationPenaltyFields: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                generationNumericField(
+                    title: AppLocalization.localizedString("Presence Penalty"),
+                    placeholder: "0",
+                    text: $generationPresencePenaltyText
+                )
+                generationNumericField(
+                    title: AppLocalization.localizedString("Frequency Penalty"),
+                    placeholder: "0",
+                    text: $generationFrequencyPenaltyText
+                )
+            }
+            generationNumericField(
+                title: AppLocalization.localizedString("Repetition Penalty"),
+                placeholder: "1.1",
+                text: $generationRepetitionPenaltyText
+            )
+        }
+    }
+
+    var generationLogprobsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(AppLocalization.localizedString("Logprobs"), isOn: $generationLogprobsEnabled)
+                .toggleStyle(.switch)
+
+            if generationLogprobsEnabled {
+                generationNumericField(
+                    title: AppLocalization.localizedString("Top Logprobs (Optional)"),
+                    placeholder: "5",
+                    text: $generationTopLogprobsText
+                )
+            }
+        }
+    }
+
+    var generationStopSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(AppLocalization.localizedString("Stop Sequences"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            placeholderPromptEditor(
+                text: $generationStopText,
+                placeholder: AppLocalization.localizedString("One stop sequence per line"),
+                height: 72
+            )
+        }
+    }
+
+    func generationNumericField(
+        title: String,
+        placeholder: String,
+        text: Binding<String>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .settingsFieldSurface(width: 140, minHeight: 34)
         }
     }
 

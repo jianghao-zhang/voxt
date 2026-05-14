@@ -3,6 +3,9 @@ import Foundation
 extension RemoteLLMRuntimeClient {
     func extractPrimaryText(from object: Any) -> String? {
         if let dict = object as? [String: Any] {
+            if isReasoningContainer(dict) {
+                return nil
+            }
             if let outputText = extractTextValue(from: dict["output_text"]) {
                 return outputText
             }
@@ -39,6 +42,9 @@ extension RemoteLLMRuntimeClient {
             if let choices = dict["choices"] as? [[String: Any]],
                let first = choices.first {
                 if let message = first["message"] as? [String: Any] {
+                    if isReasoningContainer(message) {
+                        return nil
+                    }
                     if let value = extractMessageContent(from: message["content"]) {
                         return value
                     }
@@ -463,14 +469,12 @@ extension RemoteLLMRuntimeClient {
         for item in output {
             guard let dict = item as? [String: Any] else { continue }
             let type = (dict["type"] as? String)?.lowercased()
+            if type == "reasoning" || type == "thinking" {
+                continue
+            }
 
             if let contentText = extractTextFromMessageContent(dict["content"]) {
                 return contentText
-            }
-            if type == "reasoning",
-               let summary = dict["summary"] as? [Any],
-               let summaryText = mergeTextSegments(from: summary.compactMap(extractPrimaryText(from:))) {
-                return summaryText
             }
             if shouldTreatDirectTextFieldAsPrimary(in: dict),
                let text = extractTextValue(from: dict["text"]) {
@@ -488,8 +492,11 @@ extension RemoteLLMRuntimeClient {
             var texts: [String] = []
             for blockValue in blocks {
                 if let block = blockValue as? [String: Any] {
+                    if isReasoningContainer(block) {
+                        continue
+                    }
                     let type = (block["type"] as? String)?.lowercased()
-                    if type == nil || type == "text" || type == "output_text" || type == "summary_text" {
+                    if type == nil || type == "text" || type == "output_text" {
                         if let text = extractTextValue(from: block["text"]) {
                             texts.append(text)
                             continue
@@ -518,9 +525,20 @@ extension RemoteLLMRuntimeClient {
 
     func shouldTreatDirectTextFieldAsPrimary(in dict: [String: Any]) -> Bool {
         if let type = (dict["type"] as? String)?.lowercased() {
-            return type == "text" || type == "output_text" || type == "message" || type == "summary_text"
+            return type == "text" || type == "output_text" || type == "message"
         }
         return dict["content"] == nil && dict["choices"] == nil && dict["output"] == nil
+    }
+
+    private func isReasoningContainer(_ dict: [String: Any]) -> Bool {
+        if let type = (dict["type"] as? String)?.lowercased(),
+           type == "reasoning" || type == "thinking" || type == "summary_text" {
+            return true
+        }
+        if dict["reasoning_content"] != nil && dict["content"] == nil {
+            return true
+        }
+        return false
     }
 
     func decodeStreamingJSONStringFragment(_ value: String) -> String {

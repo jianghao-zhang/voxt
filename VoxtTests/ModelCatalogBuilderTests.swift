@@ -199,6 +199,45 @@ final class ModelCatalogBuilderTests: XCTestCase {
         XCTAssertEqual(entry.primaryAction?.title, AppLocalization.localizedString("Pause"))
     }
 
+    func testCustomLLMCatalogInstalledModelIncludesConfigureAction() throws {
+        let repo = "mlx-community/Qwen3.5-4B-OptiQ-4bit"
+        var configuredRepo: String?
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(translationModel: .localLLM(repo)),
+            isCustomLLMInstalled: { candidate in
+                CustomLLMModelManager.canonicalModelRepo(candidate) == CustomLLMModelManager.canonicalModelRepo(repo)
+            },
+            configureCustomLLMGeneration: { configuredRepo = $0 }
+        )
+
+        let entry = try XCTUnwrap(
+            builder.llmEntries().first(where: { $0.id == "local-llm:\(repo)" })
+        )
+        let action = try XCTUnwrap(
+            entry.secondaryActions.first(where: { $0.title == AppLocalization.localizedString("Configure") })
+        )
+        action.handler()
+
+        XCTAssertEqual(
+            CustomLLMModelManager.canonicalModelRepo(configuredRepo ?? ""),
+            CustomLLMModelManager.canonicalModelRepo(repo)
+        )
+    }
+
+    func testCustomLLMCatalogUninstalledModelDoesNotIncludeConfigureAction() throws {
+        let repo = "mlx-community/Qwen3.5-4B-OptiQ-4bit"
+        let builder = makeBuilder(
+            featureSettings: makeFeatureSettings(translationModel: .localLLM(repo)),
+            isCustomLLMInstalled: { _ in false }
+        )
+
+        let entry = try XCTUnwrap(
+            builder.llmEntries().first(where: { $0.id == "local-llm:\(repo)" })
+        )
+
+        XCTAssertFalse(entry.secondaryActions.contains(where: { $0.title == AppLocalization.localizedString("Configure") }))
+    }
+
     func testCustomLLMCatalogUsesCuratedRatingAndTags() throws {
         let repo = "mlx-community/Qwen3.5-4B-OptiQ-4bit"
         let builder = makeBuilder(
@@ -260,11 +299,13 @@ final class ModelCatalogBuilderTests: XCTestCase {
         isDownloadingCustomLLM: @escaping (String) -> Bool = { _ in false },
         isPausedCustomLLM: @escaping (String) -> Bool = { _ in false },
         isAnotherCustomLLMDownloading: @escaping (String) -> Bool = { _ in false },
+        isCustomLLMInstalled: @escaping (String) -> Bool = { _ in false },
         isUninstallingModel: @escaping (String) -> Bool = { _ in false },
         isUninstallingWhisperModel: @escaping (String) -> Bool = { _ in false },
         isUninstallingCustomLLM: @escaping (String) -> Bool = { _ in false },
         pauseModelDownload: @escaping (String) -> Void = { _ in },
-        cancelModelDownload: @escaping (String) -> Void = { _ in }
+        cancelModelDownload: @escaping (String) -> Void = { _ in },
+        configureCustomLLMGeneration: @escaping (String) -> Void = { _ in }
     ) -> ModelCatalogBuilder {
         ModelCatalogBuilder(
             mlxModelManager: TestModelManagers.mlx,
@@ -289,6 +330,7 @@ final class ModelCatalogBuilderTests: XCTestCase {
             isDownloadingCustomLLM: isDownloadingCustomLLM,
             isPausedCustomLLM: isPausedCustomLLM,
             isAnotherCustomLLMDownloading: isAnotherCustomLLMDownloading,
+            isCustomLLMInstalled: isCustomLLMInstalled,
             isUninstallingModel: isUninstallingModel,
             isUninstallingWhisperModel: isUninstallingWhisperModel,
             isUninstallingCustomLLM: isUninstallingCustomLLM,
@@ -307,6 +349,7 @@ final class ModelCatalogBuilderTests: XCTestCase {
             cancelCustomLLMDownload: { _ in },
             deleteCustomLLM: { _ in },
             openCustomLLMModelDirectory: { _ in },
+            configureCustomLLMGeneration: configureCustomLLMGeneration,
             configureASRProvider: { _ in },
             configureLLMProvider: { _ in },
             showASRHintTarget: { _ in }

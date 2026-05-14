@@ -15,6 +15,8 @@ enum AppPreferenceKey {
     static let whisperKeepResidentLoaded = "whisperKeepResidentLoaded"
     static let whisperLocalASRTuningSettings = "whisperLocalASRTuningSettings"
     static let customLLMModelRepo = "customLLMModelRepo"
+    static let customLLMGenerationSettings = "customLLMGenerationSettings"
+    static let customLLMGenerationSettingsByRepo = "customLLMGenerationSettingsByRepo"
     static let translationCustomLLMModelRepo = "translationCustomLLMModelRepo"
     static let translationModelProvider = "translationModelProvider"
     static let translationFallbackModelProvider = "translationFallbackModelProvider"

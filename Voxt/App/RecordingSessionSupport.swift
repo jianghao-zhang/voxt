@@ -96,7 +96,8 @@ enum RecordingSessionSupport {
             guard (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
                   (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) else {
                 extractedText = trimmed
-                return ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
+                let normalized = ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
+                return textAfterSuppressingPromptEcho(normalized)
             }
 
             guard let data = trimmed.data(using: .utf8),
@@ -104,14 +105,64 @@ enum RecordingSessionSupport {
                   let extracted = extractTranscriptionTextValue(from: object),
                   !extracted.isEmpty else {
                 extractedText = trimmed
-                return ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
+                let normalized = ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
+                return textAfterSuppressingPromptEcho(normalized)
             }
             extractedText = extracted
         } else {
             extractedText = trimmed
         }
 
-        return ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
+        let normalized = ChineseScriptNormalizer.normalize(extractedText, preferredMainLanguage: userMainLanguage)
+        return textAfterSuppressingPromptEcho(normalized)
+    }
+
+    static func textAfterSuppressingPromptEcho(_ text: String, prompt: String? = nil) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        return isLikelyPromptEcho(trimmed, prompt: prompt) ? "" : trimmed
+    }
+
+    static func isLikelyPromptEcho(_ text: String, prompt: String? = nil) -> Bool {
+        let normalized = normalizedPromptEchoDetectionText(text)
+        guard normalized.count >= 24 else { return false }
+
+        if let prompt {
+            let promptKey = normalizedPromptEchoComparisonKey(prompt)
+            let textKey = normalizedPromptEchoComparisonKey(text)
+            if textKey.count >= 40,
+               promptKey.count >= 40,
+               (promptKey.contains(textKey) || textKey.contains(promptKey)) {
+                return true
+            }
+        }
+
+        let strongMarkers = [
+            "[system_prompt]",
+            "[request_content]",
+            "process this asr transcription",
+            "return only the final processed text",
+            "你是 voxt 的转写清理助手",
+            "请严格按优先级执行以下规则",
+            "请直接输出清理后的文本"
+        ]
+        if strongMarkers.contains(where: normalized.contains) {
+            return true
+        }
+
+        let markerHits = [
+            "the speaker's primary language is",
+            "mixed-language speech is expected",
+            "preserve names, product terms",
+            "primary language:",
+            "other frequently used languages:",
+            "mixed-language speech may appear",
+            "preserve names, brands",
+            "language rule:",
+            "user main language:"
+        ].filter { normalized.contains($0) }.count
+
+        return markerHits >= 2
     }
 
     static func stopRecordingFallbackTimeoutSeconds(
@@ -171,5 +222,18 @@ enum RecordingSessionSupport {
         }
 
         return nil
+    }
+
+    private static func normalizedPromptEchoDetectionText(_ text: String) -> String {
+        text
+            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: nil)
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+    }
+
+    private static func normalizedPromptEchoComparisonKey(_ text: String) -> String {
+        normalizedPromptEchoDetectionText(text)
+            .filter { !$0.isWhitespace }
     }
 }

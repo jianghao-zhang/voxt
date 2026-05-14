@@ -67,21 +67,26 @@ struct HistoryRow: View {
     let entry: TranscriptionHistoryEntry
     let audioURL: URL?
     let isCopied: Bool
+    let isCompact: Bool
     let onCopy: () -> Void
     let onShowInfo: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 8) {
             Button(action: onCopy) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text(displayText)
                         .font(.body)
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
-                        .lineLimit(3)
+                        .lineLimit(2)
+                        .onTapGesture(perform: onCopy)
+                        .help(localized("Copy"))
 
-                    HStack(spacing: 6) {
+                    Spacer(minLength: 0)
+
+                    HStack(spacing: isCompact ? 5 : 6) {
                         historyBadge
                         Text(metadataText)
                             .font(.caption)
@@ -105,13 +110,13 @@ struct HistoryRow: View {
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .trailing, spacing: 6) {
-                HStack(spacing: 8) {
+            VStack(alignment: .trailing, spacing: isCompact ? 4 : 6) {
+                HStack(spacing: 6) {
                     Button(action: onShowInfo) {
                         Image(systemName: "info.circle")
                     }
@@ -137,13 +142,15 @@ struct HistoryRow: View {
                 }
             }
         }
-        .padding(10)
+        .padding(.horizontal, 8)
+        .padding(.vertical, isCompact ? 4 : 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color(nsColor: .windowBackgroundColor).opacity(0.75))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 1)
         )
     }

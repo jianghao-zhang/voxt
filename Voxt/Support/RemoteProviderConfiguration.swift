@@ -196,6 +196,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     var omlxJSONSchema: String
     var omlxIncludeUsageStreamOptions: Bool
     var omlxExtraBodyJSON: String
+    var generationSettings: LLMGenerationSettings
 
     var id: String { providerID }
 
@@ -262,7 +263,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         omlxResponseFormat: String = OMLXResponseFormat.plain.rawValue,
         omlxJSONSchema: String = "",
         omlxIncludeUsageStreamOptions: Bool = false,
-        omlxExtraBodyJSON: String = ""
+        omlxExtraBodyJSON: String = "",
+        generationSettings: LLMGenerationSettings? = nil
     ) {
         self.providerID = providerID
         self.model = model
@@ -289,6 +291,18 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         self.omlxJSONSchema = omlxJSONSchema
         self.omlxIncludeUsageStreamOptions = omlxIncludeUsageStreamOptions
         self.omlxExtraBodyJSON = omlxExtraBodyJSON
+        self.generationSettings = generationSettings ?? LLMGenerationSettings.legacy(
+            providerID: providerID,
+            openAIReasoningEffort: openAIReasoningEffort,
+            openAIMaxOutputTokens: openAIMaxOutputTokens,
+            ollamaResponseFormat: ollamaResponseFormat,
+            ollamaThinkMode: ollamaThinkMode,
+            ollamaLogprobsEnabled: ollamaLogprobsEnabled,
+            ollamaTopLogprobs: ollamaTopLogprobs,
+            ollamaOptionsJSON: ollamaOptionsJSON,
+            omlxResponseFormat: omlxResponseFormat,
+            omlxExtraBodyJSON: omlxExtraBodyJSON
+        )
     }
 
     enum CodingKeys: String, CodingKey {
@@ -317,6 +331,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         case omlxJSONSchema
         case omlxIncludeUsageStreamOptions
         case omlxExtraBodyJSON
+        case generationSettings
     }
 
     init(from decoder: Decoder) throws {
@@ -347,6 +362,19 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         omlxJSONSchema = try container.decodeIfPresent(String.self, forKey: .omlxJSONSchema) ?? ""
         omlxIncludeUsageStreamOptions = try container.decodeIfPresent(Bool.self, forKey: .omlxIncludeUsageStreamOptions) ?? false
         omlxExtraBodyJSON = try container.decodeIfPresent(String.self, forKey: .omlxExtraBodyJSON) ?? ""
+        generationSettings = try container.decodeIfPresent(LLMGenerationSettings.self, forKey: .generationSettings)
+            ?? LLMGenerationSettings.legacy(
+                providerID: providerID,
+                openAIReasoningEffort: openAIReasoningEffort,
+                openAIMaxOutputTokens: openAIMaxOutputTokens,
+                ollamaResponseFormat: ollamaResponseFormat,
+                ollamaThinkMode: ollamaThinkMode,
+                ollamaLogprobsEnabled: ollamaLogprobsEnabled,
+                ollamaTopLogprobs: ollamaTopLogprobs,
+                ollamaOptionsJSON: ollamaOptionsJSON,
+                omlxResponseFormat: omlxResponseFormat,
+                omlxExtraBodyJSON: omlxExtraBodyJSON
+            )
     }
 
     nonisolated var withoutSensitiveValues: RemoteProviderConfiguration {
@@ -577,11 +605,11 @@ enum RemoteModelConfigurationStore {
     nonisolated private static func resolvedSensitiveValuePresence(for configuration: RemoteProviderConfiguration) -> RemoteProviderConfiguration {
         var resolved = configuration.withoutSensitiveValues
         for field in SensitiveField.allCases {
-            let keychainValue = VoxtSecureStorage.string(for: keychainAccount(providerID: configuration.providerID, field: field))
+            let hasKeychainValue = VoxtSecureStorage.hasString(
+                for: keychainAccount(providerID: configuration.providerID, field: field)
+            )
             let currentValue = sensitiveValue(for: field, in: configuration)
-            let hasValue = !(keychainValue ?? currentValue)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .isEmpty
+            let hasValue = hasKeychainValue || !currentValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             setSensitiveValue(hasValue ? redactedSensitiveValuePlaceholder : "", for: field, in: &resolved)
         }
         return resolved

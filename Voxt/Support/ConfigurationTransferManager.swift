@@ -326,6 +326,8 @@ enum ConfigurationTransferManager {
         var localModelMemoryOptimizationEnabled: Bool
         var whisperKeepResidentLoaded: Bool
         var customLLMModelRepo: String
+        var customLLMGenerationSettings: String
+        var customLLMGenerationSettingsByRepo: String
         var translationCustomLLMModelRepo: String
         var rewriteCustomLLMModelRepo: String
         var translationModelProvider: String
@@ -357,6 +359,8 @@ enum ConfigurationTransferManager {
             case localModelMemoryOptimizationEnabled
             case whisperKeepResidentLoaded
             case customLLMModelRepo
+            case customLLMGenerationSettings
+            case customLLMGenerationSettingsByRepo
             case translationCustomLLMModelRepo
             case rewriteCustomLLMModelRepo
             case translationModelProvider
@@ -388,6 +392,8 @@ enum ConfigurationTransferManager {
             whisperRealtimeEnabled: Bool,
             localModelMemoryOptimizationEnabled: Bool,
             customLLMModelRepo: String,
+            customLLMGenerationSettings: String,
+            customLLMGenerationSettingsByRepo: String,
             translationCustomLLMModelRepo: String,
             rewriteCustomLLMModelRepo: String,
             translationModelProvider: String,
@@ -418,6 +424,12 @@ enum ConfigurationTransferManager {
             self.localModelMemoryOptimizationEnabled = localModelMemoryOptimizationEnabled
             self.whisperKeepResidentLoaded = !localModelMemoryOptimizationEnabled
             self.customLLMModelRepo = customLLMModelRepo
+            self.customLLMGenerationSettings = CustomLLMGenerationSettingsStore.storageValue(
+                for: CustomLLMGenerationSettingsStore.resolvedSettings(from: customLLMGenerationSettings)
+            )
+            self.customLLMGenerationSettingsByRepo = CustomLLMGenerationSettingsStore.storageValue(
+                forByRepo: CustomLLMGenerationSettingsStore.resolvedByRepo(from: customLLMGenerationSettingsByRepo)
+            )
             self.translationCustomLLMModelRepo = translationCustomLLMModelRepo
             self.rewriteCustomLLMModelRepo = rewriteCustomLLMModelRepo
             self.translationModelProvider = translationModelProvider
@@ -461,6 +473,10 @@ enum ConfigurationTransferManager {
             }
             whisperKeepResidentLoaded = !localModelMemoryOptimizationEnabled
             customLLMModelRepo = try container.decode(String.self, forKey: .customLLMModelRepo)
+            customLLMGenerationSettings = try container.decodeIfPresent(String.self, forKey: .customLLMGenerationSettings)
+                ?? CustomLLMGenerationSettingsStore.defaultStoredValue()
+            customLLMGenerationSettingsByRepo = try container.decodeIfPresent(String.self, forKey: .customLLMGenerationSettingsByRepo)
+                ?? CustomLLMGenerationSettingsStore.defaultByRepoStoredValue()
             translationCustomLLMModelRepo = try container.decode(String.self, forKey: .translationCustomLLMModelRepo)
             rewriteCustomLLMModelRepo = try container.decode(String.self, forKey: .rewriteCustomLLMModelRepo)
             translationModelProvider = try container.decode(String.self, forKey: .translationModelProvider)
@@ -478,6 +494,12 @@ enum ConfigurationTransferManager {
             )
             mlxLocalASRTuningSettings = MLXLocalTuningSettingsStore.storageValue(
                 for: MLXLocalTuningSettingsStore.load(from: mlxLocalASRTuningSettings)
+            )
+            customLLMGenerationSettings = CustomLLMGenerationSettingsStore.storageValue(
+                for: CustomLLMGenerationSettingsStore.resolvedSettings(from: customLLMGenerationSettings)
+            )
+            customLLMGenerationSettingsByRepo = CustomLLMGenerationSettingsStore.storageValue(
+                forByRepo: CustomLLMGenerationSettingsStore.resolvedByRepo(from: customLLMGenerationSettingsByRepo)
             )
         }
     }
@@ -736,8 +758,14 @@ enum ConfigurationTransferManager {
         var issues: [MissingConfigurationIssue] = []
 
         let featureSettings = FeatureSettingsStore.load(defaults: defaults)
-        let remoteASR = RemoteModelConfigurationStore.loadConfigurations(from: defaults.string(forKey: AppPreferenceKey.remoteASRProviderConfigurations) ?? "")
-        let remoteLLM = RemoteModelConfigurationStore.loadConfigurations(from: defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? "")
+        let remoteASR = RemoteModelConfigurationStore.loadConfigurations(
+            from: defaults.string(forKey: AppPreferenceKey.remoteASRProviderConfigurations) ?? "",
+            sensitiveValueLoading: .metadataOnly
+        )
+        let remoteLLM = RemoteModelConfigurationStore.loadConfigurations(
+            from: defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? "",
+            sensitiveValueLoading: .metadataOnly
+        )
 
         appendASRIssues(
             for: featureSettings.transcription.asrSelectionID,
@@ -872,6 +900,10 @@ enum ConfigurationTransferManager {
                 localModelMemoryOptimizationEnabled: defaults.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool
                     ?? !(defaults.object(forKey: AppPreferenceKey.whisperKeepResidentLoaded) as? Bool ?? false),
                 customLLMModelRepo: defaults.string(forKey: AppPreferenceKey.customLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
+                customLLMGenerationSettings: defaults.string(forKey: AppPreferenceKey.customLLMGenerationSettings)
+                    ?? CustomLLMGenerationSettingsStore.defaultStoredValue(),
+                customLLMGenerationSettingsByRepo: defaults.string(forKey: AppPreferenceKey.customLLMGenerationSettingsByRepo)
+                    ?? CustomLLMGenerationSettingsStore.defaultByRepoStoredValue(),
                 translationCustomLLMModelRepo: defaults.string(forKey: AppPreferenceKey.translationCustomLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
                 rewriteCustomLLMModelRepo: defaults.string(forKey: AppPreferenceKey.rewriteCustomLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
                 translationModelProvider: defaults.string(forKey: AppPreferenceKey.translationModelProvider) ?? TranslationModelProvider.customLLM.rawValue,
@@ -1008,6 +1040,8 @@ enum ConfigurationTransferManager {
         defaults.set(model.localModelMemoryOptimizationEnabled, forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled)
         defaults.set(!model.localModelMemoryOptimizationEnabled, forKey: AppPreferenceKey.whisperKeepResidentLoaded)
         defaults.set(model.customLLMModelRepo, forKey: AppPreferenceKey.customLLMModelRepo)
+        defaults.set(model.customLLMGenerationSettings, forKey: AppPreferenceKey.customLLMGenerationSettings)
+        defaults.set(model.customLLMGenerationSettingsByRepo, forKey: AppPreferenceKey.customLLMGenerationSettingsByRepo)
         defaults.set(model.translationCustomLLMModelRepo, forKey: AppPreferenceKey.translationCustomLLMModelRepo)
         defaults.set(model.rewriteCustomLLMModelRepo, forKey: AppPreferenceKey.rewriteCustomLLMModelRepo)
         defaults.set(model.translationModelProvider, forKey: AppPreferenceKey.translationModelProvider)

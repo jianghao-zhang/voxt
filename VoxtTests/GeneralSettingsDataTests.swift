@@ -12,12 +12,18 @@ final class GeneralSettingsDataTests: XCTestCase {
     }
 
     func testUserMainLanguageSummaryIncludesOverflowCount() {
+        let locale = Locale(identifier: "en")
         let summary = GeneralSettingsData.userMainLanguageSummary(
             selectedCodes: ["zh-hans", "en", "ja"],
-            locale: Locale(identifier: "en")
+            locale: locale
         )
 
-        XCTAssertEqual(summary, "Chinese (Simplified) + 2 more")
+        let expected = AppLocalization.format(
+            "%@ + %d more",
+            UserMainLanguageOption.option(for: "zh-hans")?.title(locale: locale) ?? "Chinese (Simplified)",
+            2
+        )
+        XCTAssertEqual(summary, expected)
     }
 
     func testCustomPasteHotkeyFiltersSidedModifiersByEnabledModifiers() {
@@ -32,9 +38,9 @@ final class GeneralSettingsDataTests: XCTestCase {
     }
 
     func testProxyTitlesAndOverlayClamping() {
-        XCTAssertEqual(GeneralSettingsData.networkProxyModeTitle(.system), "Follow System")
-        XCTAssertEqual(GeneralSettingsData.networkProxyModeTitle(.disabled), "Off")
-        XCTAssertEqual(GeneralSettingsData.networkProxyModeTitle(.custom), "Custom")
+        XCTAssertEqual(GeneralSettingsData.networkProxyModeTitle(.system), AppLocalization.localizedString("Follow System"))
+        XCTAssertEqual(GeneralSettingsData.networkProxyModeTitle(.disabled), AppLocalization.localizedString("Off"))
+        XCTAssertEqual(GeneralSettingsData.networkProxyModeTitle(.custom), AppLocalization.localizedString("Custom"))
         XCTAssertEqual(GeneralSettingsData.proxySchemeTitle(.http), "HTTP")
         XCTAssertEqual(GeneralSettingsData.proxySchemeTitle(.https), "HTTPS")
         XCTAssertEqual(GeneralSettingsData.proxySchemeTitle(.socks5), "SOCKS5")

@@ -51,7 +51,8 @@ enum TestFactories {
         ollamaKeepAlive: String = "",
         ollamaLogprobsEnabled: Bool = false,
         ollamaTopLogprobs: Int? = nil,
-        ollamaOptionsJSON: String = ""
+        ollamaOptionsJSON: String = "",
+        generationSettings: LLMGenerationSettings? = nil
     ) -> RemoteProviderConfiguration {
         RemoteProviderConfiguration(
             providerID: providerID,
@@ -73,7 +74,8 @@ enum TestFactories {
             ollamaKeepAlive: ollamaKeepAlive,
             ollamaLogprobsEnabled: ollamaLogprobsEnabled,
             ollamaTopLogprobs: ollamaTopLogprobs,
-            ollamaOptionsJSON: ollamaOptionsJSON
+            ollamaOptionsJSON: ollamaOptionsJSON,
+            generationSettings: generationSettings
         )
     }
 

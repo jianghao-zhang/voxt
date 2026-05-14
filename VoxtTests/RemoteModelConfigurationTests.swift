@@ -292,6 +292,25 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertEqual(restored?.ollamaLogprobsEnabled, true)
         XCTAssertEqual(restored?.ollamaTopLogprobs, 7)
         XCTAssertEqual(restored?.ollamaOptionsJSON, #"{"num_ctx":8192,"repeat_penalty":1.05}"#)
+        XCTAssertEqual(restored?.generationSettings.responseFormat, .jsonSchema)
+        XCTAssertEqual(restored?.generationSettings.thinking.mode, .effort)
+        XCTAssertEqual(restored?.generationSettings.thinking.effort, OllamaThinkMode.low.rawValue)
+        XCTAssertEqual(restored?.generationSettings.logprobs, true)
+        XCTAssertEqual(restored?.generationSettings.topLogprobs, 7)
+        XCTAssertEqual(restored?.generationSettings.extraOptionsJSON, #"{"num_ctx":8192,"repeat_penalty":1.05}"#)
+    }
+
+    func testLegacyOpenAIConfigurationMigratesToUnifiedGenerationSettings() {
+        let configuration = TestFactories.makeRemoteConfiguration(
+            providerID: RemoteLLMProvider.openAI.rawValue,
+            model: "gpt-5.2",
+            openAIReasoningEffort: OpenAIReasoningEffort.high.rawValue,
+            openAIMaxOutputTokens: 4096
+        )
+
+        XCTAssertEqual(configuration.generationSettings.maxOutputTokens, 4096)
+        XCTAssertEqual(configuration.generationSettings.thinking.mode, .effort)
+        XCTAssertEqual(configuration.generationSettings.thinking.effort, OpenAIReasoningEffort.high.rawValue)
     }
 
     func testResolvedASRConfigurationFallsBackToSuggestedModelAndClearsRealtimeFlag() {
