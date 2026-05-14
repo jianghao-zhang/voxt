@@ -235,6 +235,44 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertFalse(configuration.isConfigured)
     }
 
+    func testCodexConfigurationUsesLocalLoginAndDoesNotRequireAPIKey() {
+        let configuration = TestFactories.makeRemoteConfiguration(
+            providerID: RemoteLLMProvider.codex.rawValue,
+            model: "gpt-5.4-mini"
+        )
+
+        XCTAssertTrue(configuration.isConfigured)
+        XCTAssertTrue(RemoteLLMProvider.codex.apiKeyIsOptional)
+        XCTAssertTrue(RemoteLLMProvider.codex.usesResponsesAPI)
+    }
+
+    func testCodexCredentialProviderReadsLocalAuthFile() async throws {
+        let directory = try TemporaryDirectory()
+        let token = try makeTestJWT(payload: [
+            "exp": Date().addingTimeInterval(3600).timeIntervalSince1970,
+            "https://api.openai.com/auth": [
+                "chatgpt_account_id": "acct_test"
+            ]
+        ])
+        let authURL = directory.url.appendingPathComponent("auth.json")
+        let authData = try JSONSerialization.data(withJSONObject: [
+            "auth_mode": "chatgpt",
+            "tokens": [
+                "access_token": token,
+                "refresh_token": "refresh-token"
+            ]
+        ])
+        try authData.write(to: authURL)
+
+        let headers = try await CodexOAuthCredentialProvider(
+            environment: ["CODEX_HOME": directory.url.path]
+        ).authorizationHeaders()
+
+        XCTAssertEqual(headers["Authorization"], "Bearer \(token)")
+        XCTAssertEqual(headers["ChatGPT-Account-ID"], "acct_test")
+        XCTAssertEqual(headers["originator"], "codex_cli_rs")
+    }
+
     func testOpenAIModelCatalogUsesOfficialModelIDs() {
         XCTAssertEqual(RemoteLLMProvider.openAI.suggestedModel, "gpt-5.2")
 
@@ -244,6 +282,15 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertTrue(ids.contains("gpt-5.1"))
         XCTAssertFalse(ids.contains("gpt-5.5"))
         XCTAssertFalse(ids.contains("gpt-5.4"))
+    }
+
+    func testCodexModelCatalogDefaultsToMini() {
+        XCTAssertEqual(RemoteLLMProvider.codex.suggestedModel, "gpt-5.4-mini")
+
+        let ids = RemoteLLMProvider.codex.modelOptions.map(\.id)
+        XCTAssertEqual(ids.first, "gpt-5.4-mini")
+        XCTAssertTrue(ids.contains("gpt-5.3-codex-spark"))
+        XCTAssertTrue(ids.contains("gpt-5.4"))
     }
 
     func testOpenAIReasoningEffortOptionsFollowModelSupport() {
@@ -263,6 +310,19 @@ final class RemoteModelConfigurationTests: XCTestCase {
             OpenAIReasoningEffort.supportedCases(forModel: "gpt-5"),
             [.automatic, .minimal, .low, .medium, .high]
         )
+    }
+
+    private func makeTestJWT(payload: [String: Any]) throws -> String {
+        let headerData = try JSONSerialization.data(withJSONObject: ["alg": "none", "typ": "JWT"])
+        let payloadData = try JSONSerialization.data(withJSONObject: payload)
+        return "\(base64URLEncoded(headerData)).\(base64URLEncoded(payloadData)).signature"
+    }
+
+    private func base64URLEncoded(_ data: Data) -> String {
+        data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
 
     func testLoadSaveRoundTripPreservesOllamaConfigurationFields() {
@@ -346,6 +406,7 @@ final class RemoteModelConfigurationTests: XCTestCase {
 
     func testResponsesProviderCapabilitiesAreConfiguredPerProvider() {
         XCTAssertTrue(RemoteLLMProvider.openAI.usesResponsesAPI)
+        XCTAssertTrue(RemoteLLMProvider.codex.usesResponsesAPI)
         XCTAssertTrue(RemoteLLMProvider.aliyunBailian.usesResponsesAPI)
         XCTAssertTrue(RemoteLLMProvider.volcengine.usesResponsesAPI)
         XCTAssertTrue(RemoteLLMProvider.aliyunBailian.supportsHostedSearch)
@@ -353,6 +414,7 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertTrue(RemoteLLMProvider.aliyunBailian.defaultSearchEnabled)
         XCTAssertFalse(RemoteLLMProvider.volcengine.defaultSearchEnabled)
         XCTAssertTrue(RemoteLLMProvider.omlx.apiKeyIsOptional)
+        XCTAssertTrue(RemoteLLMProvider.codex.apiKeyIsOptional)
         XCTAssertFalse(RemoteLLMProvider.omlx.usesResponsesAPI)
     }
 

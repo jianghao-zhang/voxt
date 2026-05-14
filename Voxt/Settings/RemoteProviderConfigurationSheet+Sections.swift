@@ -115,13 +115,25 @@ extension RemoteProviderConfigurationSheet {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(apiKeyFieldTitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                SecureField(apiKeyFieldPlaceholder, text: $apiKey)
-                    .textFieldStyle(.plain)
-                    .settingsFieldSurface(minHeight: 34)
+            if isCodexLLMProvider {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(apiKeyFieldTitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text(AppLocalization.localizedString("Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(apiKeyFieldTitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    SecureField(apiKeyFieldPlaceholder, text: $apiKey)
+                        .textFieldStyle(.plain)
+                        .settingsFieldSurface(minHeight: 34)
+                }
             }
 
             if let endpointPresetHintText {

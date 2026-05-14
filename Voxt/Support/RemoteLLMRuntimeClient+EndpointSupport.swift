@@ -10,6 +10,8 @@ extension RemoteLLMRuntimeClient {
             return "https://generativelanguage.googleapis.com/v1beta/models"
         case .openAI:
             return "https://api.openai.com/v1/responses"
+        case .codex:
+            return "https://chatgpt.com/backend-api/codex/responses"
         case .ollama:
             return "http://localhost:11434"
         case .omlx:
@@ -93,6 +95,11 @@ extension RemoteLLMRuntimeClient {
             return normalizedResponsesEndpoint(
                 base,
                 defaultPath: "/v1/responses"
+            )
+        case .codex:
+            return normalizedResponsesEndpoint(
+                base,
+                defaultPath: "/responses"
             )
         case .aliyunBailian:
             return normalizedResponsesEndpoint(

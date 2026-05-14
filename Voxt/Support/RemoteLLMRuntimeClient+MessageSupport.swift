@@ -85,7 +85,8 @@ extension RemoteLLMRuntimeClient {
         previousResponseID: String?,
         tuning: RemoteLLMRuntimeClient.GenerationTuning,
         textFormat: [String: Any]?,
-        streamingEnabled: Bool
+        streamingEnabled: Bool,
+        additionalHeaders: [String: String] = [:]
     ) throws -> URLRequest {
         guard let url = URL(string: endpointValue) else {
             throw NSError(
@@ -108,6 +109,9 @@ extension RemoteLLMRuntimeClient {
         if !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
+        for (key, value) in additionalHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
 
         let generationSettings = configuration.effectiveGenerationSettings(provider: provider)
         let maxOutputTokens = generationSettings.maxOutputTokens.map { max(1, $0) } ?? tuning.maxTokens
@@ -117,7 +121,7 @@ extension RemoteLLMRuntimeClient {
             "stream": streamingEnabled,
             "max_output_tokens": maxOutputTokens
         ]
-        if provider != .openAI {
+        if provider != .openAI && provider != .codex {
             payload["temperature"] = tuning.temperature
             payload["top_p"] = tuning.topP
         }
@@ -152,7 +156,7 @@ extension RemoteLLMRuntimeClient {
         )
 
         var textPayload = textFormat ?? [:]
-        if provider == .openAI,
+        if (provider == .openAI || provider == .codex),
            let verbosity = OpenAITextVerbosity.apiValue(
             selection: configuration.openAITextVerbosity,
             model: model
@@ -187,7 +191,7 @@ extension RemoteLLMRuntimeClient {
         settings: LLMGenerationSettings,
         configuration: RemoteProviderConfiguration
     ) -> String? {
-        if provider == .openAI {
+        if provider == .openAI || provider == .codex {
             if settings.thinking.mode == .effort,
                let effort = settings.thinking.effort,
                OpenAIReasoningEffort.apiValue(selection: effort, model: model) != nil {

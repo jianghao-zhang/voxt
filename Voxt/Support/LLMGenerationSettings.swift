@@ -123,7 +123,7 @@ enum LLMProviderCapabilityRegistry {
 
     static func capabilities(for provider: RemoteLLMProvider) -> LLMProviderCapabilities {
         switch provider {
-        case .openAI:
+        case .openAI, .codex:
             return LLMProviderCapabilities(
                 supportsThinkingEffort: true,
                 supportsLogprobs: true,

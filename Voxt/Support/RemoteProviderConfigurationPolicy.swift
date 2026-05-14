@@ -169,6 +169,10 @@ enum RemoteProviderConfigurationPolicy {
                 return [
                     RemoteEndpointPreset(id: "volcengine-llm-cn-beijing", title: AppLocalization.localizedString("Beijing"), url: "https://ark.cn-beijing.volces.com/api/v3/responses")
                 ]
+            case .codex:
+                return [
+                    RemoteEndpointPreset(id: "codex-chatgpt", title: AppLocalization.localizedString("ChatGPT Codex"), url: "https://chatgpt.com/backend-api/codex/responses")
+                ]
             default:
                 return []
             }

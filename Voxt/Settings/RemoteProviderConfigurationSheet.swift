@@ -95,7 +95,7 @@ struct RemoteProviderConfigurationSheet: View {
                         advancedGenerationSettingsSection
                     }
 
-                    if isOpenAILLMProvider {
+                    if usesOpenAIResponsesOptions {
                         openAILLMConfigurationSection
                     }
 

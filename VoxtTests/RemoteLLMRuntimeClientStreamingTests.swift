@@ -649,6 +649,41 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         XCTAssertEqual(format["type"] as? String, "json_object")
     }
 
+    func testMakeResponsesRequestAppliesCodexOAuthHeaders() throws {
+        let client = RemoteLLMRuntimeClient()
+        let request = try client.makeResponsesRequest(
+            provider: .codex,
+            endpointValue: "https://chatgpt.com/backend-api/codex/responses",
+            model: "gpt-5.3-codex-spark",
+            systemPrompt: "",
+            inputPayload: "ping",
+            configuration: RemoteProviderConfiguration(
+                providerID: RemoteLLMProvider.codex.rawValue,
+                model: "gpt-5.3-codex-spark",
+                endpoint: "",
+                apiKey: ""
+            ),
+            previousResponseID: nil,
+            tuning: .init(maxTokens: 512, temperature: 0.2, topP: 0.9),
+            textFormat: nil,
+            streamingEnabled: false,
+            additionalHeaders: [
+                "Authorization": "Bearer codex-token",
+                "originator": "codex_cli_rs",
+                "ChatGPT-Account-ID": "acct_123"
+            ]
+        )
+
+        let body = try XCTUnwrap(request.httpBody)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer codex-token")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "originator"), "codex_cli_rs")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "ChatGPT-Account-ID"), "acct_123")
+        XCTAssertNil(object["temperature"])
+        XCTAssertNil(object["top_p"])
+    }
+
     func testMakeResponsesRequestUsesJSONAcceptHeaderWhenNonStreaming() throws {
         let client = RemoteLLMRuntimeClient()
         let request = try client.makeResponsesRequest(
