@@ -28,6 +28,7 @@ struct ModelCatalogBuilder {
     let isDownloadingCustomLLM: (String) -> Bool
     let isPausedCustomLLM: (String) -> Bool
     let isAnotherCustomLLMDownloading: (String) -> Bool
+    let isCustomLLMInstalled: (String) -> Bool
     let isUninstallingModel: (String) -> Bool
     let isUninstallingWhisperModel: (String) -> Bool
     let isUninstallingCustomLLM: (String) -> Bool
@@ -46,6 +47,7 @@ struct ModelCatalogBuilder {
     let cancelCustomLLMDownload: (String) -> Void
     let deleteCustomLLM: (String) -> Void
     let openCustomLLMModelDirectory: (String) -> Void
+    let configureCustomLLMGeneration: (String) -> Void
     let configureASRProvider: (RemoteASRProvider) -> Void
     let configureLLMProvider: (RemoteLLMProvider) -> Void
     let showASRHintTarget: (ASRHintTarget) -> Void
@@ -104,10 +106,9 @@ struct ModelCatalogBuilder {
         entries.append(contentsOf: CustomLLMModelManager.availableModels.map { model in
             let repo = model.id
             let selectionID = FeatureModelSelectionID.localLLM(repo)
-            let isInstalled = customLLMManager.isModelDownloaded(repo: repo)
+            let isInstalled = isCustomLLMInstalled(repo)
             let badge = customLLMBadgeText(repo)
             let status = isUninstallingCustomLLM(repo) ? localizedModelCatalog("Uninstalling…") : customLLMStatusText(repo)
-
             let primaryAction: ModelTableAction?
             let secondaryActions: [ModelTableAction]
             if isUninstallingCustomLLM(repo) {
@@ -138,6 +139,9 @@ struct ModelCatalogBuilder {
                 secondaryActions = [
                     ModelTableAction(title: localizedModelCatalog("Open Location")) {
                         openCustomLLMModelDirectory(repo)
+                    },
+                    ModelTableAction(title: localizedModelCatalog("Configure")) {
+                        configureCustomLLMGeneration(repo)
                     }
                 ]
             } else {

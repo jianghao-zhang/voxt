@@ -24,6 +24,26 @@ struct RemoteProviderConfigurationSheet: View {
     @State var openAIReasoningEffort = OpenAIReasoningEffort.automatic.rawValue
     @State var openAITextVerbosity = OpenAITextVerbosity.automatic.rawValue
     @State var openAIMaxOutputTokensText = ""
+    @State var generationMaxOutputTokensText = ""
+    @State var generationTemperatureText = ""
+    @State var generationTopPText = ""
+    @State var generationTopKText = ""
+    @State var generationMinPText = ""
+    @State var generationSeedText = ""
+    @State var generationStopText = ""
+    @State var generationPresencePenaltyText = ""
+    @State var generationFrequencyPenaltyText = ""
+    @State var generationRepetitionPenaltyText = ""
+    @State var generationLogprobsEnabled = false
+    @State var generationTopLogprobsText = ""
+    @State var generationResponseFormat = LLMResponseFormat.plain.rawValue
+    @State var generationThinkingMode = LLMThinkingMode.providerDefault.rawValue
+    @State var generationThinkingEffort = ""
+    @State var generationThinkingBudgetText = ""
+    @State var generationExtraBodyJSON = ""
+    @State var generationExtraOptionsJSON = ""
+    @State var generationAdvancedExpanded = false
+    @State var generationExpertExpanded = false
     @State var doubaoDictionaryMode = DoubaoDictionaryMode.requestScoped.rawValue
     @State var doubaoEnableRequestHotwords = true
     @State var doubaoEnableRequestCorrections = true
@@ -69,6 +89,10 @@ struct RemoteProviderConfigurationSheet: View {
 
                     if showsSearchSection {
                         searchSection
+                    }
+
+                    if llmProviderForPicker != nil {
+                        advancedGenerationSettingsSection
                     }
 
                     if isOpenAILLMProvider {
@@ -134,6 +158,7 @@ struct RemoteProviderConfigurationSheet: View {
             openAIReasoningEffort = configuration.openAIReasoningEffort
             openAITextVerbosity = configuration.openAITextVerbosity
             openAIMaxOutputTokensText = configuration.openAIMaxOutputTokens.map(String.init) ?? ""
+            configureGenerationSettingsState()
             doubaoDictionaryMode = configuration.doubaoDictionaryMode
             doubaoEnableRequestHotwords = configuration.doubaoEnableRequestHotwords
             doubaoEnableRequestCorrections = configuration.doubaoEnableRequestCorrections

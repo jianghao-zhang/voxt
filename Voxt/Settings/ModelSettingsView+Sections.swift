@@ -236,6 +236,25 @@ extension ModelSettingsView {
     var customLLMSection: some View {
         Divider()
 
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(localized("Local LLM Configuration"))
+                    .font(.subheadline.weight(.medium))
+                Text(customLLMGenerationSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if customLLMManager.isModelDownloaded(repo: customLLMRepo) {
+                Button(localized("Configure")) {
+                    isCustomLLMConfigurationPresented = true
+                }
+                .buttonStyle(SettingsPillButtonStyle())
+            }
+        }
+
         ResettablePromptSection(
             title: LocalizedStringKey(localized("System Prompt")),
             text: promptBinding(for: $systemPrompt, kind: .enhancement),

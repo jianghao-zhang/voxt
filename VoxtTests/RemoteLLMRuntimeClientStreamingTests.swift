@@ -432,6 +432,80 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         XCTAssertEqual(client.extractPrimaryText(from: payload), "这是最终增强文本")
     }
 
+    func testExtractPrimaryTextIgnoresResponsesReasoningItems() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "output": [
+                [
+                    "type": "reasoning",
+                    "summary": [
+                        [
+                            "type": "summary_text",
+                            "text": "这是推理摘要"
+                        ]
+                    ]
+                ],
+                [
+                    "type": "message",
+                    "content": [
+                        [
+                            "type": "output_text",
+                            "text": "这是最终文本"
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+        XCTAssertEqual(client.extractPrimaryText(from: payload), "这是最终文本")
+    }
+
+    func testExtractPrimaryTextIgnoresAnthropicThinkingBlocks() {
+        let client = RemoteLLMRuntimeClient()
+        let payload: [String: Any] = [
+            "content": [
+                [
+                    "type": "thinking",
+                    "text": "hidden chain of thought"
+                ],
+                [
+                    "type": "text",
+                    "text": "visible answer"
+                ]
+            ]
+        ]
+
+        XCTAssertEqual(client.extractPrimaryText(from: payload), "visible answer")
+    }
+
+    func testExtractPrimaryTextIgnoresReasoningContentOnlyMessages() {
+        let client = RemoteLLMRuntimeClient()
+        let reasoningOnly: [String: Any] = [
+            "choices": [
+                [
+                    "message": [
+                        "role": "assistant",
+                        "reasoning_content": "hidden reasoning"
+                    ]
+                ]
+            ]
+        ]
+        let visible: [String: Any] = [
+            "choices": [
+                [
+                    "message": [
+                        "role": "assistant",
+                        "reasoning_content": "hidden reasoning",
+                        "content": "visible content"
+                    ]
+                ]
+            ]
+        ]
+
+        XCTAssertNil(client.extractPrimaryText(from: reasoningOnly))
+        XCTAssertEqual(client.extractPrimaryText(from: visible), "visible content")
+    }
+
     func testResponsesInputMessagesBuildsConversationHistoryAndCurrentTurn() {
         let client = RemoteLLMRuntimeClient()
         let input = client.responsesInputMessages(
@@ -957,5 +1031,240 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         XCTAssertEqual(payload["top_p"] as? Double, 0.8)
         XCTAssertEqual(payload["max_tokens"] as? Int, 64)
         XCTAssertNil(payload["repeat_penalty"])
+    }
+
+    func testAnthropicGenerationSettingsMapCoreParametersAndThinkingBudget() throws {
+        let client = RemoteLLMRuntimeClient()
+        var payload: [String: Any] = [
+            "model": "claude-sonnet-4-6",
+            "messages": []
+        ]
+
+        client.applyAnthropicGenerationSettings(
+            to: &payload,
+            settings: LLMGenerationSettings(
+                maxOutputTokens: 1024,
+                temperature: 0.3,
+                topP: 0.8,
+                topK: 40,
+                stop: ["</final>"],
+                thinking: LLMThinkingSettings(
+                    mode: .budget,
+                    effort: nil,
+                    budgetTokens: 256,
+                    exposeReasoning: false
+                )
+            ),
+            tuning: .init(maxTokens: 512, temperature: 0.2, topP: 0.9)
+        )
+
+        XCTAssertEqual(payload["max_tokens"] as? Int, 1024)
+        XCTAssertEqual(payload["temperature"] as? Double, 0.3)
+        XCTAssertEqual(payload["top_p"] as? Double, 0.8)
+        XCTAssertEqual(payload["top_k"] as? Int, 40)
+        XCTAssertEqual(payload["stop_sequences"] as? [String], ["</final>"])
+        let thinking = try XCTUnwrap(payload["thinking"] as? [String: Any])
+        XCTAssertEqual(thinking["type"] as? String, "enabled")
+        XCTAssertEqual(thinking["budget_tokens"] as? Int, 256)
+        XCTAssertEqual(thinking["display"] as? String, "omitted")
+    }
+
+    func testAnthropicGenerationSettingsDoNotSendEnabledThinkingWithoutBudget() throws {
+        let client = RemoteLLMRuntimeClient()
+        var payload: [String: Any] = [
+            "model": "claude-sonnet-4-6",
+            "messages": []
+        ]
+
+        client.applyAnthropicGenerationSettings(
+            to: &payload,
+            settings: LLMGenerationSettings(
+                thinking: LLMThinkingSettings(
+                    mode: .on,
+                    effort: nil,
+                    budgetTokens: nil,
+                    exposeReasoning: false
+                )
+            ),
+            tuning: .init(maxTokens: 512, temperature: 0.2, topP: 0.9)
+        )
+
+        XCTAssertNil(payload["thinking"])
+    }
+
+    func testGoogleGenerationSettingsMapConfigAndDisableThinking() throws {
+        let client = RemoteLLMRuntimeClient()
+        var payload: [String: Any] = [
+            "contents": []
+        ]
+
+        client.applyGoogleGenerationSettings(
+            to: &payload,
+            settings: LLMGenerationSettings(
+                maxOutputTokens: 768,
+                temperature: 0.1,
+                topP: 0.7,
+                topK: 20,
+                stop: ["END"],
+                responseFormat: .json,
+                thinking: LLMThinkingSettings(
+                    mode: .off,
+                    effort: nil,
+                    budgetTokens: nil,
+                    exposeReasoning: false
+                )
+            ),
+            tuning: .init(maxTokens: 512, temperature: 0.2, topP: 0.9)
+        )
+
+        let generationConfig = try XCTUnwrap(payload["generationConfig"] as? [String: Any])
+        XCTAssertEqual(generationConfig["maxOutputTokens"] as? Int, 768)
+        XCTAssertEqual(generationConfig["temperature"] as? Double, 0.1)
+        XCTAssertEqual(generationConfig["topP"] as? Double, 0.7)
+        XCTAssertEqual(generationConfig["topK"] as? Int, 20)
+        XCTAssertEqual(generationConfig["stopSequences"] as? [String], ["END"])
+        XCTAssertEqual(generationConfig["responseMimeType"] as? String, "application/json")
+        XCTAssertNil(payload["thinkingConfig"])
+        let thinkingConfig = try XCTUnwrap(generationConfig["thinkingConfig"] as? [String: Any])
+        XCTAssertEqual(thinkingConfig["thinkingBudget"] as? Int, 0)
+    }
+
+    func testOpenRouterGenerationSettingsExcludeReasoningAndMapOverrides() throws {
+        let client = RemoteLLMRuntimeClient()
+        var payload = client.openAICompatiblePayload(
+            model: "openrouter/auto",
+            systemPrompt: "",
+            userPrompt: "hi",
+            tuning: .init(maxTokens: 256, temperature: 0.2, topP: 0.9),
+            streamingEnabled: false
+        )
+
+        try client.applyOpenAICompatibleGenerationSettings(
+            to: &payload,
+            provider: .openrouter,
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.openrouter.rawValue,
+                model: "openrouter/auto",
+                generationSettings: LLMGenerationSettings(
+                    maxOutputTokens: 333,
+                    temperature: 0.4,
+                    topP: 0.6,
+                    seed: 42,
+                    stop: ["STOP"],
+                    presencePenalty: 0.2,
+                    frequencyPenalty: 0.1,
+                    logprobs: true,
+                    topLogprobs: 5,
+                    responseFormat: .json,
+                    thinking: LLMThinkingSettings(
+                        mode: .effort,
+                        effort: "high",
+                        budgetTokens: nil,
+                        exposeReasoning: false
+                    ),
+                    extraBodyJSON: #"{"provider":{"order":["openai"]}}"#
+                )
+            ),
+            tuning: .init(maxTokens: 256, temperature: 0.2, topP: 0.9),
+            responseFormat: nil
+        )
+
+        XCTAssertEqual(payload["max_tokens"] as? Int, 333)
+        XCTAssertEqual(payload["temperature"] as? Double, 0.4)
+        XCTAssertEqual(payload["top_p"] as? Double, 0.6)
+        XCTAssertEqual(payload["seed"] as? Int, 42)
+        XCTAssertEqual(payload["stop"] as? [String], ["STOP"])
+        XCTAssertEqual(payload["presence_penalty"] as? Double, 0.2)
+        XCTAssertEqual(payload["frequency_penalty"] as? Double, 0.1)
+        XCTAssertEqual(payload["logprobs"] as? Bool, true)
+        XCTAssertEqual(payload["top_logprobs"] as? Int, 5)
+        let reasoning = try XCTUnwrap(payload["reasoning"] as? [String: Any])
+        XCTAssertEqual(reasoning["exclude"] as? Bool, true)
+        XCTAssertEqual(reasoning["effort"] as? String, "high")
+        let responseFormat = try XCTUnwrap(payload["response_format"] as? [String: Any])
+        XCTAssertEqual(responseFormat["type"] as? String, "json_object")
+        let provider = try XCTUnwrap(payload["provider"] as? [String: Any])
+        XCTAssertEqual(provider["order"] as? [String], ["openai"])
+    }
+
+    func testOMLXGenerationSettingsMapSchemaAndExtraBody() throws {
+        let client = RemoteLLMRuntimeClient()
+        var payload = client.openAICompatiblePayload(
+            model: "Qwen3-Coder-Next-8bit",
+            systemPrompt: "",
+            userPrompt: "hi",
+            tuning: .init(maxTokens: 256, temperature: 0.2, topP: 0.9),
+            streamingEnabled: true
+        )
+
+        try client.applyOMLXCompatibleConfiguration(
+            to: &payload,
+            configuration: RemoteProviderConfiguration(
+                providerID: RemoteLLMProvider.omlx.rawValue,
+                model: "Qwen3-Coder-Next-8bit",
+                endpoint: "",
+                apiKey: "",
+                omlxJSONSchema: #"{"type":"object","properties":{"answer":{"type":"string"}}}"#,
+                omlxIncludeUsageStreamOptions: true,
+                generationSettings: LLMGenerationSettings(
+                    responseFormat: .jsonSchema,
+                    extraBodyJSON: #"{"top_k":40,"min_p":0.05}"#
+                )
+            )
+        )
+
+        let responseFormat = try XCTUnwrap(payload["response_format"] as? [String: Any])
+        XCTAssertEqual(responseFormat["type"] as? String, "json_schema")
+        let streamOptions = try XCTUnwrap(payload["stream_options"] as? [String: Any])
+        XCTAssertEqual(streamOptions["include_usage"] as? Bool, true)
+        XCTAssertEqual(payload["top_k"] as? Int, 40)
+        XCTAssertEqual(payload["min_p"] as? Double, 0.05)
+    }
+
+    func testOllamaNativePayloadMapsUnifiedGenerationSettings() throws {
+        let client = RemoteLLMRuntimeClient()
+
+        let payload = try client.ollamaNativePayload(
+            model: "qwen3",
+            systemPrompt: "",
+            userPrompt: "hi",
+            configuration: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.ollama.rawValue,
+                model: "qwen3",
+                generationSettings: LLMGenerationSettings(
+                    maxOutputTokens: 99,
+                    temperature: 0.5,
+                    topP: 0.75,
+                    topK: 32,
+                    minP: 0.04,
+                    seed: 123,
+                    stop: ["<stop>"],
+                    repetitionPenalty: 1.2,
+                    responseFormat: .json,
+                    thinking: LLMThinkingSettings(
+                        mode: .off,
+                        effort: nil,
+                        budgetTokens: nil,
+                        exposeReasoning: false
+                    ),
+                    extraOptionsJSON: #"{"num_ctx":8192}"#
+                )
+            ),
+            tuning: .init(maxTokens: 256, temperature: 0.2, topP: 0.9),
+            streamingEnabled: false
+        )
+
+        XCTAssertEqual(payload["format"] as? String, "json")
+        XCTAssertEqual(payload["think"] as? Bool, false)
+        let options = try XCTUnwrap(payload["options"] as? [String: Any])
+        XCTAssertEqual(options["num_predict"] as? Int, 99)
+        XCTAssertEqual(options["temperature"] as? Double, 0.5)
+        XCTAssertEqual(options["top_p"] as? Double, 0.75)
+        XCTAssertEqual(options["top_k"] as? Int, 32)
+        XCTAssertEqual(options["min_p"] as? Double, 0.04)
+        XCTAssertEqual(options["seed"] as? Int, 123)
+        XCTAssertEqual(options["stop"] as? [String], ["<stop>"])
+        XCTAssertEqual(options["repeat_penalty"] as? Double, 1.2)
+        XCTAssertEqual(options["num_ctx"] as? Int, 8192)
     }
 }

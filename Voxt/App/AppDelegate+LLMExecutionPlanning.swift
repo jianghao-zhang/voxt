@@ -246,7 +246,28 @@ extension AppDelegate {
             provider: plan.provider,
             startedAt: executionStartedAt
         )
-        return output
+        let sanitized = LLMVisibleOutputSanitizer.sanitize(
+            output,
+            fallbackText: plan.fallbackText,
+            taskKind: visibleOutputSanitizerTaskKind(for: plan.task)
+        )
+        if sanitized.didFallback || sanitized.didExtractFinalOutput || sanitized.didRemoveProcessText {
+            VoxtLog.warning(
+                "LLM visible output sanitized. task=\(plan.taskLabel), fallback=\(sanitized.didFallback), extractedFinal=\(sanitized.didExtractFinalOutput), removedProcess=\(sanitized.didRemoveProcessText), inputChars=\(plan.primaryInputCharacterCount), outputChars=\(output.count), finalChars=\(sanitized.text.count)"
+            )
+        }
+        return sanitized.text
+    }
+
+    private func visibleOutputSanitizerTaskKind(for task: LLMExecutionTaskPayload) -> LLMVisibleOutputSanitizer.TaskKind {
+        switch task {
+        case .enhancement:
+            return .enhancement
+        case .translation:
+            return .translation
+        case .rewrite:
+            return .rewrite
+        }
     }
 
     func llmProviderModelCapabilities(for provider: LLMExecutionProvider) -> LLMProviderModelCapabilities {

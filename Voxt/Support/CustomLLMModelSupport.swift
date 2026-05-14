@@ -499,15 +499,11 @@ enum CustomLLMModelFamily: Equatable {
 
 enum CustomLLMOutputSanitizer {
     static func normalizeResultText(_ output: String) -> String {
-        var cleaned = output
-        if let regex = try? NSRegularExpression(pattern: "<think>[\\s\\S]*?</think>", options: [.caseInsensitive]) {
-            let range = NSRange(location: 0, length: (cleaned as NSString).length)
-            cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
-        }
-        cleaned = cleaned.replacingOccurrences(of: "<think>", with: "", options: .caseInsensitive)
-        cleaned = cleaned.replacingOccurrences(of: "</think>", with: "", options: .caseInsensitive)
-        cleaned = unwrapCodeFenceIfNeeded(cleaned)
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        LLMVisibleOutputSanitizer.sanitize(
+            output,
+            fallbackText: "",
+            taskKind: .generic
+        ).text
     }
 
     static func unwrapCodeFenceIfNeeded(_ text: String) -> String {

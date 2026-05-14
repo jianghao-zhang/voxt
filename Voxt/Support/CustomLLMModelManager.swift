@@ -134,6 +134,13 @@ class CustomLLMModelManager: ObservableObject {
     private var isMemoryOptimizationEnabled: Bool {
         UserDefaults.standard.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool ?? true
     }
+    private func resolvedGenerationSettings(for repo: String) -> LLMGenerationSettings {
+        CustomLLMGenerationSettingsStore.resolvedSettings(
+            for: repo,
+            rawByRepo: UserDefaults.standard.string(forKey: AppPreferenceKey.customLLMGenerationSettingsByRepo),
+            legacyRaw: UserDefaults.standard.string(forKey: AppPreferenceKey.customLLMGenerationSettings)
+        )
+    }
 
     init(modelRepo: String, hubBaseURL: URL = URL(string: "https://huggingface.co")!) {
         let repoSelection = Self.resolveModelRepo(modelRepo)
@@ -342,13 +349,16 @@ class CustomLLMModelManager: ObservableObject {
 
     private func generationParameters(
         for request: CustomLLMRequestPlan,
-        behavior: CustomLLMModelBehavior
+        behavior: CustomLLMModelBehavior,
+        settings: LLMGenerationSettings
     ) -> GenerateParameters {
         let safeInput = max(1, request.inputCharacterCount)
         let estimated = Int(Double(safeInput) * request.kind.tokenBudgetMultiplier)
         let totalPromptCharacters = request.instructions.count + request.prompt.count
         let budget: Int?
         if let override = generationTuning.maxTokensOverride {
+            budget = max(1, override)
+        } else if let override = settings.maxOutputTokens {
             budget = max(1, override)
         } else if let override = request.maxTokensOverride {
             budget = max(1, override)
@@ -371,14 +381,14 @@ class CustomLLMModelManager: ObservableObject {
         }
 
         let repetitionPenalty: Float? =
-            behavior.family == .qwen3 ? 1.05 : nil
+            settings.repetitionPenalty.map(Float.init) ?? (behavior.family == .qwen3 ? 1.05 : nil)
 
         return GenerateParameters(
             maxTokens: budget,
-            temperature: 0,
-            topP: 1.0,
-            topK: 0,
-            minP: 0,
+            temperature: settings.temperature.map(Float.init) ?? 0,
+            topP: settings.topP.map(Float.init) ?? 1.0,
+            topK: settings.topK ?? 0,
+            minP: settings.minP.map(Float.init) ?? 0,
             repetitionPenalty: repetitionPenalty,
             repetitionContextSize: 32,
             prefillStepSize: prefillStepSize
@@ -415,13 +425,15 @@ class CustomLLMModelManager: ObservableObject {
             let containerSnapshot = try await profiledContainer(for: request.repo)
             let container = containerSnapshot.container
             let behavior = CustomLLMModelBehaviorResolver.behavior(for: request.repo)
+            let settings = resolvedGenerationSettings(for: request.repo)
             let session = makeChatSession(
                 container: container,
                 instructions: request.instructions,
                 repo: request.repo,
-                behavior: behavior
+                behavior: behavior,
+                settings: settings
             )
-            let params = generationParameters(for: request, behavior: behavior)
+            let params = generationParameters(for: request, behavior: behavior, settings: settings)
             session.generateParameters = params
 
             let modelStartedAt = Date()
@@ -1310,17 +1322,40 @@ class CustomLLMModelManager: ObservableObject {
         container: ModelContainer,
         instructions: String,
         repo: String,
-        behavior: CustomLLMModelBehavior
+        behavior: CustomLLMModelBehavior,
+        settings: LLMGenerationSettings
     ) -> ChatSession {
+        let additionalContext = localThinkingAdditionalContext(
+            behavior: behavior,
+            settings: settings
+        )
         let session = ChatSession(
             container,
             instructions: instructions,
-            additionalContext: behavior.additionalContext
+            additionalContext: additionalContext
         )
-        if behavior.disablesThinking {
+        if additionalContext?["enable_thinking"] as? Bool == false {
             VoxtLog.llm("Custom LLM thinking disabled for repo=\(repo) using chat-template additionalContext.")
+        } else if additionalContext?["enable_thinking"] as? Bool == true {
+            VoxtLog.llm("Custom LLM thinking enabled for repo=\(repo) using chat-template additionalContext.")
         }
         return session
+    }
+
+    private func localThinkingAdditionalContext(
+        behavior: CustomLLMModelBehavior,
+        settings: LLMGenerationSettings
+    ) -> [String: any Sendable]? {
+        switch settings.thinking.mode {
+        case .providerDefault:
+            return behavior.additionalContext
+        case .off:
+            return ["enable_thinking": false]
+        case .on:
+            return ["enable_thinking": true]
+        case .effort, .budget:
+            return behavior.additionalContext
+        }
     }
 
     private func structuredOutputPrompt(taskInstruction: String, input: String) -> String {

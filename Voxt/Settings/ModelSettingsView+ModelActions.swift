@@ -673,6 +673,29 @@ extension ModelSettingsView {
         )
     }
 
+    func resolvedCustomLLMGenerationSettings(for repo: String) -> LLMGenerationSettings {
+        CustomLLMGenerationSettingsStore.resolvedSettings(
+            for: repo,
+            rawByRepo: customLLMGenerationSettingsByRepoRaw,
+            legacyRaw: customLLMGenerationSettingsRaw
+        )
+    }
+
+    func saveCustomLLMGenerationSettings(_ settings: LLMGenerationSettings, for repo: String) {
+        customLLMGenerationSettingsByRepoRaw = CustomLLMGenerationSettingsStore.save(
+            settings,
+            for: repo,
+            rawByRepo: customLLMGenerationSettingsByRepoRaw
+        )
+    }
+
+    func customLLMGenerationSettingsBinding(for repo: String) -> Binding<LLMGenerationSettings> {
+        Binding(
+            get: { resolvedCustomLLMGenerationSettings(for: repo) },
+            set: { saveCustomLLMGenerationSettings($0, for: repo) }
+        )
+    }
+
     func useRemoteLLMProvider(_ provider: RemoteLLMProvider) {
         remoteLLMSelectedProviderRaw = provider.rawValue
     }
@@ -784,6 +807,34 @@ extension ModelSettingsView {
         case .generic:
             return tuning.preset.title
         }
+    }
+
+    var customLLMGenerationSummary: String {
+        let settings = resolvedCustomLLMGenerationSettings(for: customLLMRepo)
+        var parts = [String]()
+        switch settings.thinking.mode {
+        case .providerDefault:
+            parts.append(AppLocalization.localizedString("Think: Model Default"))
+        case .off:
+            parts.append(AppLocalization.localizedString("Think: Off"))
+        case .on:
+            parts.append(AppLocalization.localizedString("Think: On"))
+        case .effort, .budget:
+            break
+        }
+        if let maxOutputTokens = settings.maxOutputTokens {
+            parts.append(AppLocalization.format("Max Output: %@", String(maxOutputTokens)))
+        }
+        if let temperature = settings.temperature {
+            parts.append(AppLocalization.format("Temperature: %@", String(format: "%.2f", temperature)))
+        }
+        if let topP = settings.topP {
+            parts.append(AppLocalization.format("Top P: %@", String(format: "%.2f", topP)))
+        }
+        if let repetitionPenalty = settings.repetitionPenalty {
+            parts.append(AppLocalization.format("Repetition Penalty: %@", String(format: "%.2f", repetitionPenalty)))
+        }
+        return parts.isEmpty ? AppLocalization.localizedString("Configuration: Default") : parts.joined(separator: " · ")
     }
 
     func asrCredentialHint(for provider: RemoteASRProvider) -> String? {

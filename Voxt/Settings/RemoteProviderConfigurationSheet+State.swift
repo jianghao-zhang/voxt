@@ -14,7 +14,7 @@ extension RemoteProviderConfigurationSheet {
     }
 
     var showsLargeAdvancedProviderSection: Bool {
-        isOpenAILLMProvider || isOllamaLLMProvider || isOMLXLLMProvider
+        llmProviderForPicker != nil
     }
 
     var apiKeyFieldTitle: String {
@@ -134,6 +134,101 @@ extension RemoteProviderConfigurationSheet {
             ?? OpenAITextVerbosity.automatic.title
     }
 
+    var generationCapabilities: LLMProviderCapabilities? {
+        llmProviderForPicker.map { LLMProviderCapabilityRegistry.capabilities(for: $0) }
+    }
+
+    var shouldShowGenerationThinking: Bool {
+        guard let capabilities = generationCapabilities else { return false }
+        return capabilities.supportsThinkingToggle ||
+            capabilities.supportsThinkingEffort ||
+            capabilities.supportsThinkingBudget
+    }
+
+    var shouldShowGenerationAdvancedControls: Bool {
+        guard let capabilities = generationCapabilities else { return false }
+        return capabilities.supportsTopK ||
+            capabilities.supportsMinP ||
+            capabilities.supportsSeed ||
+            capabilities.supportsPenalties ||
+            capabilities.supportsLogprobs ||
+            capabilities.supportsResponseFormat
+    }
+
+    var shouldShowGenerationExpertControls: Bool {
+        guard let capabilities = generationCapabilities else { return false }
+        return capabilities.supportsExtraBody || capabilities.supportsExtraOptions
+    }
+
+    var generationThinkingModeMenuOptions: [SettingsMenuOption<String>] {
+        guard let capabilities = generationCapabilities else { return [] }
+        var options = [SettingsMenuOption(value: LLMThinkingMode.providerDefault.rawValue, title: AppLocalization.localizedString("Default"))]
+        if capabilities.supportsThinkingToggle {
+            options.append(SettingsMenuOption(value: LLMThinkingMode.off.rawValue, title: AppLocalization.localizedString("Off")))
+            options.append(SettingsMenuOption(value: LLMThinkingMode.on.rawValue, title: AppLocalization.localizedString("On")))
+        }
+        if capabilities.supportsThinkingEffort {
+            options.append(SettingsMenuOption(value: LLMThinkingMode.effort.rawValue, title: AppLocalization.localizedString("Effort")))
+        }
+        if capabilities.supportsThinkingBudget {
+            options.append(SettingsMenuOption(value: LLMThinkingMode.budget.rawValue, title: AppLocalization.localizedString("Budget")))
+        }
+        return options
+    }
+
+    var generationThinkingModeSelectedTitle: String {
+        generationThinkingModeMenuOptions.first(where: { $0.value == generationThinkingMode })?.title
+            ?? AppLocalization.localizedString("Default")
+    }
+
+    var sanitizedGenerationThinkingMode: LLMThinkingMode {
+        let mode = LLMThinkingMode(rawValue: generationThinkingMode) ?? .providerDefault
+        let supportedValues = Set(generationThinkingModeMenuOptions.map(\.value))
+        return supportedValues.contains(mode.rawValue) ? mode : .providerDefault
+    }
+
+    var generationThinkingEffortMenuOptions: [SettingsMenuOption<String>] {
+        let values: [String]
+        if isOpenAILLMProvider {
+            values = OpenAIReasoningEffort.supportedCases(forModel: resolvedModelValue())
+                .filter { $0 != .automatic }
+                .map(\.rawValue)
+        } else if isOllamaLLMProvider {
+            values = [
+                OllamaThinkMode.low.rawValue,
+                OllamaThinkMode.medium.rawValue,
+                OllamaThinkMode.high.rawValue
+            ]
+        } else {
+            values = ["none", "minimal", "low", "medium", "high", "xhigh"]
+        }
+        return values.map { SettingsMenuOption(value: $0, title: generationEffortTitle($0)) }
+    }
+
+    var generationThinkingEffortSelectedTitle: String {
+        generationThinkingEffortMenuOptions.first(where: { $0.value == generationThinkingEffort })?.title
+            ?? AppLocalization.localizedString("Default")
+    }
+
+    var generationResponseFormatMenuOptions: [SettingsMenuOption<String>] {
+        guard generationCapabilities?.supportsResponseFormat == true else { return [] }
+        var formats: [LLMResponseFormat] = [.plain, .json]
+        if isOllamaLLMProvider || isOMLXLLMProvider {
+            formats.append(.jsonSchema)
+        }
+        return formats.map { SettingsMenuOption(value: $0.rawValue, title: $0.title) }
+    }
+
+    var generationResponseFormatSelectedTitle: String {
+        generationResponseFormatMenuOptions.first(where: { $0.value == generationResponseFormat })?.title
+            ?? LLMResponseFormat.plain.title
+    }
+
+    var shouldShowGenerationJSONSchemaField: Bool {
+        LLMResponseFormat(rawValue: generationResponseFormat) == .jsonSchema &&
+            (isOllamaLLMProvider || isOMLXLLMProvider)
+    }
+
     var currentConfigurationSnapshot: RemoteProviderConfiguration {
         RemoteProviderConfiguration(
             providerID: configuration.providerID,
@@ -144,24 +239,90 @@ extension RemoteProviderConfigurationSheet {
             accessToken: accessToken.trimmingCharacters(in: .whitespacesAndNewlines),
             searchEnabled: (llmProviderForPicker?.supportsHostedSearch == true) ? searchEnabled : false,
             openAIChunkPseudoRealtimeEnabled: isOpenAIASRTest ? openAIChunkPseudoRealtimeEnabled : false,
-            openAIReasoningEffort: isOpenAILLMProvider ? openAIReasoningEffort : OpenAIReasoningEffort.automatic.rawValue,
+            openAIReasoningEffort: isOpenAILLMProvider ? openAIReasoningEffortSnapshot() : OpenAIReasoningEffort.automatic.rawValue,
             openAITextVerbosity: isOpenAILLMProvider ? openAITextVerbosity : OpenAITextVerbosity.automatic.rawValue,
-            openAIMaxOutputTokens: isOpenAILLMProvider ? parsedOpenAIMaxOutputTokensValue() : nil,
+            openAIMaxOutputTokens: isOpenAILLMProvider ? parsedOptionalInt(generationMaxOutputTokensText) : nil,
             doubaoDictionaryMode: doubaoDictionaryMode,
             doubaoEnableRequestHotwords: doubaoEnableRequestHotwords,
             doubaoEnableRequestCorrections: doubaoEnableRequestCorrections,
-            ollamaResponseFormat: ollamaResponseFormat,
+            ollamaResponseFormat: isOllamaLLMProvider ? ollamaResponseFormatSnapshot() : ollamaResponseFormat,
             ollamaJSONSchema: ollamaJSONSchema.trimmingCharacters(in: .whitespacesAndNewlines),
-            ollamaThinkMode: ollamaThinkMode,
+            ollamaThinkMode: isOllamaLLMProvider ? ollamaThinkModeSnapshot() : ollamaThinkMode,
             ollamaKeepAlive: ollamaKeepAlive.trimmingCharacters(in: .whitespacesAndNewlines),
-            ollamaLogprobsEnabled: ollamaLogprobsEnabled,
-            ollamaTopLogprobs: parsedOllamaTopLogprobsValue(),
-            ollamaOptionsJSON: ollamaOptionsJSON.trimmingCharacters(in: .whitespacesAndNewlines),
-            omlxResponseFormat: omlxResponseFormat,
+            ollamaLogprobsEnabled: isOllamaLLMProvider ? generationLogprobsEnabled : ollamaLogprobsEnabled,
+            ollamaTopLogprobs: isOllamaLLMProvider ? parsedOptionalInt(generationTopLogprobsText) : parsedOllamaTopLogprobsValue(),
+            ollamaOptionsJSON: isOllamaLLMProvider ? generationExtraOptionsJSON.trimmingCharacters(in: .whitespacesAndNewlines) : ollamaOptionsJSON.trimmingCharacters(in: .whitespacesAndNewlines),
+            omlxResponseFormat: isOMLXLLMProvider ? omlxResponseFormatSnapshot() : omlxResponseFormat,
             omlxJSONSchema: omlxJSONSchema.trimmingCharacters(in: .whitespacesAndNewlines),
             omlxIncludeUsageStreamOptions: omlxIncludeUsageStreamOptions,
-            omlxExtraBodyJSON: omlxExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+            omlxExtraBodyJSON: isOMLXLLMProvider ? generationExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines) : omlxExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines),
+            generationSettings: currentGenerationSettingsSnapshot()
         )
+    }
+
+    func currentGenerationSettingsSnapshot() -> LLMGenerationSettings {
+        guard let provider = llmProviderForPicker else {
+            return configuration.generationSettings
+        }
+        let capabilities = LLMProviderCapabilityRegistry.capabilities(for: provider)
+        var settings = LLMGenerationSettings()
+        settings.maxOutputTokens = parsedOptionalInt(generationMaxOutputTokensText)
+        settings.temperature = parsedOptionalDouble(generationTemperatureText)
+        settings.topP = parsedOptionalDouble(generationTopPText)
+        settings.topK = capabilities.supportsTopK ? parsedOptionalInt(generationTopKText) : nil
+        settings.minP = capabilities.supportsMinP ? parsedOptionalDouble(generationMinPText) : nil
+        settings.seed = capabilities.supportsSeed ? parsedOptionalInt(generationSeedText) : nil
+        settings.stop = parsedStopSequences()
+        if capabilities.supportsPenalties {
+            settings.presencePenalty = parsedOptionalDouble(generationPresencePenaltyText)
+            settings.frequencyPenalty = parsedOptionalDouble(generationFrequencyPenaltyText)
+            settings.repetitionPenalty = parsedOptionalDouble(generationRepetitionPenaltyText)
+        }
+        if capabilities.supportsLogprobs {
+            settings.logprobs = generationLogprobsEnabled
+            settings.topLogprobs = parsedOptionalInt(generationTopLogprobsText)
+        }
+        if capabilities.supportsResponseFormat {
+            settings.responseFormat = LLMResponseFormat(rawValue: generationResponseFormat) ?? .plain
+        }
+        if shouldShowGenerationThinking {
+            settings.thinking = LLMThinkingSettings(
+                mode: sanitizedGenerationThinkingMode,
+                effort: normalizedOptionalString(generationThinkingEffort),
+                budgetTokens: parsedOptionalInt(generationThinkingBudgetText),
+                exposeReasoning: false
+            )
+        }
+        if capabilities.supportsExtraBody {
+            settings.extraBodyJSON = generationExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if capabilities.supportsExtraOptions {
+            settings.extraOptionsJSON = generationExtraOptionsJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return settings
+    }
+
+    func configureGenerationSettingsState() {
+        let provider = llmProviderForPicker
+        let settings = provider.map { configuration.effectiveGenerationSettings(provider: $0) } ?? configuration.generationSettings
+        generationMaxOutputTokensText = settings.maxOutputTokens.map(String.init) ?? ""
+        generationTemperatureText = settings.temperature.map(Self.formatOptionalDouble) ?? ""
+        generationTopPText = settings.topP.map(Self.formatOptionalDouble) ?? ""
+        generationTopKText = settings.topK.map(String.init) ?? ""
+        generationMinPText = settings.minP.map(Self.formatOptionalDouble) ?? ""
+        generationSeedText = settings.seed.map(String.init) ?? ""
+        generationStopText = settings.stop.joined(separator: "\n")
+        generationPresencePenaltyText = settings.presencePenalty.map(Self.formatOptionalDouble) ?? ""
+        generationFrequencyPenaltyText = settings.frequencyPenalty.map(Self.formatOptionalDouble) ?? ""
+        generationRepetitionPenaltyText = settings.repetitionPenalty.map(Self.formatOptionalDouble) ?? ""
+        generationLogprobsEnabled = settings.logprobs
+        generationTopLogprobsText = settings.topLogprobs.map(String.init) ?? ""
+        generationResponseFormat = settings.responseFormat.rawValue
+        generationThinkingMode = settings.thinking.mode.rawValue
+        generationThinkingEffort = settings.thinking.effort ?? ""
+        generationThinkingBudgetText = settings.thinking.budgetTokens.map(String.init) ?? ""
+        generationExtraBodyJSON = settings.extraBodyJSON
+        generationExtraOptionsJSON = settings.extraOptionsJSON
     }
 
     var isDoubaoASRTest: Bool {
@@ -318,26 +479,85 @@ extension RemoteProviderConfigurationSheet {
     }
 
     func validationMessage() -> String? {
+        if let generationMessage = validationMessageForGenerationSettings() {
+            return generationMessage
+        }
         if isOllamaLLMProvider {
             return validationMessageForOllamaSettings(
-                responseFormat: ollamaResponseFormat,
+                responseFormat: ollamaResponseFormatSnapshot(),
                 jsonSchema: ollamaJSONSchema,
-                optionsJSON: ollamaOptionsJSON,
-                logprobsEnabled: ollamaLogprobsEnabled,
-                topLogprobsText: ollamaTopLogprobsText
+                optionsJSON: generationExtraOptionsJSON,
+                logprobsEnabled: generationLogprobsEnabled,
+                topLogprobsText: generationTopLogprobsText
             )
         }
         if isOMLXLLMProvider {
             return validationMessageForOMLXSettings(
-                responseFormat: omlxResponseFormat,
+                responseFormat: omlxResponseFormatSnapshot(),
                 jsonSchema: omlxJSONSchema,
-                extraBodyJSON: omlxExtraBodyJSON
+                extraBodyJSON: generationExtraBodyJSON
             )
         }
-        if isOpenAILLMProvider {
-            return validationMessageForOpenAISettings(
-                maxOutputTokensText: openAIMaxOutputTokensText
-            )
+        return nil
+    }
+
+    func validationMessageForGenerationSettings() -> String? {
+        guard let capabilities = generationCapabilities else { return nil }
+        var positiveIntFields = [
+            (generationMaxOutputTokensText, AppLocalization.localizedString("Max Output Tokens")),
+            (generationTopKText, AppLocalization.localizedString("Top K"))
+        ]
+        if sanitizedGenerationThinkingMode == .budget {
+            positiveIntFields.append((generationThinkingBudgetText, AppLocalization.localizedString("Thinking Budget")))
+        }
+        if sanitizedGenerationThinkingMode == .budget,
+           generationThinkingBudgetText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return AppLocalization.format("%@ must be a positive integer.", AppLocalization.localizedString("Thinking Budget"))
+        }
+        for (text, fieldName) in positiveIntFields where !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard let value = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)), value > 0 else {
+                return AppLocalization.format("%@ must be a positive integer.", fieldName)
+            }
+        }
+        var integerFields = [
+            (generationSeedText, AppLocalization.localizedString("Seed"))
+        ]
+        if generationLogprobsEnabled {
+            integerFields.append((generationTopLogprobsText, AppLocalization.localizedString("Top Logprobs")))
+        }
+        for (text, fieldName) in integerFields where !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard let value = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)), value >= 0 else {
+                return AppLocalization.format("%@ must be a non-negative integer.", fieldName)
+            }
+        }
+        let doubleFields = [
+            (generationTemperatureText, AppLocalization.localizedString("Temperature")),
+            (generationTopPText, AppLocalization.localizedString("Top P")),
+            (generationMinPText, AppLocalization.localizedString("Min P")),
+            (generationPresencePenaltyText, AppLocalization.localizedString("Presence Penalty")),
+            (generationFrequencyPenaltyText, AppLocalization.localizedString("Frequency Penalty")),
+            (generationRepetitionPenaltyText, AppLocalization.localizedString("Repetition Penalty"))
+        ]
+        for (text, fieldName) in doubleFields where !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) != nil else {
+                return AppLocalization.format("%@ must be a number.", fieldName)
+            }
+        }
+        if capabilities.supportsExtraBody,
+           let extraBodyMessage = validateJSONObjectField(
+               generationExtraBodyJSON,
+               fieldName: AppLocalization.localizedString("Extra Body JSON"),
+               requiresValue: false
+           ) {
+            return extraBodyMessage
+        }
+        if capabilities.supportsExtraOptions,
+           let extraOptionsMessage = validateJSONObjectField(
+               generationExtraOptionsJSON,
+               fieldName: AppLocalization.localizedString("Options JSON"),
+               requiresValue: false
+           ) {
+            return extraOptionsMessage
         }
         return nil
     }
@@ -457,6 +677,108 @@ extension RemoteProviderConfigurationSheet {
         let trimmed = openAIMaxOutputTokensText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return Int(trimmed)
+    }
+
+    func parsedOptionalInt(_ text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return Int(trimmed)
+    }
+
+    func parsedOptionalDouble(_ text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return Double(trimmed)
+    }
+
+    func parsedStopSequences() -> [String] {
+        generationStopText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    func normalizedOptionalString(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    func openAIReasoningEffortSnapshot() -> String {
+        guard LLMThinkingMode(rawValue: generationThinkingMode) == .effort,
+              let effort = normalizedOptionalString(generationThinkingEffort),
+              OpenAIReasoningEffort(rawValue: effort) != nil
+        else {
+            return OpenAIReasoningEffort.automatic.rawValue
+        }
+        return effort
+    }
+
+    func ollamaResponseFormatSnapshot() -> String {
+        switch LLMResponseFormat(rawValue: generationResponseFormat) {
+        case .json:
+            return OllamaResponseFormat.json.rawValue
+        case .jsonSchema:
+            return OllamaResponseFormat.jsonSchema.rawValue
+        case .plain, nil:
+            return OllamaResponseFormat.plain.rawValue
+        }
+    }
+
+    func omlxResponseFormatSnapshot() -> String {
+        switch LLMResponseFormat(rawValue: generationResponseFormat) {
+        case .jsonSchema:
+            return OMLXResponseFormat.jsonSchema.rawValue
+        case .plain, .json, nil:
+            return OMLXResponseFormat.plain.rawValue
+        }
+    }
+
+    func ollamaThinkModeSnapshot() -> String {
+        switch LLMThinkingMode(rawValue: generationThinkingMode) {
+        case .off:
+            return OllamaThinkMode.off.rawValue
+        case .on, .budget:
+            return OllamaThinkMode.on.rawValue
+        case .effort:
+            switch generationThinkingEffort {
+            case OllamaThinkMode.low.rawValue:
+                return OllamaThinkMode.low.rawValue
+            case OllamaThinkMode.medium.rawValue:
+                return OllamaThinkMode.medium.rawValue
+            case OllamaThinkMode.high.rawValue:
+                return OllamaThinkMode.high.rawValue
+            default:
+                return OllamaThinkMode.on.rawValue
+            }
+        case .providerDefault, nil:
+            return OllamaThinkMode.off.rawValue
+        }
+    }
+
+    func generationEffortTitle(_ value: String) -> String {
+        if let openAIEffort = OpenAIReasoningEffort(rawValue: value) {
+            return openAIEffort.title
+        }
+        switch value {
+        case "none":
+            return AppLocalization.localizedString("None")
+        case "minimal":
+            return AppLocalization.localizedString("Minimal")
+        case "low":
+            return AppLocalization.localizedString("Low")
+        case "medium":
+            return AppLocalization.localizedString("Medium")
+        case "high":
+            return AppLocalization.localizedString("High")
+        case "xhigh":
+            return AppLocalization.localizedString("Extra High")
+        default:
+            return value
+        }
+    }
+
+    nonisolated static func formatOptionalDouble(_ value: Double) -> String {
+        String(format: "%g", value)
     }
 
     func runConnectionTest(
