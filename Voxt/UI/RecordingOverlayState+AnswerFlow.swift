@@ -18,6 +18,7 @@ extension OverlayState {
         isRequesting = false
         isFinalizingTranscription = false
         isCompleting = false
+        isRewriteConversationTurnInProgress = false
         statusMessage = ""
         compactLeadingIconImage = nil
         dismissSessionTranslationTargetPicker()
@@ -79,6 +80,7 @@ extension OverlayState {
         isRequesting = false
         isFinalizingTranscription = false
         isCompleting = false
+        isRewriteConversationTurnInProgress = false
         statusMessage = ""
         compactLeadingIconImage = nil
         dismissSessionTranslationTargetPicker()
@@ -102,6 +104,7 @@ extension OverlayState {
         isStreamingAnswer = true
         canInjectAnswer = canInject
         displayMode = .answer
+        isRewriteConversationTurnInProgress = true
         isRecording = false
         audioLevel = 0
         isFinalizingTranscription = false
@@ -175,7 +178,15 @@ extension OverlayState {
         case .singleResult:
             return latestCompletedAnswerPayload != nil
         case .conversation:
-            return true
+            guard latestCompletedAnswerPayload != nil else { return false }
+            return !isRewriteConversationTurnInProgress &&
+                !isRecording &&
+                !isModelInitializing &&
+                !isEnhancing &&
+                !isRequesting &&
+                !isFinalizingTranscription &&
+                !isCompleting &&
+                !isStreamingAnswer
         }
     }
 

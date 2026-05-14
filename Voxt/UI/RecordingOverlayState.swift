@@ -47,6 +47,7 @@ class OverlayState: ObservableObject {
     @Published var latestHistoryEntryID: UUID?
     @Published var rewriteConversationRemoteResponseID: String?
     @Published var pendingConversationUserPrompt: String?
+    @Published var isRewriteConversationTurnInProgress = false
     @Published var isStreamingAnswer = false
     @Published var canInjectAnswer = false
     @Published var isPresented = false
@@ -142,6 +143,7 @@ class OverlayState: ObservableObject {
         latestHistoryEntryID = nil
         rewriteConversationRemoteResponseID = nil
         pendingConversationUserPrompt = nil
+        isRewriteConversationTurnInProgress = false
         isStreamingAnswer = false
         canInjectAnswer = false
         isPresented = false

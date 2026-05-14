@@ -147,6 +147,7 @@ extension AppDelegate {
         }
 
         overlayState.isRecording = false
+        overlayState.isRewriteConversationTurnInProgress = false
         overlayState.audioLevel = 0
     }
 
@@ -256,6 +257,7 @@ extension AppDelegate {
             overlayState.clearPendingConversationUserPrompt()
             overlayState.statusMessage = ""
             overlayState.sessionIconMode = .rewrite
+            overlayState.isRewriteConversationTurnInProgress = true
             overlayState.answerTitle = ""
             overlayState.answerContent = ""
             overlayState.isStreamingAnswer = false

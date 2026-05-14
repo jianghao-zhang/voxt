@@ -38,6 +38,24 @@ final class OverlayStateConversationTests: XCTestCase {
         XCTAssertNil(state.pendingConversationUserPrompt)
     }
 
+    func testContinueButtonHidesDuringConversationContinuationTurn() {
+        let state = OverlayState()
+        state.sessionIconMode = .rewrite
+        state.presentAnswer(title: "Draft", content: "First answer", canInject: true)
+        state.beginRewriteConversationIfNeeded()
+
+        XCTAssertTrue(state.showsRewriteContinueButton)
+
+        state.isRewriteConversationTurnInProgress = true
+
+        XCTAssertFalse(state.showsRewriteContinueButton)
+        XCTAssertEqual(state.answerSpaceShortcutAction, .toggleConversationRecording)
+
+        state.presentConversationAnswer(content: "Follow-up answer", canInject: true)
+
+        XCTAssertTrue(state.showsRewriteContinueButton)
+    }
+
     func testAnswerSpaceShortcutUnavailableForNonRewriteAnswer() {
         let state = OverlayState()
         state.sessionIconMode = .translation
