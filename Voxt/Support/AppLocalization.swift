@@ -22,6 +22,8 @@ enum AppLocalization {
 
     private static let languageSnapshotLock = NSLock()
     private static var languageSnapshot = makeLanguageSnapshot()
+    private static let localizedStringCacheLock = NSLock()
+    private static var localizedStringCache = [String: String]()
     private static let interfaceLanguageObserver: NSObjectProtocol = {
         NotificationCenter.default.addObserver(
             forName: .voxtInterfaceLanguageDidChange,
@@ -49,16 +51,35 @@ enum AppLocalization {
 
     static func localizedString(_ key: String) -> String {
         let identifier = currentLanguageSnapshot().localeIdentifier
-        if let localized = resolvedLocalizedString(key, localeIdentifier: identifier) {
-            return localized
-        }
-        if let english = resolvedLocalizedString(key, localeIdentifier: "en") {
-            return english
-        }
-        return Bundle.main.localizedString(forKey: key, value: key, table: nil)
+        return cachedLocalizedString(key, localeIdentifier: identifier)
     }
 
     static func localizedString(_ key: String, localeIdentifier: String) -> String {
+        cachedLocalizedString(key, localeIdentifier: localeIdentifier)
+    }
+
+    static func format(_ key: String, _ arguments: CVarArg...) -> String {
+        String(format: localizedString(key), locale: locale, arguments: arguments)
+    }
+
+    private static func cachedLocalizedString(_ key: String, localeIdentifier: String) -> String {
+        let cacheKey = "\(localeIdentifier)\u{1F}\(key)"
+        localizedStringCacheLock.lock()
+        if let cached = localizedStringCache[cacheKey] {
+            localizedStringCacheLock.unlock()
+            return cached
+        }
+        localizedStringCacheLock.unlock()
+
+        let resolved = uncachedLocalizedString(key, localeIdentifier: localeIdentifier)
+
+        localizedStringCacheLock.lock()
+        localizedStringCache[cacheKey] = resolved
+        localizedStringCacheLock.unlock()
+        return resolved
+    }
+
+    private static func uncachedLocalizedString(_ key: String, localeIdentifier: String) -> String {
         if let localized = resolvedLocalizedString(key, localeIdentifier: localeIdentifier) {
             return localized
         }
@@ -66,10 +87,6 @@ enum AppLocalization {
             return english
         }
         return Bundle.main.localizedString(forKey: key, value: key, table: nil)
-    }
-
-    static func format(_ key: String, _ arguments: CVarArg...) -> String {
-        String(format: localizedString(key), locale: locale, arguments: arguments)
     }
 
     private static func currentLanguageSnapshot() -> LanguageSnapshot {

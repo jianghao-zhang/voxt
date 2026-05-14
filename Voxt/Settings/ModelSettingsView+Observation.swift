@@ -142,6 +142,12 @@ extension ModelSettingsView {
                 .onChange(of: selectedTags) { _, _ in
                     handleCatalogFilterSelectionChange()
                 }
+                .onChange(of: isActive) { _, _ in
+                    handleModelSettingsVisibilityChange()
+                }
+                .onChange(of: mainWindowState.isVisible) { _, _ in
+                    handleModelSettingsVisibilityChange()
+                }
         )
 
         let stateObserved = AnyView(
@@ -150,7 +156,7 @@ extension ModelSettingsView {
                     handleImmediateDownloadLifecycleChange()
                 }
                 .onReceive(downloadMetadataRefreshPublisher) { _ in
-                    refreshCatalogSnapshot()
+                    handleDownloadMetadataChange()
                 }
         )
 
@@ -250,12 +256,30 @@ extension ModelSettingsView {
         refreshCatalogSnapshot()
     }
 
+    func handleModelSettingsVisibilityChange() {
+        guard isActive else { return }
+        guard mainWindowState.isVisible else { return }
+        refreshModelInstallStateIfNeeded()
+        pruneSelectedTags()
+        refreshCatalogSnapshot()
+    }
+
     func handleImmediateDownloadLifecycleChange() {
         guard isActive else { return }
         guard mainWindowState.isVisible else { return }
         guard shouldPollModelState else { return }
         refreshModelInstallStateIfNeeded()
         pruneSelectedTags()
+        refreshCatalogSnapshot()
+    }
+
+    func handleDownloadMetadataChange() {
+        guard ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+            isActive: isActive,
+            isWindowVisible: mainWindowState.isVisible
+        ) else {
+            return
+        }
         refreshCatalogSnapshot()
     }
 

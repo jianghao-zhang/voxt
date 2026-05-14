@@ -1,6 +1,13 @@
 import Foundation
 
 enum ModelSettingsProgressRefreshSupport {
+    static func shouldRefreshCatalogForMetadataChange(
+        isActive: Bool,
+        isWindowVisible: Bool
+    ) -> Bool {
+        isActive && isWindowVisible
+    }
+
     static func shouldPollModelState(
         mlxState: MLXModelManager.ModelState,
         mlxActiveDownloadRepos: Set<String>,

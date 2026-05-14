@@ -2,6 +2,27 @@ import XCTest
 @testable import Voxt
 
 final class ModelSettingsProgressRefreshSupportTests: XCTestCase {
+    func testShouldRefreshCatalogForMetadataChangeOnlyWhenActiveAndVisible() {
+        XCTAssertTrue(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: true,
+                isWindowVisible: true
+            )
+        )
+        XCTAssertFalse(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: false,
+                isWindowVisible: true
+            )
+        )
+        XCTAssertFalse(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: true,
+                isWindowVisible: false
+            )
+        )
+    }
+
     func testShouldPollModelStateWhenNonCurrentMLXDownloadIsActive() {
         let shouldPoll = ModelSettingsProgressRefreshSupport.shouldPollModelState(
             mlxState: .notDownloaded,
