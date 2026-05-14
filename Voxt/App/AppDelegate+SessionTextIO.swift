@@ -157,7 +157,7 @@ extension AppDelegate {
             llmDurationSeconds: llmDurationSeconds,
             sessionOutputMode: sessionOutputMode,
             userMainLanguage: userMainLanguage,
-            matcher: dictionaryStore.makeMatcherIfEnabled(activeGroupID: activeDictionaryGroupID()),
+            matcher: dictionaryStore.makeMatcherIfEnabled(for: text, activeGroupID: activeDictionaryGroupID()),
             usesConservativeEvidence: shouldUseConservativeDictionaryEvidenceForCurrentSession(),
             automaticReplacementEnabled: UserDefaults.standard.bool(
                 forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled
@@ -189,7 +189,7 @@ extension AppDelegate {
             llmDurationSeconds: llmDurationSeconds,
             sessionOutputMode: sessionOutputMode,
             userMainLanguage: userMainLanguage,
-            matcher: dictionaryStore.makeMatcherIfEnabled(activeGroupID: activeDictionaryGroupID()),
+            matcher: dictionaryStore.makeMatcherIfEnabled(for: originalText, activeGroupID: activeDictionaryGroupID()),
             usesConservativeEvidence: shouldUseConservativeDictionaryEvidenceForCurrentSession(),
             automaticReplacementEnabled: UserDefaults.standard.bool(
                 forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled

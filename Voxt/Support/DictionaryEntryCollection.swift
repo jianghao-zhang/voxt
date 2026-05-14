@@ -109,7 +109,7 @@ enum DictionaryEntryCollection {
         return selectedTerms.joined(separator: "\n")
     }
 
-    private static func matcherConfiguration(
+    static func matcherConfiguration(
         for entries: [DictionaryEntry],
         activeGroupID: UUID?
     ) -> (entries: [DictionaryEntry], blockedGlobalMatchKeys: Set<String>) {

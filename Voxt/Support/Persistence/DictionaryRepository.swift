@@ -6,6 +6,7 @@ protocol DictionaryRepositoryProtocol: AnyObject, Sendable {
     func allTerms(limit: Int?) throws -> [String]
     func entries(filter: DictionaryFilter, query: String, limit: Int, offset: Int) throws -> [DictionaryEntry]
     func entryCount(filter: DictionaryFilter, query: String) throws -> Int
+    func matchingEntries(sourceText: String, activeGroupID: UUID?, limit: Int) throws -> [DictionaryEntry]
     func upsert(_ entry: DictionaryEntry) throws
     func replaceAll(_ entries: [DictionaryEntry]) throws
     func delete(id: UUID) throws
@@ -140,6 +141,66 @@ final class DictionaryRepository: DictionaryRepositoryProtocol, @unchecked Senda
                 arguments: arguments
             ) ?? 0
         }
+    }
+
+    func matchingEntries(sourceText: String, activeGroupID: UUID?, limit: Int = 200) throws -> [DictionaryEntry] {
+        let normalizedSource = DictionaryStore.normalizeTerm(sourceText)
+        guard !normalizedSource.isEmpty, limit > 0 else { return [] }
+
+        let queryLimit = min(max(limit * 8, 200), 1_000)
+        let candidates = try fetchEntries(
+            sql: """
+                WITH matched_rows AS (
+                    SELECT e.id, length(e.normalizedTerm) AS matchLength, e.matchCount, e.updatedAt, e.term
+                    FROM dictionary_entries e
+                    WHERE e.status = ?
+                      AND \(scopeSQL(activeGroupID: activeGroupID))
+                      AND length(e.normalizedTerm) > 0
+                      AND instr(?, e.normalizedTerm) > 0
+
+                    UNION
+
+                    SELECT e.id, length(r.normalizedText) AS matchLength, e.matchCount, e.updatedAt, e.term
+                    FROM dictionary_replacement_terms r
+                    JOIN dictionary_entries e ON e.id = r.entryID
+                    WHERE e.status = ?
+                      AND \(scopeSQL(activeGroupID: activeGroupID))
+                      AND length(r.normalizedText) > 0
+                      AND instr(?, r.normalizedText) > 0
+
+                    UNION
+
+                    SELECT e.id, length(v.normalizedText) AS matchLength, e.matchCount, e.updatedAt, e.term
+                    FROM dictionary_observed_variants v
+                    JOIN dictionary_entries e ON e.id = v.entryID
+                    WHERE e.status = ?
+                      AND \(scopeSQL(activeGroupID: activeGroupID))
+                      AND length(v.normalizedText) > 0
+                      AND instr(?, v.normalizedText) > 0
+                ),
+                matched_ids AS (
+                    SELECT
+                        id,
+                        MAX(matchLength) AS matchLength,
+                        MAX(matchCount) AS matchCount,
+                        MAX(updatedAt) AS updatedAt,
+                        MIN(term) AS term
+                    FROM matched_rows
+                    GROUP BY id
+                )
+                SELECT id FROM matched_ids
+                ORDER BY matchLength DESC, matchCount DESC, updatedAt DESC, term COLLATE NOCASE ASC
+                LIMIT ?
+                """,
+            arguments: matchingEntriesArguments(
+                normalizedSource: normalizedSource,
+                activeGroupID: activeGroupID,
+                limit: queryLimit
+            )
+        )
+        return Array(candidates
+            .filter { entryMatchesSource($0, normalizedSource: normalizedSource) }
+            .prefix(limit))
     }
 
     func upsert(_ entry: DictionaryEntry) throws {
@@ -450,5 +511,82 @@ final class DictionaryRepository: DictionaryRepositoryProtocol, @unchecked Senda
 
     private func sqlPlaceholders(count: Int) -> String {
         "(\(Array(repeating: "?", count: count).joined(separator: ",")))"
+    }
+
+    private func scopeSQL(activeGroupID: UUID?) -> String {
+        activeGroupID == nil ? "e.groupID IS NULL" : "(e.groupID IS NULL OR e.groupID = ?)"
+    }
+
+    private func matchingEntriesArguments(
+        normalizedSource: String,
+        activeGroupID: UUID?,
+        limit: Int
+    ) -> StatementArguments {
+        var arguments: StatementArguments = []
+        for _ in 0..<3 {
+            arguments += [DictionaryEntryStatus.active.rawValue]
+            if let activeGroupID {
+                arguments += [activeGroupID.uuidString]
+            }
+            arguments += [normalizedSource]
+        }
+        arguments += [limit]
+        return arguments
+    }
+
+    private func entryMatchesSource(_ entry: DictionaryEntry, normalizedSource: String) -> Bool {
+        normalizedNeedles(for: entry).contains { sourceContainsNeedle($0, normalizedSource: normalizedSource) }
+    }
+
+    private func normalizedNeedles(for entry: DictionaryEntry) -> [String] {
+        var values = [entry.normalizedTerm]
+        values.append(contentsOf: entry.replacementTerms.map(\.normalizedText))
+        values.append(contentsOf: entry.observedVariants.map(\.normalizedText))
+        return values
+            .map(DictionaryStore.normalizeTerm)
+            .filter { !$0.isEmpty }
+    }
+
+    private func sourceContainsNeedle(_ needle: String, normalizedSource: String) -> Bool {
+        var searchRange: Range<String.Index>? = normalizedSource.startIndex..<normalizedSource.endIndex
+        while let range = normalizedSource.range(of: needle, options: [], range: searchRange) {
+            if hasValidBoundary(before: range.lowerBound, after: range.upperBound, needle: needle, source: normalizedSource) {
+                return true
+            }
+            searchRange = range.upperBound..<normalizedSource.endIndex
+        }
+        return false
+    }
+
+    private func hasValidBoundary(
+        before lowerBound: String.Index,
+        after upperBound: String.Index,
+        needle: String,
+        source: String
+    ) -> Bool {
+        let needsLeadingBoundary = needle.unicodeScalars.first.map(isASCIIAlphaNumeric) ?? false
+        let needsTrailingBoundary = needle.unicodeScalars.last.map(isASCIIAlphaNumeric) ?? false
+
+        if needsLeadingBoundary,
+           lowerBound > source.startIndex,
+           let previous = source[..<lowerBound].unicodeScalars.last,
+           isASCIIAlphaNumeric(previous) {
+            return false
+        }
+
+        if needsTrailingBoundary,
+           upperBound < source.endIndex,
+           let next = source[upperBound...].unicodeScalars.first,
+           isASCIIAlphaNumeric(next) {
+            return false
+        }
+
+        return true
+    }
+
+    private func isASCIIAlphaNumeric(_ scalar: UnicodeScalar) -> Bool {
+        (65...90).contains(Int(scalar.value))
+            || (97...122).contains(Int(scalar.value))
+            || (48...57).contains(Int(scalar.value))
     }
 }

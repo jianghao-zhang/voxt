@@ -629,8 +629,17 @@ final class DictionaryStore: ObservableObject {
         )
     }
 
+    func makeMatcherIfEnabled(for text: String, activeGroupID: UUID?) -> DictionaryMatcher? {
+        let configuration = matcherConfiguration(for: activeGroupID, sourceText: text)
+        guard !configuration.entries.isEmpty else { return nil }
+        return DictionaryMatcher(
+            entries: configuration.entries,
+            blockedGlobalMatchKeys: configuration.blockedGlobalMatchKeys
+        )
+    }
+
     func correctionContext(for text: String, activeGroupID: UUID?) -> DictionaryCorrectionResult? {
-        guard let matcher = makeMatcherIfEnabled(activeGroupID: activeGroupID) else { return nil }
+        guard let matcher = makeMatcherIfEnabled(for: text, activeGroupID: activeGroupID) else { return nil }
         return matcher.applyCorrections(
             to: text,
             automaticReplacementEnabled: defaults.bool(forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled)
@@ -638,7 +647,7 @@ final class DictionaryStore: ObservableObject {
     }
 
     func matchContext(for text: String, activeGroupID: UUID?) -> DictionaryCorrectionResult? {
-        guard let matcher = makeMatcherIfEnabled(activeGroupID: activeGroupID) else { return nil }
+        guard let matcher = makeMatcherIfEnabled(for: text, activeGroupID: activeGroupID) else { return nil }
         let candidates = matcher.recallCandidates(in: text)
         guard !candidates.isEmpty else { return nil }
         return DictionaryCorrectionResult(
@@ -650,7 +659,7 @@ final class DictionaryStore: ObservableObject {
     }
 
     func glossaryContext(for text: String, activeGroupID: UUID?) -> DictionaryPromptContext? {
-        guard let matcher = makeMatcherIfEnabled(activeGroupID: activeGroupID) else { return nil }
+        guard let matcher = makeMatcherIfEnabled(for: text, activeGroupID: activeGroupID) else { return nil }
         let context = matcher.promptContext(for: text)
         return context.isEmpty ? nil : context
     }
@@ -700,6 +709,24 @@ final class DictionaryStore: ObservableObject {
                 activeGroupID: activeGroupID
             )
         )
+    }
+
+    private func matcherConfiguration(
+        for activeGroupID: UUID?,
+        sourceText: String
+    ) -> (entries: [DictionaryEntry], blockedGlobalMatchKeys: Set<String>) {
+        if let repository,
+           let candidates = try? repository.matchingEntries(
+               sourceText: sourceText,
+               activeGroupID: activeGroupID,
+               limit: 200
+           ) {
+            return DictionaryEntryCollection.matcherConfiguration(
+                for: candidates,
+                activeGroupID: activeGroupID
+            )
+        }
+        return matcherConfiguration(for: activeGroupID)
     }
 
     private func prepareEntryInput(

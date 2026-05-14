@@ -291,6 +291,21 @@ final class SQLiteStorageRepositoryTests: XCTestCase {
         }
         try dictionaryRepository.replaceAll(dictionaryEntries)
         XCTAssertEqual(try dictionaryRepository.entryCount(query: "Alias19999"), 1)
+        XCTAssertEqual(
+            try dictionaryRepository.matchingEntries(
+                sourceText: "Please use Alias19999 today.",
+                activeGroupID: nil,
+                limit: 20
+            ).map(\.term),
+            ["Term19999"]
+        )
+        XCTAssertTrue(
+            try dictionaryRepository.matchingEntries(
+                sourceText: "No seeded term appears here.",
+                activeGroupID: nil,
+                limit: 20
+            ).isEmpty
+        )
 
         let historyEntries = (0..<20_000).map {
             makeHistoryEntry(
