@@ -13,18 +13,32 @@ extension RemoteProviderConfigurationSheet {
         llmProviderForPicker == .openAI
     }
 
+    var isCodexLLMProvider: Bool {
+        llmProviderForPicker == .codex
+    }
+
+    var usesOpenAIResponsesOptions: Bool {
+        isOpenAILLMProvider || isCodexLLMProvider
+    }
+
     var showsLargeAdvancedProviderSection: Bool {
         llmProviderForPicker != nil
     }
 
     var apiKeyFieldTitle: String {
-        (llmProviderForPicker?.apiKeyIsOptional == true)
+        if isCodexLLMProvider {
+            return AppLocalization.localizedString("Codex Login")
+        }
+        return (llmProviderForPicker?.apiKeyIsOptional == true)
             ? AppLocalization.localizedString("API Key (Optional)")
             : AppLocalization.localizedString("API Key")
     }
 
     var apiKeyFieldPlaceholder: String {
-        (llmProviderForPicker?.apiKeyIsOptional == true)
+        if isCodexLLMProvider {
+            return AppLocalization.localizedString("Uses ~/.codex/auth.json")
+        }
+        return (llmProviderForPicker?.apiKeyIsOptional == true)
             ? AppLocalization.localizedString("Paste API key (optional)")
             : AppLocalization.localizedString("Paste API key")
     }
@@ -189,7 +203,7 @@ extension RemoteProviderConfigurationSheet {
 
     var generationThinkingEffortMenuOptions: [SettingsMenuOption<String>] {
         let values: [String]
-        if isOpenAILLMProvider {
+        if usesOpenAIResponsesOptions {
             values = OpenAIReasoningEffort.supportedCases(forModel: resolvedModelValue())
                 .filter { $0 != .automatic }
                 .map(\.rawValue)
@@ -234,14 +248,14 @@ extension RemoteProviderConfigurationSheet {
             providerID: configuration.providerID,
             model: resolvedModelValue(),
             endpoint: isDoubaoASRTest ? "" : endpoint.trimmingCharacters(in: .whitespacesAndNewlines),
-            apiKey: isDoubaoASRTest ? "" : apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            apiKey: (isDoubaoASRTest || isCodexLLMProvider) ? "" : apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
             appID: appID.trimmingCharacters(in: .whitespacesAndNewlines),
             accessToken: accessToken.trimmingCharacters(in: .whitespacesAndNewlines),
             searchEnabled: (llmProviderForPicker?.supportsHostedSearch == true) ? searchEnabled : false,
             openAIChunkPseudoRealtimeEnabled: isOpenAIASRTest ? openAIChunkPseudoRealtimeEnabled : false,
-            openAIReasoningEffort: isOpenAILLMProvider ? openAIReasoningEffortSnapshot() : OpenAIReasoningEffort.automatic.rawValue,
-            openAITextVerbosity: isOpenAILLMProvider ? openAITextVerbosity : OpenAITextVerbosity.automatic.rawValue,
-            openAIMaxOutputTokens: isOpenAILLMProvider ? parsedOptionalInt(generationMaxOutputTokensText) : nil,
+            openAIReasoningEffort: usesOpenAIResponsesOptions ? openAIReasoningEffortSnapshot() : OpenAIReasoningEffort.automatic.rawValue,
+            openAITextVerbosity: usesOpenAIResponsesOptions ? openAITextVerbosity : OpenAITextVerbosity.automatic.rawValue,
+            openAIMaxOutputTokens: usesOpenAIResponsesOptions ? parsedOptionalInt(generationMaxOutputTokensText) : nil,
             doubaoDictionaryMode: doubaoDictionaryMode,
             doubaoEnableRequestHotwords: doubaoEnableRequestHotwords,
             doubaoEnableRequestCorrections: doubaoEnableRequestCorrections,
@@ -446,6 +460,8 @@ extension RemoteProviderConfigurationSheet {
             return AppLocalization.localizedString("Aliyun API keys are region-specific; use the matching endpoint.")
         case .volcengine:
             return AppLocalization.localizedString("Volcengine models should use the Responses endpoint in the same region as the API key.")
+        case .codex:
+            return AppLocalization.localizedString("Codex uses the ChatGPT subscription backend and local Codex OAuth credentials.")
         default:
             return nil
         }

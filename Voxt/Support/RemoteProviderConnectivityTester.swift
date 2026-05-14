@@ -423,9 +423,14 @@ struct RemoteProviderConnectivityTester {
             }
             headers["Authorization"] = "Bearer \(configuration.apiKey)"
             return try await testMiniMaxReachability(endpoint: endpoint, headers: headers, model: model)
-        case .openAI, .ollama, .omlx, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio, .aliyunBailian:
+        case .openAI, .codex, .ollama, .omlx, .deepseek, .openrouter, .grok, .zai, .volcengine, .kimi, .lmStudio, .aliyunBailian:
             if !configuration.apiKey.isEmpty {
                 headers["Authorization"] = "Bearer \(configuration.apiKey)"
+            }
+            if provider == .codex {
+                for (key, value) in try await CodexOAuthCredentialProvider().authorizationHeaders() {
+                    headers[key] = value
+                }
             }
             if provider.usesResponsesAPI {
                 return try await testResponsesReachability(

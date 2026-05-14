@@ -101,6 +101,9 @@ enum OpenAIReasoningEffort: String, CaseIterable, Identifiable {
         if normalized == "gpt-5.2-codex" || normalized.hasPrefix("gpt-5.2-codex-") {
             return [.automatic, .low, .medium, .high, .xhigh]
         }
+        if normalized == "gpt-5.3-codex-spark" || normalized.hasPrefix("gpt-5.3-codex-spark-") {
+            return [.automatic, .none, .low, .medium, .high]
+        }
         if normalized == "gpt-5.1-codex-max" || normalized.hasPrefix("gpt-5.1-codex-max-") {
             return [.automatic, .none, .medium, .high, .xhigh]
         }

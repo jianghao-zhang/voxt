@@ -40,6 +40,14 @@ struct RemoteLLMRuntimeClient {
         }
     }
 
+    func authorizationHeaders(
+        provider: RemoteLLMProvider,
+        configuration _: RemoteProviderConfiguration
+    ) async throws -> [String: String] {
+        guard provider == .codex else { return [:] }
+        return try await CodexOAuthCredentialProvider().authorizationHeaders()
+    }
+
     private struct StreamingPartialDeliveryState {
         var lastPublishedAt = Date.distantPast
         var lastPublishedLength = 0
@@ -93,6 +101,9 @@ struct RemoteLLMRuntimeClient {
         let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        for (key, value) in try await authorizationHeaders(provider: provider, configuration: configuration) {
+            request.setValue(value, forHTTPHeaderField: key)
         }
 
         let (_, response) = try await VoxtNetworkSession.active.data(for: request)
@@ -566,6 +577,7 @@ struct RemoteLLMRuntimeClient {
             intent: intent
         ).applying(configuration.effectiveGenerationSettings(provider: provider))
         let shouldAttemptStreaming = onPartialText != nil && supportsStreaming(provider: provider, intent: intent)
+        let authHeaders = try await authorizationHeaders(provider: provider, configuration: configuration)
 
         if shouldAttemptStreaming, let onPartialText {
             do {
@@ -579,7 +591,8 @@ struct RemoteLLMRuntimeClient {
                     previousResponseID: previousResponseID,
                     tuning: tuning,
                     textFormat: textFormat,
-                    streamingEnabled: true
+                    streamingEnabled: true,
+                    additionalHeaders: authHeaders
                 )
                 let requestStartedAt = Date()
                 logRequest(
@@ -618,7 +631,8 @@ struct RemoteLLMRuntimeClient {
             previousResponseID: previousResponseID,
             tuning: tuning,
             textFormat: textFormat,
-            streamingEnabled: false
+            streamingEnabled: false,
+            additionalHeaders: authHeaders
         )
         let requestStartedAt = Date()
         logRequest(
