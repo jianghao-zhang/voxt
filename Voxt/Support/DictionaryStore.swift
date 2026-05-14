@@ -503,7 +503,20 @@ final class DictionaryStore: ObservableObject {
         maxCount: Int = 24,
         maxCharacters: Int = 320
     ) -> String {
-        DictionaryEntryCollection.promptBiasTermsText(
+        if let repository,
+           let entries = try? repository.activeEntriesForRemoteRequest(
+            activeGroupID: activeGroupID,
+            limit: max(maxCount * 4, maxCount)
+           ) {
+            return DictionaryEntryCollection.promptBiasTermsText(
+                from: entries,
+                activeGroupID: activeGroupID,
+                maxCount: maxCount,
+                maxCharacters: maxCharacters
+            )
+        }
+
+        return DictionaryEntryCollection.promptBiasTermsText(
             from: entries,
             activeGroupID: activeGroupID,
             maxCount: maxCount,
@@ -620,15 +633,6 @@ final class DictionaryStore: ObservableObject {
         return importTransferEntries(payload.entries)
     }
 
-    func makeMatcherIfEnabled(activeGroupID: UUID?) -> DictionaryMatcher? {
-        let configuration = matcherConfiguration(for: activeGroupID)
-        guard !configuration.entries.isEmpty else { return nil }
-        return DictionaryMatcher(
-            entries: configuration.entries,
-            blockedGlobalMatchKeys: configuration.blockedGlobalMatchKeys
-        )
-    }
-
     func makeMatcherIfEnabled(for text: String, activeGroupID: UUID?) -> DictionaryMatcher? {
         let configuration = matcherConfiguration(for: activeGroupID, sourceText: text)
         guard !configuration.entries.isEmpty else { return nil }
@@ -679,8 +683,19 @@ final class DictionaryStore: ObservableObject {
         }
     }
 
-    func activeEntriesForRemoteRequest(activeGroupID: UUID?) -> [DictionaryEntry] {
-        DictionaryEntryCollection.activeEntriesForRemoteRequest(from: entries, activeGroupID: activeGroupID)
+    func activeEntriesForRemoteRequest(activeGroupID: UUID?, limit: Int = 5_000) -> [DictionaryEntry] {
+        if let repository,
+           let entries = try? repository.activeEntriesForRemoteRequest(
+            activeGroupID: activeGroupID,
+            limit: limit
+           ) {
+            return entries
+        }
+
+        return Array(
+            DictionaryEntryCollection.activeEntriesForRemoteRequest(from: entries, activeGroupID: activeGroupID)
+                .prefix(limit)
+        )
     }
 
     func activeEntriesAcrossAllScopesForRemoteSync() -> [DictionaryEntry] {
@@ -688,9 +703,11 @@ final class DictionaryStore: ObservableObject {
     }
 
     func recordMatches(_ candidates: [DictionaryMatchCandidate]) {
-        let updatedEntries = recordCandidates(candidates)
         guard !candidates.isEmpty else { return }
-        replaceEntries(entries)
+        objectWillChange.send()
+        let updatedEntries = recordCandidates(candidates)
+        guard !updatedEntries.isEmpty else { return }
+        filteredEntriesCache = DictionaryEntryCollection.filteredEntriesCache(for: entries)
         persistEntries(updatedEntries)
     }
 

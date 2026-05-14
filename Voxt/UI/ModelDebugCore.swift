@@ -230,12 +230,14 @@ final class ASRDebugViewModel: ObservableObject {
         whisperTranscriber = WhisperKitTranscriber(modelManager: whisperModelManager)
         mlxTranscriber.dictionaryEntryProvider = {
             appDelegate.dictionaryStore.activeEntriesForRemoteRequest(
-                activeGroupID: appDelegate.activeDictionaryGroupID()
+                activeGroupID: appDelegate.activeDictionaryGroupID(),
+                limit: 64
             )
         }
         remoteTranscriber.doubaoDictionaryEntryProvider = {
             appDelegate.dictionaryStore.activeEntriesForRemoteRequest(
-                activeGroupID: appDelegate.activeDictionaryGroupID()
+                activeGroupID: appDelegate.activeDictionaryGroupID(),
+                limit: 5_000
             )
         }
         remoteConfigurations = RemoteModelConfigurationStore.loadConfigurations(

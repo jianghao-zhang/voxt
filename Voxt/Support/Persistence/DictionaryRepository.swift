@@ -7,6 +7,7 @@ protocol DictionaryRepositoryProtocol: AnyObject, Sendable {
     func entries(filter: DictionaryFilter, query: String, limit: Int, offset: Int) throws -> [DictionaryEntry]
     func entryCount(filter: DictionaryFilter, query: String) throws -> Int
     func matchingEntries(sourceText: String, activeGroupID: UUID?, limit: Int) throws -> [DictionaryEntry]
+    func activeEntriesForRemoteRequest(activeGroupID: UUID?, limit: Int) throws -> [DictionaryEntry]
     func upsert(_ entry: DictionaryEntry) throws
     func replaceAll(_ entries: [DictionaryEntry]) throws
     func delete(id: UUID) throws
@@ -203,6 +204,37 @@ final class DictionaryRepository: DictionaryRepositoryProtocol, @unchecked Senda
             .prefix(limit))
     }
 
+    func activeEntriesForRemoteRequest(activeGroupID: UUID?, limit: Int) throws -> [DictionaryEntry] {
+        guard limit > 0 else { return [] }
+        var arguments: StatementArguments = [DictionaryEntryStatus.active.rawValue]
+        let scopeSQL: String
+        let scopeOrderSQL: String
+        if let activeGroupID {
+            scopeSQL = "(groupID IS NULL OR groupID = ?)"
+            scopeOrderSQL = "CASE WHEN groupID = ? THEN 0 ELSE 1 END,"
+            arguments += [activeGroupID.uuidString, activeGroupID.uuidString]
+        } else {
+            scopeSQL = "groupID IS NULL"
+            scopeOrderSQL = ""
+        }
+        arguments += [limit]
+
+        return try fetchEntries(
+            sql: """
+                SELECT id FROM dictionary_entries
+                WHERE status = ? AND \(scopeSQL)
+                ORDER BY
+                    \(scopeOrderSQL)
+                    matchCount DESC,
+                    COALESCE(lastMatchedAt, 0) DESC,
+                    updatedAt DESC,
+                    term COLLATE NOCASE ASC
+                LIMIT ?
+                """,
+            arguments: arguments
+        )
+    }
+
     func upsert(_ entry: DictionaryEntry) throws {
         try database.dbQueue.write { db in
             try upsert(entry, db: db)
@@ -276,31 +308,65 @@ final class DictionaryRepository: DictionaryRepositoryProtocol, @unchecked Senda
     }
 
     private func entries(for ids: [String], db: Database) throws -> [DictionaryEntry] {
-        var entries: [DictionaryEntry] = []
-        entries.reserveCapacity(ids.count)
+        guard !ids.isEmpty else { return [] }
 
-        for id in ids {
-            guard let row = try Row.fetchOne(
+        var entryRowsByID: [String: Row] = [:]
+        var replacementsByEntryID: [String: [DictionaryReplacementTerm]] = [:]
+        var variantsByEntryID: [String: [ObservedVariant]] = [:]
+
+        for chunk in chunks(ids, size: 500) {
+            let entryRows = try Row.fetchAll(
                 db,
-                sql: "SELECT * FROM dictionary_entries WHERE id = ?",
-                arguments: [id]
-            ) else {
-                continue
+                sql: "SELECT * FROM dictionary_entries WHERE id IN \(sqlPlaceholders(count: chunk.count))",
+                arguments: StatementArguments(chunk)
+            )
+            for row in entryRows {
+                let id: String = row["id"]
+                entryRowsByID[id] = row
             }
 
-            let replacements = try Row.fetchAll(
+            let replacementRows = try Row.fetchAll(
                 db,
-                sql: "SELECT * FROM dictionary_replacement_terms WHERE entryID = ? ORDER BY text COLLATE NOCASE ASC",
-                arguments: [id]
-            ).compactMap { replacement(from: $0) }
+                sql: """
+                    SELECT * FROM dictionary_replacement_terms
+                    WHERE entryID IN \(sqlPlaceholders(count: chunk.count))
+                    ORDER BY entryID, text COLLATE NOCASE ASC
+                    """,
+                arguments: StatementArguments(chunk)
+            )
+            for row in replacementRows {
+                let entryID: String = row["entryID"]
+                guard let replacement = replacement(from: row) else { continue }
+                replacementsByEntryID[entryID, default: []].append(replacement)
+            }
 
-            let variants = try Row.fetchAll(
+            let variantRows = try Row.fetchAll(
                 db,
-                sql: "SELECT * FROM dictionary_observed_variants WHERE entryID = ? ORDER BY count DESC, lastSeenAt DESC",
-                arguments: [id]
-            ).compactMap { observedVariant(from: $0) }
+                sql: """
+                    SELECT * FROM dictionary_observed_variants
+                    WHERE entryID IN \(sqlPlaceholders(count: chunk.count))
+                    ORDER BY entryID, count DESC, lastSeenAt DESC
+                    """,
+                arguments: StatementArguments(chunk)
+            )
+            for row in variantRows {
+                let entryID: String = row["entryID"]
+                guard let variant = observedVariant(from: row) else { continue }
+                variantsByEntryID[entryID, default: []].append(variant)
+            }
+        }
 
-            entries.append(entry(from: row, replacementTerms: replacements, observedVariants: variants))
+        var entries: [DictionaryEntry] = []
+        entries.reserveCapacity(ids.count)
+        for id in ids {
+            guard let row = entryRowsByID[id] else { continue }
+            entries.append(
+                entry(
+                    from: row,
+                    replacementTerms: replacementsByEntryID[id] ?? [],
+                    observedVariants: variantsByEntryID[id] ?? []
+                )
+            )
         }
 
         return entries
@@ -511,6 +577,19 @@ final class DictionaryRepository: DictionaryRepositoryProtocol, @unchecked Senda
 
     private func sqlPlaceholders(count: Int) -> String {
         "(\(Array(repeating: "?", count: count).joined(separator: ",")))"
+    }
+
+    private func chunks<Value>(_ values: [Value], size: Int) -> [[Value]] {
+        guard size > 0 else { return [values] }
+        var result: [[Value]] = []
+        result.reserveCapacity((values.count + size - 1) / size)
+        var startIndex = values.startIndex
+        while startIndex < values.endIndex {
+            let endIndex = values.index(startIndex, offsetBy: size, limitedBy: values.endIndex) ?? values.endIndex
+            result.append(Array(values[startIndex..<endIndex]))
+            startIndex = endIndex
+        }
+        return result
     }
 
     private func scopeSQL(activeGroupID: UUID?) -> String {

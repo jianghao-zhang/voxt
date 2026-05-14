@@ -154,6 +154,20 @@ final class VoxtDatabase: @unchecked Sendable {
                 """)
         }
 
+        migrator.registerMigration("v4_dictionary_active_scope_indexes") { db in
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_dictionary_active_scope_rank
+                    ON dictionary_entries(
+                        status,
+                        groupID,
+                        matchCount DESC,
+                        lastMatchedAt DESC,
+                        updatedAt DESC,
+                        term COLLATE NOCASE ASC
+                    );
+                """)
+        }
+
         return migrator
     }
 }

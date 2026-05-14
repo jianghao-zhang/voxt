@@ -27,6 +27,7 @@ final class SQLiteStorageRepositoryTests: XCTestCase {
 
         let indexes = try database.debugSQLiteObjectNames(type: "index")
         XCTAssertTrue(indexes.contains("idx_dictionary_normalized_scope"))
+        XCTAssertTrue(indexes.contains("idx_dictionary_active_scope_rank"))
         XCTAssertTrue(indexes.contains("idx_history_kind_created"))
     }
 
@@ -291,6 +292,10 @@ final class SQLiteStorageRepositoryTests: XCTestCase {
         }
         try dictionaryRepository.replaceAll(dictionaryEntries)
         XCTAssertEqual(try dictionaryRepository.entryCount(query: "Alias19999"), 1)
+        XCTAssertEqual(
+            try dictionaryRepository.activeEntriesForRemoteRequest(activeGroupID: nil, limit: 64).count,
+            64
+        )
         XCTAssertEqual(
             try dictionaryRepository.matchingEntries(
                 sourceText: "Please use Alias19999 today.",

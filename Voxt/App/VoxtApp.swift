@@ -392,7 +392,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         remoteASRTranscriber.doubaoDictionaryEntryProvider = { [weak self] in
             guard let self else { return [] }
             return self.dictionaryStore.activeEntriesForRemoteRequest(
-                activeGroupID: self.activeDictionaryGroupID()
+                activeGroupID: self.activeDictionaryGroupID(),
+                limit: 5_000
             )
         }
 
