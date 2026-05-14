@@ -475,8 +475,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         partialLoopTask = nil
         captureWatchdogTask?.cancel()
         captureWatchdogTask = nil
-        realtimeEagerTask?.cancel()
-        realtimeEagerTask = nil
+        stopRealtimePollingTasks()
 
         isFinalizingTranscription = true
         finalizationTask?.cancel()
@@ -1274,10 +1273,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         activeInferencePassKind = nil
         captureWatchdogTask?.cancel()
         captureWatchdogTask = nil
-        realtimeEagerTask?.cancel()
-        realtimeEagerTask = nil
-        realtimeLevelTask?.cancel()
-        realtimeLevelTask = nil
+        stopRealtimePollingTasks()
         realtimeEagerLastSampleCount = 0
         realtimeEagerLastPublishedSampleCount = 0
         realtimeTraceEntries.removeAll(keepingCapacity: false)
@@ -1296,10 +1292,7 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
     private func cleanupPreparedWhisperIfNeeded() {
         preparedWhisper?.audioProcessor.stopRecording()
         preparedWhisper?.audioProcessor.purgeAudioSamples(keepingLast: 0)
-        realtimeEagerTask?.cancel()
-        realtimeEagerTask = nil
-        realtimeLevelTask?.cancel()
-        realtimeLevelTask = nil
+        stopRealtimePollingTasks()
         activeInferencePassTask?.cancel()
         activeInferencePassTask = nil
         activeInferencePassID = nil
@@ -1319,6 +1312,13 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         preparedUseBuiltInTranslationTask = false
         isModelInitializing = false
         isFinalizingTranscription = false
+    }
+
+    private func stopRealtimePollingTasks() {
+        realtimeEagerTask?.cancel()
+        realtimeEagerTask = nil
+        realtimeLevelTask?.cancel()
+        realtimeLevelTask = nil
     }
 
     private func startAudioCaptureGraph() throws {

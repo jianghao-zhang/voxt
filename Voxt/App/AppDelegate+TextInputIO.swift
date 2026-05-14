@@ -4,6 +4,8 @@ import ApplicationServices
 
 extension AppDelegate {
     private static let axMessagingTimeout: Float = 0.05
+    private static let automaticDictionaryLearningSnippetBeforeCursor = 4_000
+    private static let automaticDictionaryLearningSnippetAfterCursor = 1_000
     private static let nativeWritableTextRoles: Set<String> = [
         kAXTextAreaRole as String,
         kAXTextFieldRole as String,
@@ -258,13 +260,6 @@ extension AppDelegate {
     func currentFocusedInputTextSnapshotForAutomaticDictionaryLearning(
         expectedBundleID: String? = nil
     ) async -> FocusedInputTextSnapshot? {
-        if let snapshot = currentFocusedInputTextSnapshot(
-            expectedBundleID: expectedBundleID,
-            logDiagnostics: false
-        ) {
-            return snapshot
-        }
-
         guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else {
             return nil
         }
@@ -272,6 +267,32 @@ extension AppDelegate {
            let bundleIdentifier = frontmostApplication.bundleIdentifier,
            bundleIdentifier != expectedBundleID {
             return nil
+        }
+
+        let bundleIdentifier = frontmostApplication.bundleIdentifier
+        let processIdentifier = frontmostApplication.processIdentifier
+        if let focusedElement = focusedAXElement(
+            preferredProcessID: processIdentifier,
+            logDiagnostics: false
+        ) {
+            let writableElement = writableTextInputElement(from: focusedElement) ?? (
+                isWritableTextInputElement(focusedElement) ? focusedElement : nil
+            )
+            if let writableElement,
+               let snippetSnapshot = focusedInputSnippetSnapshot(
+                    for: writableElement,
+                    bundleIdentifier: bundleIdentifier,
+                    processIdentifier: processIdentifier
+               ) {
+                return snippetSnapshot
+            }
+        }
+
+        if let snapshot = currentFocusedInputTextSnapshot(
+            expectedBundleID: expectedBundleID,
+            logDiagnostics: false
+        ) {
+            return snapshot
         }
 
         if let cdpSnapshot = await electronCDPFocusedInputTextSnapshot(
@@ -282,6 +303,73 @@ extension AppDelegate {
         }
 
         return nil
+    }
+
+    private func focusedInputSnippetSnapshot(
+        for writableElement: AXUIElement,
+        bundleIdentifier: String?,
+        processIdentifier: pid_t
+    ) -> FocusedInputTextSnapshot? {
+        guard axParameterizedAttributeNames(for: writableElement)
+            .contains(kAXStringForRangeParameterizedAttribute as String) else {
+            return nil
+        }
+
+        let role = axStringAttribute(kAXRoleAttribute as CFString, for: writableElement)
+        let isFocusedTarget = axBoolAttribute(kAXFocusedAttribute as CFString, for: writableElement) == true
+        let selectedRange = axRangeAttribute(kAXSelectedTextRangeAttribute as CFString, for: writableElement)
+        let sourceRange: CFRange?
+        if let selectedRange,
+           selectedRange.location >= 0,
+           let numberOfCharacters = axIntAttribute("AXNumberOfCharacters" as CFString, for: writableElement),
+           numberOfCharacters > 0 {
+            sourceRange = automaticDictionaryLearningSnippetRange(
+                selectedRange: selectedRange,
+                numberOfCharacters: numberOfCharacters
+            )
+        } else if let visibleRange = axRangeAttribute(kAXVisibleCharacterRangeAttribute as CFString, for: writableElement),
+                  visibleRange.location >= 0,
+                  visibleRange.length > 0 {
+            sourceRange = visibleRange
+        } else {
+            sourceRange = nil
+        }
+
+        guard let sourceRange,
+              sourceRange.length > 0,
+              let text = axParameterizedString(
+                kAXStringForRangeParameterizedAttribute as CFString,
+                range: sourceRange,
+                for: writableElement
+              ),
+              !text.isEmpty else {
+            return nil
+        }
+
+        return FocusedInputTextSnapshot(
+            text: text,
+            bundleIdentifier: bundleIdentifier,
+            processIdentifier: processIdentifier,
+            role: role,
+            isEditable: isWritableTextInputElement(writableElement),
+            isFocusedTarget: isFocusedTarget,
+            selectedRange: selectedNSRange(from: selectedRange),
+            failureReason: nil,
+            textSource: "ax-focused-range"
+        )
+    }
+
+    private func automaticDictionaryLearningSnippetRange(
+        selectedRange: CFRange,
+        numberOfCharacters: Int
+    ) -> CFRange {
+        let selectedLocation = min(max(selectedRange.location, 0), numberOfCharacters)
+        let selectedLength = max(selectedRange.length, 0)
+        let before = min(Self.automaticDictionaryLearningSnippetBeforeCursor, selectedLocation)
+        let start = max(selectedLocation - before, 0)
+        let requestedLength = before + selectedLength + Self.automaticDictionaryLearningSnippetAfterCursor
+        let availableLength = max(numberOfCharacters - start, 0)
+        return CFRange(location: start, length: min(requestedLength, availableLength))
     }
 
     private func focusedAXElement(
