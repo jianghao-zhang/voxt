@@ -56,7 +56,35 @@ extension AppDelegate {
             self?.handleEscapeShortcut() ?? false
         }
         hotkeyManager.start()
+        setupMouseTriggerCallbacks()
+        refreshMouseTriggerManager()
+        if mouseShortcutDefaultsObserver == nil {
+            mouseShortcutDefaultsObserver = NotificationCenter.default.addObserver(
+                forName: UserDefaults.didChangeNotification,
+                object: UserDefaults.standard,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.refreshMouseTriggerManager()
+                }
+            }
+        }
         VoxtLog.hotkey("Hotkey callbacks configured.")
+    }
+
+    func setupMouseTriggerCallbacks() {
+        mouseTriggerManager.onTranscriptionDown = { [weak self] in
+            guard let self else { return }
+            self.handleTranscriptionMouseTriggerDown()
+        }
+        mouseTriggerManager.onTranscriptionUp = { [weak self] in
+            guard let self else { return }
+            self.handleTranscriptionMouseTriggerUp()
+        }
+    }
+
+    func refreshMouseTriggerManager() {
+        mouseTriggerManager.refresh()
     }
 
     func setupLifecycleRecoveryObservers() {
@@ -106,6 +134,7 @@ extension AppDelegate {
     func scheduleHotkeyTransientStateReset(reason: String) {
         Task { @MainActor [weak self] in
             self?.hotkeyManager.resetTransientState(reason: reason)
+            self?.mouseTriggerManager.resetTransientState(reason: reason)
         }
     }
 
@@ -195,34 +224,61 @@ extension AppDelegate {
     }
 
     func handleTranscriptionHotkeyDown() {
-        let triggerMode = HotkeyPreference.loadTriggerMode()
+        handleTranscriptionTriggerDown(
+            triggerMode: HotkeyPreference.loadTriggerMode(),
+            allowsDoubleTapRewrite: true,
+            source: "hotkey"
+        )
+    }
+
+    func handleTranscriptionMouseTriggerDown() {
+        handleTranscriptionTriggerDown(
+            triggerMode: MouseTriggerPreference.loadTriggerMode(),
+            allowsDoubleTapRewrite: false,
+            source: "mouse",
+            pendingStartDelay: mouseLongPressActivationDelay,
+            pendingStartShouldStart: { [weak self] in
+                self?.mouseTriggerManager.isMiddleButtonPressed() == true
+            }
+        )
+    }
+
+    private func handleTranscriptionTriggerDown(
+        triggerMode: HotkeyPreference.TriggerMode,
+        allowsDoubleTapRewrite: Bool,
+        source: String,
+        pendingStartDelay: TimeInterval? = nil,
+        pendingStartShouldStart: (() -> Bool)? = nil
+    ) {
         VoxtLog.hotkey(
-            "Hotkey callback transcriptionDown. mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
+            "Trigger callback transcriptionDown. source=\(source), mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
         )
-        let doubleTapRewriteAction = TranscriptionDoubleTapRewriteResolver.resolve(
-            state: TranscriptionDoubleTapRewriteResolver.State(
-                triggerMode: triggerMode,
-                rewriteActivationMode: HotkeyPreference.loadRewriteActivationMode(),
-                isSessionActive: isSessionActive,
-                hasPendingTranscriptionStart: pendingTranscriptionStartTask != nil
+        if allowsDoubleTapRewrite {
+            let doubleTapRewriteAction = TranscriptionDoubleTapRewriteResolver.resolve(
+                state: TranscriptionDoubleTapRewriteResolver.State(
+                    triggerMode: triggerMode,
+                    rewriteActivationMode: HotkeyPreference.loadRewriteActivationMode(),
+                    isSessionActive: isSessionActive,
+                    hasPendingTranscriptionStart: pendingTranscriptionStartTask != nil
+                )
             )
-        )
-        switch doubleTapRewriteAction {
-        case .useStandardHandling:
-            break
-        case .scheduleDelayedTranscriptionStart:
-            let delay = NSEvent.doubleClickInterval
-            VoxtLog.hotkey("Transcription tap entering double-tap rewrite wait window. delaySec=\(delay)")
-            schedulePendingTranscriptionStart(
-                delay: delay,
-                reason: "doubleTapRewriteWait"
-            )
-            return
-        case .startRewrite:
-            VoxtLog.hotkey("Transcription second tap detected; starting rewrite instead of transcription.")
-            cancelPendingTranscriptionStart()
-            beginRecording(outputMode: .rewrite)
-            return
+            switch doubleTapRewriteAction {
+            case .useStandardHandling:
+                break
+            case .scheduleDelayedTranscriptionStart:
+                let delay = NSEvent.doubleClickInterval
+                VoxtLog.hotkey("Transcription tap entering double-tap rewrite wait window. delaySec=\(delay)")
+                schedulePendingTranscriptionStart(
+                    delay: delay,
+                    reason: "doubleTapRewriteWait"
+                )
+                return
+            case .startRewrite:
+                VoxtLog.hotkey("Transcription second tap detected; starting rewrite instead of transcription.")
+                cancelPendingTranscriptionStart()
+                beginRecording(outputMode: .rewrite)
+                return
+            }
         }
         let actions = HotkeyActionResolver.resolveTranscriptionDown(
             state: HotkeyActionResolver.State(
@@ -235,16 +291,49 @@ extension AppDelegate {
             )
         )
         for action in actions {
-            performHotkeyAction(action)
+            if action == .scheduleTranscriptionStart, let pendingStartDelay {
+                schedulePendingTranscriptionStart(
+                    delay: pendingStartDelay,
+                    reason: "\(source)LongPressDebounce",
+                    shouldStart: pendingStartShouldStart
+                )
+            } else {
+                performHotkeyAction(action)
+            }
         }
     }
 
     func handleTranscriptionHotkeyUp() {
-        let triggerMode = HotkeyPreference.loadTriggerMode()
+        handleTranscriptionTriggerUp(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
+    }
+
+    func handleTranscriptionMouseTriggerUp() {
+        handleTranscriptionTriggerUp(
+            triggerMode: MouseTriggerPreference.loadTriggerMode(),
+            source: "mouse",
+            cancelsFreshLongPressSession: true
+        )
+    }
+
+    private func handleTranscriptionTriggerUp(
+        triggerMode: HotkeyPreference.TriggerMode,
+        source: String,
+        cancelsFreshLongPressSession: Bool = false
+    ) {
         guard triggerMode == .longPress else { return }
         VoxtLog.hotkey(
-            "Hotkey callback transcriptionUp. isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
+            "Trigger callback transcriptionUp. source=\(source), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
         )
+        if cancelsFreshLongPressSession,
+           pendingTranscriptionStartTask == nil,
+           isSessionActive,
+           sessionOutputMode == .transcription,
+           let recordingStartedAt,
+           Date().timeIntervalSince(recordingStartedAt) < mouseLongPressQuickReleaseCancelInterval {
+            VoxtLog.hotkey("Mouse long-press transcription cancelled after quick release.")
+            cancelActiveRecordingSession()
+            return
+        }
         let actions = HotkeyActionResolver.resolveTranscriptionUp(
             state: HotkeyActionResolver.State(
                 triggerMode: triggerMode,
@@ -261,12 +350,22 @@ extension AppDelegate {
     }
 
     func handleTranslationHotkeyDown() {
+        handleTranslationTriggerDown(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
+    }
+
+    func handleTranslationMouseTriggerDown() {
+        handleTranslationTriggerDown(triggerMode: MouseTriggerPreference.loadTriggerMode(), source: "mouse")
+    }
+
+    private func handleTranslationTriggerDown(
+        triggerMode: HotkeyPreference.TriggerMode,
+        source: String
+    ) {
         VoxtLog.info(
-            "Translation hotkey invoked. mode=\(HotkeyPreference.loadTriggerMode().rawValue), isSessionActive=\(isSessionActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
+            "Translation trigger invoked. source=\(source), mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
         )
-        let triggerMode = HotkeyPreference.loadTriggerMode()
         VoxtLog.hotkey(
-            "Hotkey callback translationDown. mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
+            "Trigger callback translationDown. source=\(source), mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
         )
         let actions = HotkeyActionResolver.resolveTranslationDown(
             state: HotkeyActionResolver.State(
@@ -300,10 +399,20 @@ extension AppDelegate {
     }
 
     func handleTranslationHotkeyUp() {
-        let triggerMode = HotkeyPreference.loadTriggerMode()
+        handleTranslationTriggerUp(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
+    }
+
+    func handleTranslationMouseTriggerUp() {
+        handleTranslationTriggerUp(triggerMode: MouseTriggerPreference.loadTriggerMode(), source: "mouse")
+    }
+
+    private func handleTranslationTriggerUp(
+        triggerMode: HotkeyPreference.TriggerMode,
+        source: String
+    ) {
         guard triggerMode == .longPress else { return }
         VoxtLog.hotkey(
-            "Hotkey callback translationUp. isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), selectedTextFlow=\(isSelectedTextTranslationFlow)",
+            "Trigger callback translationUp. source=\(source), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), selectedTextFlow=\(isSelectedTextTranslationFlow)",
         )
         let actions = HotkeyActionResolver.resolveTranslationUp(
             state: HotkeyActionResolver.State(
@@ -321,12 +430,22 @@ extension AppDelegate {
     }
 
     func handleRewriteHotkeyDown() {
+        handleRewriteTriggerDown(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
+    }
+
+    func handleRewriteMouseTriggerDown() {
+        handleRewriteTriggerDown(triggerMode: MouseTriggerPreference.loadTriggerMode(), source: "mouse")
+    }
+
+    private func handleRewriteTriggerDown(
+        triggerMode: HotkeyPreference.TriggerMode,
+        source: String
+    ) {
         VoxtLog.info(
-            "Rewrite hotkey invoked. mode=\(HotkeyPreference.loadTriggerMode().rawValue), isSessionActive=\(isSessionActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
+            "Rewrite trigger invoked. source=\(source), mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), pendingStart=\(pendingTranscriptionStartTask != nil)"
         )
-        let triggerMode = HotkeyPreference.loadTriggerMode()
         VoxtLog.hotkey(
-            "Hotkey callback rewriteDown. mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputModeLabel), pendingStart=\(pendingTranscriptionStartTask != nil)",
+            "Trigger callback rewriteDown. source=\(source), mode=\(triggerMode.rawValue), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputModeLabel), pendingStart=\(pendingTranscriptionStartTask != nil)",
         )
 
         cancelPendingTranscriptionStart()
@@ -348,10 +467,20 @@ extension AppDelegate {
     }
 
     func handleRewriteHotkeyUp() {
-        let triggerMode = HotkeyPreference.loadTriggerMode()
+        handleRewriteTriggerUp(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
+    }
+
+    func handleRewriteMouseTriggerUp() {
+        handleRewriteTriggerUp(triggerMode: MouseTriggerPreference.loadTriggerMode(), source: "mouse")
+    }
+
+    private func handleRewriteTriggerUp(
+        triggerMode: HotkeyPreference.TriggerMode,
+        source: String
+    ) {
         guard triggerMode == .longPress else { return }
         VoxtLog.hotkey(
-            "Hotkey callback rewriteUp. isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputModeLabel)",
+            "Trigger callback rewriteUp. source=\(source), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputModeLabel)",
         )
         guard isSessionActive, sessionOutputMode == .rewrite else { return }
         endRecording()
@@ -388,7 +517,8 @@ extension AppDelegate {
 
     func schedulePendingTranscriptionStart(
         delay: TimeInterval,
-        reason: String
+        reason: String,
+        shouldStart: (() -> Bool)? = nil
     ) {
         VoxtLog.hotkey("Scheduling pending transcription start. delaySec=\(delay), reason=\(reason)")
         pendingTranscriptionStartTask?.cancel()
@@ -402,6 +532,11 @@ extension AppDelegate {
             guard !Task.isCancelled else { return }
             guard !self.isSessionActive else {
                 VoxtLog.hotkey("Pending transcription start dropped: session already active.")
+                self.pendingTranscriptionStartTask = nil
+                return
+            }
+            if let shouldStart, !shouldStart() {
+                VoxtLog.hotkey("Pending transcription start dropped: trigger is no longer active. reason=\(reason)")
                 self.pendingTranscriptionStartTask = nil
                 return
             }

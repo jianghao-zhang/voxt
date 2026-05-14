@@ -1531,3 +1531,9 @@
 "Generation: Default" = "生成：默认";
 "Configuration: Default" = "配置：默认";
 "Generation Settings" = "生成设置";
+"Middle-Click Transcription" = "中键转录";
+"Enable Middle Click" = "启用鼠标中键";
+"Use the middle mouse button to start transcription." = "用鼠标中键开始转录。";
+"Middle Mouse Button" = "中键";
+"No Buttons Assigned" = "未分配按键";
+"%d Assigned" = "已分配 %d 个";

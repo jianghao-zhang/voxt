@@ -55,11 +55,14 @@ struct HotkeySettingsView: View {
     @AppStorage(AppPreferenceKey.hotkeyDistinguishModifierSides) private var distinguishModifierSides = HotkeyPreference.defaultDistinguishModifierSides
     @AppStorage(AppPreferenceKey.hotkeyPreset) private var hotkeyPreset = HotkeyPreference.defaultPreset.rawValue
     @AppStorage(AppPreferenceKey.escapeKeyCancelsOverlaySession) private var escapeKeyCancelsOverlaySession = true
+    @AppStorage(AppPreferenceKey.mouseTriggersEnabled) private var mouseTriggersEnabled = false
+    @AppStorage(AppPreferenceKey.mouseTriggerMode) private var mouseTriggerMode = MouseTriggerPreference.defaultTriggerMode.rawValue
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @State private var recordingField: RecordingField?
     @State private var pendingCapturedField: RecordingField?
     @State private var pendingCapturedHotkey: HotkeyPreference.Hotkey?
     @State private var recorderMessageKey: String?
+    @State private var isMouseShortcutSectionExpanded = false
 
     private var hotkeyBinding: Binding<UInt16> {
         Binding(
@@ -215,6 +218,18 @@ struct HotkeySettingsView: View {
             },
             set: {
                 hotkeyTriggerMode = rewriteActivationState.enforcedTriggerMode(from: $0).rawValue
+            }
+        )
+    }
+
+    private var mouseTriggerModeBinding: Binding<HotkeyPreference.TriggerMode> {
+        Binding(
+            get: {
+                HotkeyPreference.TriggerMode(rawValue: mouseTriggerMode)
+                    ?? MouseTriggerPreference.defaultTriggerMode
+            },
+            set: {
+                mouseTriggerMode = $0.rawValue
             }
         )
     }
@@ -433,6 +448,8 @@ struct HotkeySettingsView: View {
                 .padding(8)
             }
 
+            mouseShortcutSection
+
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(localized("Cancel Shortcut"))
@@ -495,6 +512,72 @@ struct HotkeySettingsView: View {
                 }
             }
         }
+    }
+
+    private var mouseShortcutSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isMouseShortcutSectionExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .rotationEffect(.degrees(isMouseShortcutSectionExpanded ? 90 : 0))
+                            .foregroundStyle(.secondary)
+                        Text(localized("Middle-Click Transcription"))
+                            .font(.headline)
+                        Spacer()
+                        Text(mouseShortcutSummary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if isMouseShortcutSectionExpanded {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(localized("Enable Middle Click"))
+                                    .foregroundStyle(.secondary)
+                                Text(localized("Use the middle mouse button to start transcription."))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $mouseTriggersEnabled)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                        }
+
+                        HStack(alignment: .center, spacing: 12) {
+                            Text(localized("Trigger"))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            SettingsMenuPicker(
+                                selection: mouseTriggerModeBinding,
+                                options: HotkeyPreference.TriggerMode.allCases.map { mode in
+                                    SettingsMenuOption(value: mode, title: mode.title)
+                                },
+                                selectedTitle: mouseTriggerModeBinding.wrappedValue.title,
+                                width: 220
+                            )
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+        }
+    }
+
+    private var mouseShortcutSummary: String {
+        mouseTriggersEnabled ? localized("On") : localized("Off")
     }
 
     private func applyPreset(_ preset: HotkeyPreference.Preset) {

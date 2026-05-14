@@ -242,7 +242,10 @@ struct HotkeyPreference {
             AppPreferenceKey.hotkeyTriggerMode: defaultTriggerMode.rawValue,
             AppPreferenceKey.rewriteHotkeyActivationMode: defaultRewriteActivationMode.rawValue,
             AppPreferenceKey.hotkeyDistinguishModifierSides: defaultDistinguishModifierSides,
-            AppPreferenceKey.hotkeyPreset: defaultPreset.rawValue
+            AppPreferenceKey.hotkeyPreset: defaultPreset.rawValue,
+            AppPreferenceKey.mouseTriggersEnabled: false,
+            AppPreferenceKey.mouseTriggerMode: MouseTriggerPreference.defaultTriggerMode.rawValue,
+            AppPreferenceKey.mouseShortcutCaptureInProgress: false
         ])
     }
 
@@ -637,6 +640,39 @@ struct HotkeyPreference {
 
         guard status == noErr else { return nil }
         return String(utf16CodeUnits: chars, count: length)
+    }
+}
+
+enum MouseTriggerPreference {
+    static let middleButtonNumber = 2
+    static let defaultTriggerMode = HotkeyPreference.TriggerMode.tap
+
+    static func isEnabled(defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: AppPreferenceKey.mouseTriggersEnabled) as? Bool ?? false
+    }
+
+    static func loadTriggerMode(defaults: UserDefaults = .standard) -> HotkeyPreference.TriggerMode {
+        guard let rawValue = defaults.string(forKey: AppPreferenceKey.mouseTriggerMode),
+              let mode = HotkeyPreference.TriggerMode(rawValue: rawValue)
+        else {
+            return defaultTriggerMode
+        }
+        return mode
+    }
+
+    static func saveTriggerMode(
+        _ mode: HotkeyPreference.TriggerMode,
+        defaults: UserDefaults = .standard
+    ) {
+        defaults.set(mode.rawValue, forKey: AppPreferenceKey.mouseTriggerMode)
+    }
+
+    static func isRuntimeEnabled(defaults: UserDefaults = .standard) -> Bool {
+        isEnabled(defaults: defaults)
+    }
+
+    static func isMiddleButton(_ buttonNumber: Int) -> Bool {
+        buttonNumber == middleButtonNumber
     }
 }
 

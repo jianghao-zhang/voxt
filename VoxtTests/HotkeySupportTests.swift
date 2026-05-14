@@ -392,6 +392,74 @@ final class HotkeySupportTests: XCTestCase {
         )
     }
 
+    func testMouseTriggerPreferenceRequiresEnabledSwitch() {
+        let suiteName = "MouseTriggerPreferenceTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertFalse(MouseTriggerPreference.isRuntimeEnabled(defaults: defaults))
+
+        defaults.set(true, forKey: AppPreferenceKey.mouseTriggersEnabled)
+        XCTAssertTrue(MouseTriggerPreference.isRuntimeEnabled(defaults: defaults))
+        XCTAssertTrue(MouseTriggerPreference.isMiddleButton(2))
+        XCTAssertFalse(MouseTriggerPreference.isMiddleButton(3))
+    }
+
+    func testMouseTriggerPreferencePersistsIndependentTriggerMode() {
+        let suiteName = "MouseTriggerPreferenceTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(HotkeyPreference.TriggerMode.longPress.rawValue, forKey: AppPreferenceKey.hotkeyTriggerMode)
+        XCTAssertEqual(MouseTriggerPreference.loadTriggerMode(defaults: defaults), .tap)
+
+        HotkeyPreference.saveTriggerMode(.tap, defaults: defaults)
+        MouseTriggerPreference.saveTriggerMode(.longPress, defaults: defaults)
+        XCTAssertEqual(MouseTriggerPreference.loadTriggerMode(defaults: defaults), .longPress)
+        XCTAssertEqual(HotkeyPreference.loadTriggerMode(defaults: defaults), .tap)
+
+        defaults.set("invalid", forKey: AppPreferenceKey.mouseTriggerMode)
+        XCTAssertEqual(MouseTriggerPreference.loadTriggerMode(defaults: defaults), .tap)
+    }
+
+    func testMouseLongPressIgnoresDelayedOrphanDownAfterRelease() async {
+        let defaults = UserDefaults.standard
+        let savedTriggerMode = defaults.object(forKey: AppPreferenceKey.mouseTriggerMode)
+        defer { restoreDefaultsValue(savedTriggerMode, forKey: AppPreferenceKey.mouseTriggerMode) }
+
+        MouseTriggerPreference.saveTriggerMode(.longPress)
+        let manager = MouseTriggerManager()
+        var downCount = 0
+        manager.onTranscriptionDown = {
+            downCount += 1
+        }
+
+        manager.debugHandleMiddleButtonUpForTests()
+        try? await Task.sleep(nanoseconds: 220_000_000)
+        manager.debugHandleMiddleButtonDownForTests()
+        try? await Task.sleep(nanoseconds: 90_000_000)
+
+        XCTAssertEqual(downCount, 0)
+    }
+
+    func testMouseLongPressStartsWhenMiddleButtonIsStillPressed() async {
+        let defaults = UserDefaults.standard
+        let savedTriggerMode = defaults.object(forKey: AppPreferenceKey.mouseTriggerMode)
+        defer { restoreDefaultsValue(savedTriggerMode, forKey: AppPreferenceKey.mouseTriggerMode) }
+
+        MouseTriggerPreference.saveTriggerMode(.longPress)
+        let manager = MouseTriggerManager()
+        var downCount = 0
+        manager.onTranscriptionDown = {
+            downCount += 1
+        }
+
+        manager.debugHandleMiddleButtonDownForTests()
+        try? await Task.sleep(nanoseconds: 90_000_000)
+
+        XCTAssertEqual(downCount, 1)
+    }
+
     private func restoreDefaultsValue(_ value: Any?, forKey key: String) {
         let defaults = UserDefaults.standard
         if let value {

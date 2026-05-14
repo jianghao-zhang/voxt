@@ -594,6 +594,9 @@ enum ConfigurationTransferManager {
         var hotkeyDistinguishModifierSides: Bool
         var hotkeyPreset: String
         var escapeKeyCancelsOverlaySession: Bool
+        var mouseTriggersEnabled: Bool
+        var mouseTriggerMode: String
+        var mouseTranscriptionButtonNumber: Int?
 
         private enum CodingKeys: String, CodingKey {
             case hotkeyKeyCode
@@ -610,6 +613,9 @@ enum ConfigurationTransferManager {
             case hotkeyDistinguishModifierSides
             case hotkeyPreset
             case escapeKeyCancelsOverlaySession
+            case mouseTriggersEnabled
+            case mouseTriggerMode
+            case mouseTranscriptionButtonNumber
         }
 
         init(
@@ -626,7 +632,10 @@ enum ConfigurationTransferManager {
             hotkeyTriggerMode: String,
             hotkeyDistinguishModifierSides: Bool,
             hotkeyPreset: String,
-            escapeKeyCancelsOverlaySession: Bool
+            escapeKeyCancelsOverlaySession: Bool,
+            mouseTriggersEnabled: Bool,
+            mouseTriggerMode: String,
+            mouseTranscriptionButtonNumber: Int?
         ) {
             self.hotkeyKeyCode = hotkeyKeyCode
             self.hotkeyModifiers = hotkeyModifiers
@@ -642,6 +651,9 @@ enum ConfigurationTransferManager {
             self.hotkeyDistinguishModifierSides = hotkeyDistinguishModifierSides
             self.hotkeyPreset = hotkeyPreset
             self.escapeKeyCancelsOverlaySession = escapeKeyCancelsOverlaySession
+            self.mouseTriggersEnabled = mouseTriggersEnabled
+            self.mouseTriggerMode = mouseTriggerMode
+            self.mouseTranscriptionButtonNumber = mouseTranscriptionButtonNumber
         }
 
         init(from decoder: Decoder) throws {
@@ -666,6 +678,18 @@ enum ConfigurationTransferManager {
                 Bool.self,
                 forKey: .escapeKeyCancelsOverlaySession
             ) ?? true
+            mouseTriggersEnabled = try container.decodeIfPresent(
+                Bool.self,
+                forKey: .mouseTriggersEnabled
+            ) ?? false
+            mouseTriggerMode = try container.decodeIfPresent(
+                String.self,
+                forKey: .mouseTriggerMode
+            ) ?? MouseTriggerPreference.defaultTriggerMode.rawValue
+            mouseTranscriptionButtonNumber = try container.decodeIfPresent(
+                Int.self,
+                forKey: .mouseTranscriptionButtonNumber
+            )
         }
     }
 
@@ -956,7 +980,12 @@ enum ConfigurationTransferManager {
                 hotkeyTriggerMode: HotkeyPreference.loadTriggerMode(defaults: defaults).rawValue,
                 hotkeyDistinguishModifierSides: defaults.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? HotkeyPreference.defaultDistinguishModifierSides,
                 hotkeyPreset: defaults.string(forKey: AppPreferenceKey.hotkeyPreset) ?? HotkeyPreference.defaultPreset.rawValue,
-                escapeKeyCancelsOverlaySession: defaults.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true
+                escapeKeyCancelsOverlaySession: defaults.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true,
+                mouseTriggersEnabled: MouseTriggerPreference.isEnabled(defaults: defaults),
+                mouseTriggerMode: MouseTriggerPreference.loadTriggerMode(defaults: defaults).rawValue,
+                mouseTranscriptionButtonNumber: MouseTriggerPreference.isEnabled(defaults: defaults)
+                    ? MouseTriggerPreference.middleButtonNumber
+                    : nil
             )
         )
     }
@@ -1119,6 +1148,17 @@ enum ConfigurationTransferManager {
         defaults.set(hotkey.hotkeyDistinguishModifierSides, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
         defaults.set(hotkey.hotkeyPreset, forKey: AppPreferenceKey.hotkeyPreset)
         defaults.set(hotkey.escapeKeyCancelsOverlaySession, forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession)
+        defaults.set(hotkey.mouseTriggersEnabled, forKey: AppPreferenceKey.mouseTriggersEnabled)
+        let mouseTriggerMode = HotkeyPreference.TriggerMode(rawValue: hotkey.mouseTriggerMode)
+            ?? MouseTriggerPreference.defaultTriggerMode
+        MouseTriggerPreference.saveTriggerMode(mouseTriggerMode, defaults: defaults)
+        if hotkey.mouseTriggersEnabled {
+            defaults.set(MouseTriggerPreference.middleButtonNumber, forKey: AppPreferenceKey.mouseTranscriptionButtonNumber)
+        } else {
+            defaults.removeObject(forKey: AppPreferenceKey.mouseTranscriptionButtonNumber)
+        }
+        defaults.removeObject(forKey: "mouseTranslationButtonNumber")
+        defaults.removeObject(forKey: "mouseRewriteButtonNumber")
 
         let featureSettings = payload.feature ?? FeatureSettingsStore.deriveFromLegacy(defaults: defaults)
         FeatureSettingsStore.save(featureSettings, defaults: defaults)

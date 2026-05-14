@@ -2,6 +2,7 @@ import Foundation
 import Carbon
 import AppKit
 import ApplicationServices
+import IOKit.hid
 
 /// Monitors a global hotkey via a CGEvent tap.
 /// - Press and hold hotkey key  → calls `onKeyDown`
@@ -218,7 +219,8 @@ class HotkeyManager {
     }
 
     private func handleEvent(type: CGEventType, event: CGEvent) -> Bool {
-        guard !UserDefaults.standard.bool(forKey: AppPreferenceKey.hotkeyCaptureInProgress) else {
+        guard !UserDefaults.standard.bool(forKey: AppPreferenceKey.hotkeyCaptureInProgress),
+              !UserDefaults.standard.bool(forKey: AppPreferenceKey.mouseShortcutCaptureInProgress) else {
             return false
         }
         var eventWasConsumed = false
@@ -1259,3 +1261,376 @@ extension HotkeyManager {
     }
 }
 #endif
+
+@MainActor
+class MouseTriggerManager {
+    enum EventTapRecoveryResult: Equatable {
+        case reenabled
+        case unavailable
+    }
+
+    var onTranscriptionDown: (() -> Void)?
+    var onTranscriptionUp: (() -> Void)?
+
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    private var retryTask: Task<Void, Never>?
+    private var didPromptAccessibility = false
+    private var didPromptInputMonitoring = false
+    private var pressedButtons: Set<Int> = []
+    private var lastButtonReleaseAt: [Int: Date] = [:]
+    private var pendingLongPressDownTasks: [Int: Task<Void, Never>] = [:]
+    private var hidMonitor: MouseButtonHIDMonitor?
+    private let staleDuplicateDownSuppressionInterval: TimeInterval = 0.35
+    private let longPressDownAcceptanceDelay: TimeInterval = 0.06
+
+    deinit {
+        retryTask?.cancel()
+        retryTask = nil
+
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        eventTap = nil
+        runLoopSource = nil
+    }
+
+    func refresh() {
+        if MouseTriggerPreference.isRuntimeEnabled() {
+            start()
+        } else {
+            stop()
+        }
+    }
+
+    func stop() {
+        guard eventTap != nil || runLoopSource != nil || retryTask != nil || hidMonitor != nil else { return }
+        VoxtLog.info("Stopping mouse trigger manager.")
+        retryTask?.cancel()
+        retryTask = nil
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        eventTap = nil
+        runLoopSource = nil
+        pressedButtons.removeAll()
+        lastButtonReleaseAt.removeAll()
+        cancelPendingLongPressDownTasks()
+        stopHIDMonitor()
+        VoxtLog.hotkey("Mouse trigger manager stopped.")
+    }
+
+    func resetTransientState(reason: String) {
+        guard !pressedButtons.isEmpty || !pendingLongPressDownTasks.isEmpty else { return }
+        VoxtLog.hotkey("Mouse trigger transient state reset. reason=\(reason)")
+        let shouldEmitRelease = MouseTriggerPreference.loadTriggerMode() == .longPress
+        let now = Date()
+        for buttonNumber in pressedButtons {
+            lastButtonReleaseAt[buttonNumber] = now
+        }
+        pressedButtons.removeAll()
+        cancelPendingLongPressDownTasks()
+        if shouldEmitRelease {
+            onTranscriptionUp?()
+        }
+    }
+
+    @discardableResult
+    func recoverEventTapIfNeeded(disabledEventType: CGEventType) -> EventTapRecoveryResult {
+        resetTransientState(reason: disabledEventType == .tapDisabledByTimeout ? "tapDisabledByTimeout" : "tapDisabledByUserInput")
+
+        guard let tap = eventTap else {
+            VoxtLog.warning("Mouse trigger event tap disabled but no active tap is available.")
+            return .unavailable
+        }
+
+        CGEvent.tapEnable(tap: tap, enable: true)
+        VoxtLog.warning("Mouse trigger event tap re-enabled.")
+        return .reenabled
+    }
+
+    private func start() {
+        guard eventTap == nil else { return }
+        VoxtLog.info("Starting mouse trigger manager.")
+        guard preflightAndPromptPermissionsIfNeeded() else {
+            scheduleRetry()
+            return
+        }
+
+        let eventMask: CGEventMask =
+            (1 << CGEventType.otherMouseDown.rawValue) |
+            (1 << CGEventType.otherMouseUp.rawValue)
+
+        guard let (tap, tapLocation) = createEventTap(eventMask: eventMask) else {
+            VoxtLog.error("Failed to create mouse trigger event tap. \(permissionStatusText())")
+            scheduleRetry()
+            return
+        }
+
+        eventTap = tap
+        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        startHIDMonitor()
+        retryTask?.cancel()
+        retryTask = nil
+        VoxtLog.hotkey("Mouse trigger event tap started successfully. location=\(tapLocation.debugName)")
+    }
+
+    private func preflightAndPromptPermissionsIfNeeded() -> Bool {
+        let currentStatus = EventListeningPermissionManager.status()
+        let accessibilityGranted = currentStatus.accessibilityGranted
+        let inputMonitoringGranted = currentStatus.inputMonitoringGranted
+
+        guard accessibilityGranted, inputMonitoringGranted else {
+            if !accessibilityGranted, !didPromptAccessibility {
+                didPromptAccessibility = true
+                _ = AccessibilityPermissionManager.request(prompt: true)
+            }
+            if !inputMonitoringGranted, !didPromptInputMonitoring {
+                didPromptInputMonitoring = true
+                _ = EventListeningPermissionManager.requestInputMonitoring(prompt: true)
+            }
+            VoxtLog.hotkey("Mouse trigger preflight blocked. \(permissionStatusText())")
+            return false
+        }
+
+        return true
+    }
+
+    private func permissionStatusText() -> String {
+        EventListeningPermissionManager.status().description
+    }
+
+    private func scheduleRetry() {
+        guard retryTask == nil else { return }
+        retryTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled, self.eventTap == nil {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                self.refresh()
+            }
+        }
+    }
+
+    private func createEventTap(eventMask: CGEventMask) -> (tap: CFMachPort, location: CGEventTapLocation)? {
+        let callback: CGEventTapCallBack = { _, type, event, refcon -> Unmanaged<CGEvent>? in
+            guard let refcon else { return Unmanaged.passUnretained(event) }
+            let manager = Unmanaged<MouseTriggerManager>.fromOpaque(refcon).takeUnretainedValue()
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                manager.recoverEventTapIfNeeded(disabledEventType: type)
+                return Unmanaged.passUnretained(event)
+            }
+            let consumed = manager.handleEvent(type: type, event: event)
+            return consumed ? nil : Unmanaged.passUnretained(event)
+        }
+
+        for tapLocation in [CGEventTapLocation.cghidEventTap, .cgSessionEventTap] {
+            if let tap = CGEvent.tapCreate(
+                tap: tapLocation,
+                place: .tailAppendEventTap,
+                options: .defaultTap,
+                eventsOfInterest: eventMask,
+                callback: callback,
+                userInfo: Unmanaged.passUnretained(self).toOpaque()
+            ) {
+                return (tap, tapLocation)
+            }
+        }
+
+        return nil
+    }
+
+    private func handleEvent(type: CGEventType, event: CGEvent) -> Bool {
+        guard !UserDefaults.standard.bool(forKey: AppPreferenceKey.hotkeyCaptureInProgress),
+              !UserDefaults.standard.bool(forKey: AppPreferenceKey.mouseShortcutCaptureInProgress),
+              MouseTriggerPreference.isRuntimeEnabled()
+        else {
+            return false
+        }
+
+        let buttonNumber = Int(event.getIntegerValueField(.mouseEventButtonNumber))
+        guard MouseTriggerPreference.isMiddleButton(buttonNumber) else {
+            return false
+        }
+
+        switch type {
+        case .otherMouseDown:
+            return handleButtonDown(buttonNumber)
+        case .otherMouseUp:
+            return handleButtonUp(buttonNumber)
+        default:
+            return false
+        }
+    }
+
+    private func startHIDMonitor() {
+        let monitor = MouseButtonHIDMonitor()
+        monitor.onButtonChange = { [weak self] buttonNumber, isDown in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      !UserDefaults.standard.bool(forKey: AppPreferenceKey.hotkeyCaptureInProgress),
+                      !UserDefaults.standard.bool(forKey: AppPreferenceKey.mouseShortcutCaptureInProgress),
+                      MouseTriggerPreference.isRuntimeEnabled(),
+                      MouseTriggerPreference.isMiddleButton(buttonNumber)
+                else { return }
+
+                if isDown {
+                    _ = self.handleButtonDown(buttonNumber)
+                } else {
+                    _ = self.handleButtonUp(buttonNumber)
+                }
+            }
+        }
+        monitor.start()
+        hidMonitor = monitor
+    }
+
+    private func stopHIDMonitor() {
+        hidMonitor?.stop()
+        hidMonitor = nil
+    }
+
+    private func handleButtonDown(_ buttonNumber: Int) -> Bool {
+        guard !pressedButtons.contains(buttonNumber) else { return true }
+        if MouseTriggerPreference.loadTriggerMode() == .longPress,
+           let releasedAt = lastButtonReleaseAt[buttonNumber],
+           Date().timeIntervalSince(releasedAt) < staleDuplicateDownSuppressionInterval {
+            VoxtLog.hotkey("Mouse trigger stale duplicate down ignored after recent release. button=\(buttonNumber)")
+            return true
+        }
+        pressedButtons.insert(buttonNumber)
+        if MouseTriggerPreference.loadTriggerMode() == .longPress {
+            pendingLongPressDownTasks[buttonNumber]?.cancel()
+            pendingLongPressDownTasks[buttonNumber] = Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    try await Task.sleep(for: .seconds(self.longPressDownAcceptanceDelay))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled,
+                      self.pressedButtons.contains(buttonNumber)
+                else { return }
+                self.pendingLongPressDownTasks[buttonNumber] = nil
+                self.onTranscriptionDown?()
+            }
+            return true
+        }
+        onTranscriptionDown?()
+        return true
+    }
+
+    private func handleButtonUp(_ buttonNumber: Int) -> Bool {
+        lastButtonReleaseAt[buttonNumber] = Date()
+        pendingLongPressDownTasks[buttonNumber]?.cancel()
+        pendingLongPressDownTasks[buttonNumber] = nil
+        if MouseTriggerPreference.loadTriggerMode() == .longPress {
+            pressedButtons.remove(buttonNumber)
+            onTranscriptionUp?()
+            return true
+        }
+        guard pressedButtons.remove(buttonNumber) != nil else { return true }
+        onTranscriptionUp?()
+        return true
+    }
+
+    func isMiddleButtonPressed() -> Bool {
+        pressedButtons.contains(MouseTriggerPreference.middleButtonNumber)
+    }
+
+#if DEBUG
+    func debugHandleMiddleButtonDownForTests() {
+        _ = handleButtonDown(MouseTriggerPreference.middleButtonNumber)
+    }
+
+    func debugHandleMiddleButtonUpForTests() {
+        _ = handleButtonUp(MouseTriggerPreference.middleButtonNumber)
+    }
+#endif
+
+    private func cancelPendingLongPressDownTasks() {
+        for task in pendingLongPressDownTasks.values {
+            task.cancel()
+        }
+        pendingLongPressDownTasks.removeAll()
+    }
+}
+
+final class MouseButtonHIDMonitor {
+    var onButtonChange: ((Int, Bool) -> Void)?
+
+    private var manager: IOHIDManager?
+
+    deinit {
+        stop()
+    }
+
+    func start() {
+        stop()
+
+        let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+        let matchers: [[String: Int]] = [
+            [
+                kIOHIDDeviceUsagePageKey as String: kHIDPage_GenericDesktop,
+                kIOHIDDeviceUsageKey as String: kHIDUsage_GD_Mouse
+            ],
+            [
+                kIOHIDDeviceUsagePageKey as String: kHIDPage_GenericDesktop,
+                kIOHIDDeviceUsageKey as String: kHIDUsage_GD_Pointer
+            ]
+        ]
+
+        IOHIDManagerSetDeviceMatchingMultiple(manager, matchers as CFArray)
+        IOHIDManagerRegisterInputValueCallback(
+            manager,
+            { context, _, _, value in
+                guard let context else { return }
+                let monitor = Unmanaged<MouseButtonHIDMonitor>.fromOpaque(context).takeUnretainedValue()
+                monitor.handleInputValue(value)
+            },
+            Unmanaged.passUnretained(self).toOpaque()
+        )
+        IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
+        let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        guard openResult == kIOReturnSuccess else {
+            VoxtLog.hotkey("Mouse button hid monitor open failed. status=\(openResult)")
+            IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
+            return
+        }
+
+        self.manager = manager
+        VoxtLog.hotkey("Mouse button hid monitor started.")
+    }
+
+    func stop() {
+        guard let manager else { return }
+        IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
+        IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        self.manager = nil
+        VoxtLog.hotkey("Mouse button hid monitor stopped.")
+    }
+
+    private func handleInputValue(_ value: IOHIDValue) {
+        let element = IOHIDValueGetElement(value)
+        let usagePage = IOHIDElementGetUsagePage(element)
+        let usage = IOHIDElementGetUsage(element)
+        guard usagePage == kHIDPage_Button,
+              let buttonNumber = Self.cgButtonNumber(forHIDButtonUsage: usage)
+        else { return }
+
+        onButtonChange?(buttonNumber, IOHIDValueGetIntegerValue(value) != 0)
+    }
+
+    private static func cgButtonNumber(forHIDButtonUsage usage: UInt32) -> Int? {
+        guard usage >= 3 else { return nil }
+        return Int(usage - 1)
+    }
+}
