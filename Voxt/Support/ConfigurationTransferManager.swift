@@ -736,8 +736,14 @@ enum ConfigurationTransferManager {
         var issues: [MissingConfigurationIssue] = []
 
         let featureSettings = FeatureSettingsStore.load(defaults: defaults)
-        let remoteASR = RemoteModelConfigurationStore.loadConfigurations(from: defaults.string(forKey: AppPreferenceKey.remoteASRProviderConfigurations) ?? "")
-        let remoteLLM = RemoteModelConfigurationStore.loadConfigurations(from: defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? "")
+        let remoteASR = RemoteModelConfigurationStore.loadConfigurations(
+            from: defaults.string(forKey: AppPreferenceKey.remoteASRProviderConfigurations) ?? "",
+            sensitiveValueLoading: .metadataOnly
+        )
+        let remoteLLM = RemoteModelConfigurationStore.loadConfigurations(
+            from: defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? "",
+            sensitiveValueLoading: .metadataOnly
+        )
 
         appendASRIssues(
             for: featureSettings.transcription.asrSelectionID,

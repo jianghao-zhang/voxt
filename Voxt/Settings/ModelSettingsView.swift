@@ -113,7 +113,7 @@ struct ModelSettingsView: View {
     @State var pendingModelRemovalTarget: LocalModelRemovalTarget?
     @State var uninstallingModelTarget: LocalModelRemovalTarget?
 
-    let modelStateRefreshTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    let modelStateRefreshTimer = Timer.publish(every: 2.0, on: .main, in: .common).autoconnect()
 
     var selectedEngine: TranscriptionEngine {
         TranscriptionEngine(rawValue: engineRaw) ?? .mlxAudio

@@ -577,11 +577,11 @@ enum RemoteModelConfigurationStore {
     nonisolated private static func resolvedSensitiveValuePresence(for configuration: RemoteProviderConfiguration) -> RemoteProviderConfiguration {
         var resolved = configuration.withoutSensitiveValues
         for field in SensitiveField.allCases {
-            let keychainValue = VoxtSecureStorage.string(for: keychainAccount(providerID: configuration.providerID, field: field))
+            let hasKeychainValue = VoxtSecureStorage.hasString(
+                for: keychainAccount(providerID: configuration.providerID, field: field)
+            )
             let currentValue = sensitiveValue(for: field, in: configuration)
-            let hasValue = !(keychainValue ?? currentValue)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .isEmpty
+            let hasValue = hasKeychainValue || !currentValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             setSensitiveValue(hasValue ? redactedSensitiveValuePlaceholder : "", for: field, in: &resolved)
         }
         return resolved

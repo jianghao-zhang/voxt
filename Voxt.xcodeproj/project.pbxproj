@@ -18,6 +18,7 @@
 		E2A1C3B4D5F60718293A4B6C /* PermissionFlow in Frameworks */ = {isa = PBXBuildFile; productRef = E2A1C3B4D5F60718293A4B6D /* PermissionFlow */; };
 		E2A1C3B4D5F60718293A4B6E /* SystemSettingsKit in Frameworks */ = {isa = PBXBuildFile; productRef = E2A1C3B4D5F60718293A4B6F /* SystemSettingsKit */; };
 		F1A2B3C4D5E6F708090A0B0C /* FaviconFinder in Frameworks */ = {isa = PBXBuildFile; productRef = F1A2B3C4D5E6F708090A0B0D /* FaviconFinder */; };
+		FA11DBA0FA11DBA0FA11DBA0 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = FA11DBA1FA11DBA1FA11DBA1 /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +84,7 @@
 				E2A1C3B4D5F60718293A4B6C /* PermissionFlow in Frameworks */,
 				E2A1C3B4D5F60718293A4B6E /* SystemSettingsKit in Frameworks */,
 				F1A2B3C4D5E6F708090A0B0C /* FaviconFinder in Frameworks */,
+				FA11DBA0FA11DBA0FA11DBA0 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -191,6 +193,7 @@
 				E2A1C3B4D5F60718293A4B6D /* PermissionFlow */,
 				E2A1C3B4D5F60718293A4B6F /* SystemSettingsKit */,
 				F1A2B3C4D5E6F708090A0B0D /* FaviconFinder */,
+				FA11DBA1FA11DBA1FA11DBA1 /* GRDB */,
 			);
 			productName = Voxt;
 			productReference = 31F19CCD2F4D76D200E96913 /* Voxt Dev.app */;
@@ -253,6 +256,7 @@
 				D1E2F3A4B5C60718293A4B5E /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				E2A1C3B4D5F60718293A4B70 /* XCRemoteSwiftPackageReference "PermissionFlow" */,
 				F1A2B3C4D5E6F708090A0B0E /* XCRemoteSwiftPackageReference "FaviconFinder" */,
+				FA11DBA2FA11DBA2FA11DBA2 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 31F19CCE2F4D76D200E96913 /* Products */;
@@ -931,6 +935,14 @@
 				minimumVersion = 5.1.5;
 			};
 		};
+		FA11DBA2FA11DBA2FA11DBA2 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.10.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -978,6 +990,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F1A2B3C4D5E6F708090A0B0E /* XCRemoteSwiftPackageReference "FaviconFinder" */;
 			productName = FaviconFinder;
+		};
+		FA11DBA1FA11DBA1FA11DBA1 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FA11DBA2FA11DBA2FA11DBA2 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

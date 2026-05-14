@@ -30,6 +30,22 @@ enum VoxtSecureStorage {
         }
     }
 
+    nonisolated static func hasString(for account: String) -> Bool {
+        var query = baseQuery(for: account)
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        switch status {
+        case errSecSuccess:
+            return true
+        case errSecItemNotFound:
+            return false
+        default:
+            print("[Voxt] [WARN] Keychain presence check failed. account=\(account), status=\(status)")
+            return false
+        }
+    }
+
     nonisolated static func set(_ value: String, for account: String) {
         guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             removeValue(for: account)

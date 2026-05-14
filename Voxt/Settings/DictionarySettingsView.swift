@@ -37,13 +37,12 @@ struct DictionarySettingsView: View {
     @State private var pendingHistoryScanCount = 0
     @State private var dictionarySearchText = ""
     @State private var showDictionarySearchDialog = false
+    @State private var visibleEntries: [DictionaryEntry] = []
+    @State private var totalEntryCount = 0
+    @State private var isLoadingEntries = false
+    @State private var entryPageGeneration = 0
 
-    private var visibleEntries: [DictionaryEntry] {
-        DictionaryEntryCollection.searchEntries(
-            dictionaryStore.filteredEntries(for: selectedFilter),
-            query: dictionarySearchText
-        )
-    }
+    private let entryPageSize = 80
 
     private var localHistoryScanModelOptions: [DictionaryHistoryScanModelOption] {
         historyScanModelOptions.filter { $0.source == .local }
@@ -62,23 +61,14 @@ struct DictionarySettingsView: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    settingsCard
-                        .settingsNavigationAnchor(.dictionarySettings)
-                    dictionaryListCard
-                        .settingsNavigationAnchor(.dictionaryEntries)
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            settingsCard
+                .settingsNavigationAnchor(.dictionarySettings)
+            dictionaryListCard
+                .settingsNavigationAnchor(.dictionaryEntries)
                 .frame(maxHeight: .infinity, alignment: .top)
-            }
-            .onAppear {
-                scrollToNavigationTargetIfNeeded(using: proxy)
-            }
-            .onChange(of: navigationRequest?.id) { _, _ in
-                scrollToNavigationTargetIfNeeded(using: proxy)
-            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .sheet(item: $dialog) { currentDialog in
             dialogView(for: currentDialog)
         }
@@ -119,12 +109,22 @@ struct DictionarySettingsView: View {
             )
         }
         .onAppear(perform: reloadContentAsync)
+        .onChange(of: selectedFilter) { _, _ in
+            reloadDictionaryEntries(reset: true)
+        }
+        .onChange(of: dictionarySearchText) { _, _ in
+            reloadDictionaryEntries(reset: true)
+        }
+        .onReceive(dictionaryStore.$entries) { _ in
+            reloadDictionaryEntries(reset: true)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
             reloadContentAsync()
         }
         .alert(localized("Delete All Dictionary Terms?"), isPresented: $showClearAllConfirmation) {
             Button(localized("Delete"), role: .destructive) {
                 dictionaryStore.clearAll()
+                reloadDictionaryEntries(reset: true)
             }
             Button(localized("Cancel"), role: .cancel) {}
         } message: {
@@ -148,19 +148,8 @@ struct DictionarySettingsView: View {
     }
 
     private func refreshPendingHistoryScanCountAsync() {
-        let historyEntries = historyStore.allHistoryEntries
         let checkpoint = dictionarySuggestionStore.historyScanCheckpoint
-
-        DispatchQueue.global(qos: .utility).async {
-            let count = DictionarySuggestionStore.pendingHistoryEntryCount(
-                in: historyEntries,
-                checkpoint: checkpoint
-            )
-
-            DispatchQueue.main.async {
-                pendingHistoryScanCount = count
-            }
-        }
+        pendingHistoryScanCount = historyStore.pendingDictionaryHistoryEntryCount(after: checkpoint)
     }
 
     private var settingsCard: some View {
@@ -179,18 +168,24 @@ struct DictionarySettingsView: View {
         DictionaryEntriesCard(
             selectedFilter: $selectedFilter,
             visibleEntries: visibleEntries,
+            totalEntryCount: totalEntryCount,
             searchText: dictionarySearchText,
             dictionaryTransferMessage: dictionaryTransferMessage,
+            isLoadingEntries: isLoadingEntries,
             scopeLabel: scopeLabel(for:),
             scopeIsMissing: { entry in
                 entry.groupID != nil && groupName(for: entry.groupID) == nil
             },
             onSearch: { showDictionarySearchDialog = true },
             onClearSearch: { dictionarySearchText = "" },
+            onLoadMore: { reloadDictionaryEntries(reset: false) },
             onCreate: { dialog = .create },
             onClearAll: { showClearAllConfirmation = true },
             onEdit: { entry in dialog = .edit(entry) },
-            onDelete: { entry in dictionaryStore.delete(id: entry.id) }
+            onDelete: { entry in
+                dictionaryStore.delete(id: entry.id)
+                reloadDictionaryEntries(reset: true)
+            }
         )
     }
 
@@ -237,12 +232,37 @@ struct DictionarySettingsView: View {
                 groupNameSnapshot: selectedGroupName(for: selectedGroupID) ?? entry.groupNameSnapshot
             )
         }
+        reloadDictionaryEntries(reset: true)
     }
 
     private func reloadContentAsync() {
-        dictionaryStore.reloadAsync()
         dictionarySuggestionStore.reloadAsync()
         refreshLocalContentState()
+        reloadDictionaryEntries(reset: true)
+    }
+
+    private func reloadDictionaryEntries(reset: Bool) {
+        let offset = reset ? 0 : visibleEntries.count
+        guard reset || offset < totalEntryCount else { return }
+        guard reset || !isLoadingEntries else { return }
+
+        entryPageGeneration += 1
+        let generation = entryPageGeneration
+        let filter = selectedFilter
+        let query = dictionarySearchText
+        isLoadingEntries = true
+
+        dictionaryStore.loadEntries(
+            filter: filter,
+            query: query,
+            limit: entryPageSize,
+            offset: offset
+        ) { count, page in
+            guard generation == entryPageGeneration else { return }
+            totalEntryCount = count
+            visibleEntries = reset ? page : visibleEntries + page
+            isLoadingEntries = false
+        }
     }
 
     private func refreshLocalContentState() {
@@ -390,6 +410,7 @@ struct DictionarySettingsView: View {
             let text = try String(contentsOf: url, encoding: .utf8)
             let result = try dictionaryStore.importTransferJSONString(text)
             refreshLocalContentState()
+            reloadDictionaryEntries(reset: true)
             dictionaryTransferMessage = AppLocalization.format(
                 "Imported %d terms and skipped %d duplicates.",
                 result.addedCount,

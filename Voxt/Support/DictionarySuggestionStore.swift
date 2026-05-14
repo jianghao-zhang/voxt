@@ -637,36 +637,14 @@ final class DictionarySuggestionStore: ObservableObject {
         }
 
         return pendingEntries.reduce(into: 0) { count, entry in
-            if entry.kind == .normal {
+            if case .normal = entry.kind {
                 count += 1
             }
         }
     }
 
     func pendingHistoryEntries(in historyStore: TranscriptionHistoryStore) -> [TranscriptionHistoryEntry] {
-        let sorted = historyStore.allHistoryEntries.sorted {
-            if $0.createdAt == $1.createdAt {
-                return $0.id.uuidString < $1.id.uuidString
-            }
-            return $0.createdAt < $1.createdAt
-        }
-
-        let pendingEntries: [TranscriptionHistoryEntry]
-        if let checkpoint = historyScanCheckpoint {
-            pendingEntries = sorted.filter {
-                if $0.createdAt > checkpoint.lastProcessedAt {
-                    return true
-                }
-                if $0.createdAt < checkpoint.lastProcessedAt {
-                    return false
-                }
-                return $0.id.uuidString > checkpoint.lastHistoryEntryID.uuidString
-            }
-        } else {
-            pendingEntries = sorted
-        }
-
-        return pendingEntries.filter { $0.kind == .normal }
+        historyStore.pendingDictionaryHistoryEntries(after: historyScanCheckpoint)
     }
 
     func beginHistoryScan(totalCount: Int) {

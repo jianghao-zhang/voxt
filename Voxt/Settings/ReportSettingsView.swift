@@ -4,6 +4,7 @@ struct ReportSettingsView: View {
     @Environment(\.locale) private var locale
     @ObservedObject var historyStore: TranscriptionHistoryStore
     @State private var cachedSummary: ReportSummary?
+    @State private var summaryGeneration = 0
 
     private let cardColumns = [
         GridItem(.flexible(), spacing: 12),
@@ -11,7 +12,7 @@ struct ReportSettingsView: View {
     ]
 
     var body: some View {
-        let summary = cachedSummary ?? ReportSummary(entries: historyStore.allHistoryEntries, locale: locale)
+        let summary = cachedSummary ?? ReportSummary.empty(locale: locale)
 
         VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: cardColumns, spacing: 12) {
@@ -130,7 +131,18 @@ struct ReportSettingsView: View {
     }
 
     private func refreshSummary() {
-        cachedSummary = ReportSummary(entries: historyStore.allHistoryEntries, locale: locale)
+        summaryGeneration += 1
+        let generation = summaryGeneration
+        let locale = locale
+        let dayStarts = ReportSummary.lastSevenDayStarts()
+
+        historyStore.reportMetrics(dayStarts: dayStarts) { metrics in
+            guard generation == summaryGeneration else { return }
+            cachedSummary = ReportSummary(
+                metrics: metrics ?? .empty(dayStarts: dayStarts),
+                locale: locale
+            )
+        }
     }
 }
 
@@ -189,43 +201,48 @@ private struct ReportSummary {
     let averageCharactersPerMinute: Double
     let dailyCharacters: [SevenDayBarChart.DayValue]
 
-    init(entries: [TranscriptionHistoryEntry], locale: Locale) {
-        totalDictationSeconds = entries.reduce(0) { $0 + ($1.audioDurationSeconds ?? 0) }
-        totalCharacters = entries.reduce(0) { $0 + $1.text.count }
-        totalTranslationCharacters = entries
-            .filter { $0.kind == .translation }
-            .reduce(0) { $0 + $1.text.count }
-
-        if totalDictationSeconds > 0 {
-            averageCharactersPerMinute = Double(totalCharacters) / (totalDictationSeconds / 60.0)
-        } else {
-            averageCharactersPerMinute = 0
-        }
-
-        dailyCharacters = Self.computeDailyCharacters(entries: entries, locale: locale)
+    init(metrics: HistoryReportMetrics, locale: Locale) {
+        totalDictationSeconds = metrics.totalDictationSeconds
+        totalCharacters = metrics.totalCharacters
+        totalTranslationCharacters = metrics.totalTranslationCharacters
+        averageCharactersPerMinute = totalDictationSeconds > 0
+            ? Double(totalCharacters) / (totalDictationSeconds / 60.0)
+            : 0
+        dailyCharacters = Self.dailyCharacters(from: metrics.dailyCharacters, locale: locale)
     }
 
-    private static func computeDailyCharacters(entries: [TranscriptionHistoryEntry], locale: Locale) -> [SevenDayBarChart.DayValue] {
+    static func empty(locale: Locale) -> ReportSummary {
+        let dayStarts = lastSevenDayStarts()
+        return ReportSummary(metrics: .empty(dayStarts: dayStarts), locale: locale)
+    }
+
+    static func lastSevenDayStarts() -> [Date] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let startDay = calendar.date(byAdding: .day, value: -6, to: today) ?? today
-
-        var daily: [Date: Int] = [:]
-        for entry in entries {
-            let day = calendar.startOfDay(for: entry.createdAt)
-            guard day >= startDay, day <= today else { continue }
-            daily[day, default: 0] += entry.text.count
-        }
-
         return (0..<7).compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: offset, to: startDay) else {
-                return nil
-            }
+            calendar.date(byAdding: .day, value: offset, to: startDay)
+        }
+    }
+
+    private static func dailyCharacters(from valuesByDay: [Date: Int], locale: Locale) -> [SevenDayBarChart.DayValue] {
+        lastSevenDayStarts().map { day in
             return SevenDayBarChart.DayValue(
                 dayStart: day,
                 label: day.formatted(.dateTime.weekday(.abbreviated).locale(locale)),
-                value: daily[day, default: 0]
+                value: valuesByDay[day, default: 0]
             )
         }
+    }
+}
+
+private extension HistoryReportMetrics {
+    static func empty(dayStarts: [Date]) -> HistoryReportMetrics {
+        HistoryReportMetrics(
+            totalDictationSeconds: 0,
+            totalCharacters: 0,
+            totalTranslationCharacters: 0,
+            dailyCharacters: Dictionary(uniqueKeysWithValues: dayStarts.map { ($0, 0) })
+        )
     }
 }

@@ -11,7 +11,7 @@ struct DictionarySettingsHeaderCard: View {
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 16) {
                     Button(AppLocalization.localizedString("One-Click Ingest")) {
                         onOpenIngest()
@@ -83,12 +83,15 @@ private struct DictionarySettingsHeaderStatus: View {
 struct DictionaryEntriesCard: View {
     @Binding var selectedFilter: DictionaryFilter
     let visibleEntries: [DictionaryEntry]
+    let totalEntryCount: Int
     let searchText: String
     let dictionaryTransferMessage: String?
+    let isLoadingEntries: Bool
     let scopeLabel: (DictionaryEntry) -> String
     let scopeIsMissing: (DictionaryEntry) -> Bool
     let onSearch: () -> Void
     let onClearSearch: () -> Void
+    let onLoadMore: () -> Void
     let onCreate: () -> Void
     let onClearAll: () -> Void
     let onEdit: (DictionaryEntry) -> Void
@@ -96,7 +99,7 @@ struct DictionaryEntriesCard: View {
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     DictionaryFilterPicker(selectedFilter: $selectedFilter)
 
@@ -119,7 +122,7 @@ struct DictionaryEntriesCard: View {
                         onClearAll()
                     }
                     .buttonStyle(SettingsStatusButtonStyle(tint: .red))
-                    .disabled(visibleEntries.isEmpty)
+                    .disabled(totalEntryCount == 0)
                 }
 
                 if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -135,15 +138,18 @@ struct DictionaryEntriesCard: View {
                     }
                 }
 
-                if visibleEntries.isEmpty {
+                if visibleEntries.isEmpty && !isLoadingEntries {
                     Text(emptyStateText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    VirtualizedVerticalList(
+                    PagedVerticalList(
                         items: visibleEntries,
-                        rowHeight: 64,
-                        rowSpacing: 6
+                        totalCount: totalEntryCount,
+                        rowHeight: 56,
+                        rowSpacing: 8,
+                        isLoading: isLoadingEntries,
+                        onLoadMore: onLoadMore
                     ) { entry in
                         DictionaryRow(
                             entry: entry,
@@ -153,7 +159,7 @@ struct DictionaryEntriesCard: View {
                             onDelete: { onDelete(entry) }
                         )
                     }
-                    .frame(minHeight: 240, idealHeight: 420, maxHeight: 520, alignment: .top)
+                    .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity, alignment: .top)
                 }
 
                 if let dictionaryTransferMessage, !dictionaryTransferMessage.isEmpty {
@@ -169,9 +175,13 @@ struct DictionaryEntriesCard: View {
     }
 
     private var emptyStateText: String {
-        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if !isSearchActive {
             return AppLocalization.localizedString("No dictionary terms yet.")
         }
         return AppLocalization.localizedString("No dictionary terms match this search.")
+    }
+
+    private var isSearchActive: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

@@ -179,17 +179,18 @@ private struct DictionaryListRowContainer<Content: View, Actions: View>: View {
     @ViewBuilder let actions: () -> Actions
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: 8) {
             content()
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
 
             HStack(spacing: 6) {
                 actions()
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .settingsCardSurface(cornerRadius: SettingsUIStyle.compactCornerRadius, fillOpacity: 1)
     }
 }

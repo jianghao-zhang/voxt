@@ -42,6 +42,9 @@ struct VoxtApp: App {
                 .keyboardShortcut(",", modifiers: .command)
             }
             MainWindowNavigationCommands(appDelegate: appDelegate)
+            #if DEBUG
+            DevelopmentCommands(appDelegate: appDelegate)
+            #endif
             HelpNavigationCommands(appDelegate: appDelegate)
         }
     }
@@ -195,3 +198,20 @@ struct HelpNavigationCommands: Commands {
         }
     }
 }
+
+#if DEBUG
+struct DevelopmentCommands: Commands {
+    let appDelegate: AppDelegate
+
+    var body: some Commands {
+        CommandMenu("Developer") {
+            Button("Seed 20k Dictionary + 20k History") {
+                appDelegate.seedDevelopmentStorageData(dictionaryCount: 20_000, historyCount: 20_000)
+            }
+            Button("Seed 20k Dictionary + 100k History") {
+                appDelegate.seedDevelopmentStorageData(dictionaryCount: 20_000, historyCount: 100_000)
+            }
+        }
+    }
+}
+#endif

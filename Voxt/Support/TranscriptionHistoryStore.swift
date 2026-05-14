@@ -294,6 +294,13 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
     }
 }
 
+struct HistoryReportMetrics: Hashable {
+    let totalDictationSeconds: TimeInterval
+    let totalCharacters: Int
+    let totalTranslationCharacters: Int
+    let dailyCharacters: [Date: Int]
+}
+
 @MainActor
 final class TranscriptionHistoryStore: ObservableObject {
     @Published private(set) var entries: [TranscriptionHistoryEntry] = []
@@ -301,26 +308,26 @@ final class TranscriptionHistoryStore: ObservableObject {
     private var allEntries: [TranscriptionHistoryEntry] = []
     private var entriesByKind: [TranscriptionHistoryKind: [TranscriptionHistoryEntry]] = [:]
     private var loadedCount = 0
+    private var totalEntryCount = 0
     private var reloadGeneration = 0
     private let pageSize = 40
-    private let maxStoredEntries = 20_000
 
     private let fileManager = FileManager.default
     private let defaults = UserDefaults.standard
-    private let persistenceCoordinator = AsyncJSONPersistenceCoordinator(
-        label: "com.voxt.transcription-history.persistence"
-    )
+    private let repository: HistoryRepositoryProtocol
+    private let audioArchive: HistoryAudioArchiveManaging
 
-    init() {
+    init(
+        repository: HistoryRepositoryProtocol? = nil,
+        audioArchive: HistoryAudioArchiveManaging? = nil
+    ) {
+        self.repository = repository ?? HistoryRepository()
+        self.audioArchive = audioArchive ?? HistoryAudioArchiveService()
         reload()
     }
 
     var hasMore: Bool {
-        loadedCount < allEntries.count
-    }
-
-    var allHistoryEntries: [TranscriptionHistoryEntry] {
-        allEntries
+        loadedCount < totalEntryCount
     }
 
     func historyEntries(for kind: TranscriptionHistoryKind) -> [TranscriptionHistoryEntry] {
@@ -328,19 +335,26 @@ final class TranscriptionHistoryStore: ObservableObject {
     }
 
     func entry(id: UUID) -> TranscriptionHistoryEntry? {
-        allEntries.first(where: { $0.id == id })
+        if let cached = allEntries.first(where: { $0.id == id }) {
+            return cached
+        }
+        return try? repository.entry(id: id)
     }
 
     func updateRetentionPolicy() {
-        if applyRetentionPolicyIfNeeded() {
-            loadedCount = min(loadedCount, allEntries.count)
-            entries = Array(allEntries.prefix(loadedCount))
-            persist()
-        }
+        cleanupRetainedEntriesIfNeeded()
+        reload()
     }
 
     func reload() {
         do {
+            let repositoryCount = try repository.entryCount(kind: nil, query: "")
+            if repositoryCount > 0 || !legacyHistoryFileExists() {
+                let firstPage = try repository.entries(kind: nil, query: "", limit: pageSize, offset: 0)
+                applyLoadedEntries(firstPage, totalCount: repositoryCount, resetPagination: true)
+                return
+            }
+
             let url = try historyFileURL()
             guard fileManager.fileExists(atPath: url.path) else {
                 applyReloadedEntries([], resetPagination: true)
@@ -357,6 +371,7 @@ final class TranscriptionHistoryStore: ObservableObject {
     func reloadAsync() {
         reloadGeneration += 1
         let generation = reloadGeneration
+        let repository = repository
 
         let url: URL?
         do {
@@ -367,29 +382,106 @@ final class TranscriptionHistoryStore: ObservableObject {
         }
 
         DispatchQueue.global(qos: .utility).async { [weak self, url] in
-            let decodedEntries: [TranscriptionHistoryEntry]
-            if let url, FileManager.default.fileExists(atPath: url.path) {
+            let loadedEntries: [TranscriptionHistoryEntry]
+            let totalCount: Int
+            if let repositoryCount = try? repository.entryCount(kind: nil, query: ""),
+               repositoryCount > 0 || url.map({ !FileManager.default.fileExists(atPath: $0.path) }) == true {
+                totalCount = repositoryCount
+                loadedEntries = (try? repository.entries(kind: nil, query: "", limit: 40, offset: 0)) ?? []
+            } else if let url, FileManager.default.fileExists(atPath: url.path) {
                 do {
                     let data = try Data(contentsOf: url)
-                    decodedEntries = try JSONDecoder().decode([TranscriptionHistoryEntry].self, from: data)
+                    loadedEntries = try JSONDecoder().decode([TranscriptionHistoryEntry].self, from: data)
+                    totalCount = loadedEntries.reduce(into: 0) { count, entry in
+                        if case .transcript = entry.kind {
+                            return
+                        }
+                        count += 1
+                    }
                 } catch {
-                    decodedEntries = []
+                    loadedEntries = []
+                    totalCount = 0
                 }
             } else {
-                decodedEntries = []
+                loadedEntries = []
+                totalCount = 0
             }
 
             DispatchQueue.main.async {
                 guard let self, generation == self.reloadGeneration else { return }
-                self.applyReloadedEntries(decodedEntries, resetPagination: false)
+                self.applyLoadedEntries(loadedEntries, totalCount: totalCount, resetPagination: false)
             }
         }
     }
 
     func loadNextPage() {
         guard hasMore else { return }
-        loadedCount = min(loadedCount + pageSize, allEntries.count)
-        entries = Array(allEntries.prefix(loadedCount))
+        let page = historyEntries(kind: nil, query: "", limit: pageSize, offset: loadedCount)
+        guard !page.isEmpty else {
+            totalEntryCount = loadedCount
+            publishVisibleEntries()
+            return
+        }
+        mergeLoadedEntries(page)
+        loadedCount = min(loadedCount + page.count, totalEntryCount)
+        refreshEntryIndexes()
+        publishVisibleEntries()
+    }
+
+    func historyEntries(
+        kind: TranscriptionHistoryKind?,
+        query: String = "",
+        limit: Int,
+        offset: Int
+    ) -> [TranscriptionHistoryEntry] {
+        (try? repository.entries(kind: kind, query: query, limit: limit, offset: offset)) ?? []
+    }
+
+    func entryCount(kind: TranscriptionHistoryKind?, query: String = "") -> Int {
+        (try? repository.entryCount(kind: kind, query: query)) ?? 0
+    }
+
+    func loadEntries(
+        kind: TranscriptionHistoryKind?,
+        query: String = "",
+        limit: Int,
+        offset: Int,
+        completion: @escaping (Int, [TranscriptionHistoryEntry]) -> Void
+    ) {
+        let repository = repository
+        DispatchQueue.global(qos: .userInitiated).async {
+            let count = (try? repository.entryCount(kind: kind, query: query)) ?? 0
+            let page = (try? repository.entries(kind: kind, query: query, limit: limit, offset: offset)) ?? []
+            DispatchQueue.main.async {
+                completion(count, page)
+            }
+        }
+    }
+
+    func allEntriesBatch(limit: Int, offset: Int) -> [TranscriptionHistoryEntry] {
+        (try? repository.entries(kind: nil, query: "", limit: limit, offset: offset)) ?? []
+    }
+
+    func latestEntryText() -> String? {
+        try? repository.latestEntryText()
+    }
+
+    func pendingDictionaryHistoryEntryCount(after checkpoint: DictionaryHistoryScanCheckpoint?) -> Int {
+        (try? repository.pendingNormalEntryCount(after: checkpoint)) ?? 0
+    }
+
+    func pendingDictionaryHistoryEntries(after checkpoint: DictionaryHistoryScanCheckpoint?) -> [TranscriptionHistoryEntry] {
+        (try? repository.pendingNormalEntries(after: checkpoint)) ?? []
+    }
+
+    func reportMetrics(dayStarts: [Date], completion: @escaping (HistoryReportMetrics?) -> Void) {
+        let repository = repository
+        DispatchQueue.global(qos: .utility).async {
+            let metrics = try? repository.reportMetrics(dayStarts: dayStarts)
+            DispatchQueue.main.async {
+                completion(metrics)
+            }
+        }
     }
 
     @discardableResult
@@ -469,36 +561,49 @@ final class TranscriptionHistoryStore: ObservableObject {
             dictionarySuggestedTerms: dictionarySuggestedTerms
         )
 
-        allEntries.insert(entry, at: 0)
-        if allEntries.count > maxStoredEntries {
-            allEntries = Array(allEntries.prefix(maxStoredEntries))
-        }
-        _ = applyRetentionPolicyIfNeeded()
-
-        loadedCount = min(max(loadedCount + 1, pageSize), allEntries.count)
+        totalEntryCount += 1
+        cacheUpdatedEntry(entry)
+        loadedCount = min(max(loadedCount + 1, min(pageSize, allEntries.count)), totalEntryCount)
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
+        persistEntry(entry)
+        cleanupRetainedEntriesIfNeeded()
         return entry.id
     }
 
     func delete(id: UUID) {
-        let removed = allEntries.filter { $0.id == id }
-        allEntries.removeAll { $0.id == id }
-        loadedCount = min(loadedCount, allEntries.count)
+        let wasCached = allEntries.contains { $0.id == id }
+        let removed: TranscriptionHistoryEntry?
+        do {
+            removed = try repository.delete(id: id)
+        } catch {
+            return
+        }
+
+        removeCachedEntry(id: id)
+        if removed != nil || wasCached {
+            totalEntryCount = max(0, totalEntryCount - 1)
+        }
+        loadedCount = min(loadedCount, totalEntryCount)
         refreshEntryIndexes()
         publishVisibleEntries()
-        removed.forEach(removeAudioIfNeeded(for:))
-        persist()
+        removed.map(audioArchive.removeArchive(for:))
     }
 
     func clearAll() {
-        allEntries.forEach(removeAudioIfNeeded(for:))
+        let audioPaths = (try? repository.audioRelativePaths()) ?? []
+        do {
+            try repository.clearAll()
+        } catch {
+            return
+        }
+
+        audioPaths.forEach(audioArchive.removeArchive(relativePath:))
         allEntries = []
         loadedCount = 0
+        totalEntryCount = 0
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
     }
 
     func importAudioArchive(
@@ -506,111 +611,45 @@ final class TranscriptionHistoryStore: ObservableObject {
         kind: TranscriptionHistoryKind,
         preferredFileName: String? = nil
     ) throws -> String {
-        let resolvedFileName = sanitizedAudioFileName(
-            preferredFileName?.trimmingCharacters(in: .whitespacesAndNewlines),
-            fallbackKind: kind
-        )
-        let relativePath = "\(audioFolderName(for: kind))/\(resolvedFileName)"
-        let destinationURL = try historyAssetsDirectoryURL().appendingPathComponent(relativePath)
-        try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if fileManager.fileExists(atPath: destinationURL.path) {
-            try fileManager.removeItem(at: destinationURL)
-        }
-        try fileManager.moveItem(at: sourceURL, to: destinationURL)
-        return relativePath
+        try audioArchive.importArchive(from: sourceURL, kind: kind, preferredFileName: preferredFileName)
     }
 
     func replaceAudioArchive(for entryID: UUID, with sourceURL: URL) throws -> TranscriptionHistoryEntry? {
-        guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
+        guard let existingEntry = entry(id: entryID) else { return nil }
 
-        let existingEntry = allEntries[index]
-        let relativePath = existingEntry.audioRelativePath ?? existingEntry.transcriptAudioRelativePath
-        let resolvedRelativePath = relativePath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            ? relativePath!
-            : "\(audioFolderName(for: existingEntry.kind))/\(sanitizedAudioFileName(nil, fallbackKind: existingEntry.kind))"
-        let destinationURL = try historyAssetsDirectoryURL().appendingPathComponent(resolvedRelativePath)
-        try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if fileManager.fileExists(atPath: destinationURL.path) {
-            try fileManager.removeItem(at: destinationURL)
-        }
-        try fileManager.moveItem(at: sourceURL, to: destinationURL)
+        let resolvedRelativePath = try audioArchive.replaceArchive(for: existingEntry, with: sourceURL)
 
-        allEntries[index] = existingEntry.updatingAudioRelativePath(resolvedRelativePath)
-        entries = Array(allEntries.prefix(loadedCount))
-        persist()
-        return allEntries[index]
+        let updatedEntry = existingEntry.updatingAudioRelativePath(resolvedRelativePath)
+        cacheUpdatedEntry(updatedEntry)
+        persistEntry(updatedEntry)
+        return updatedEntry
     }
 
     func audioURL(for entry: TranscriptionHistoryEntry) -> URL? {
-        let relativePath = entry.audioRelativePath ?? entry.transcriptAudioRelativePath
-        guard let relativePath, !relativePath.isEmpty else {
-            return nil
-        }
-        do {
-            return try historyAssetsDirectoryURL().appendingPathComponent(relativePath)
-        } catch {
-            return nil
-        }
+        audioArchive.audioURL(for: entry)
     }
 
     func exportAllAudioArchives(to destinationDirectoryURL: URL) throws -> HistoryAudioExportSummary {
-        try fileManager.createDirectory(at: destinationDirectoryURL, withIntermediateDirectories: true)
-
-        var exportedCount = 0
-        var skippedCount = 0
-        var failedCount = 0
-
-        for entry in allEntries {
-            guard let sourceURL = audioURL(for: entry) else {
-                skippedCount += 1
-                continue
-            }
-            guard fileManager.fileExists(atPath: sourceURL.path) else {
-                skippedCount += 1
-                continue
-            }
-
-            do {
-                let folderURL = destinationDirectoryURL.appendingPathComponent(audioFolderName(for: entry.kind), isDirectory: true)
-                try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                let destinationURL = folderURL.appendingPathComponent(exportFileName(for: entry))
-                if fileManager.fileExists(atPath: destinationURL.path) {
-                    try fileManager.removeItem(at: destinationURL)
-                }
-                try fileManager.copyItem(at: sourceURL, to: destinationURL)
-                exportedCount += 1
-            } catch {
-                failedCount += 1
-            }
+        try audioArchive.exportAllArchives(to: destinationDirectoryURL) { visitBatch in
+            forEachHistoryBatch(visitBatch)
         }
-
-        return HistoryAudioExportSummary(
-            exportedCount: exportedCount,
-            skippedCount: skippedCount,
-            failedCount: failedCount
-        )
     }
 
     func currentAudioArchiveStorageStats() -> HistoryAudioStorageStats {
-        var storedFileCount = 0
-        var totalBytes: Int64 = 0
+        let audioPaths = (try? repository.audioRelativePaths()) ?? []
+        return audioArchive.storageStats(audioPaths: audioPaths)
+    }
 
-        for entry in allEntries {
-            guard let sourceURL = audioURL(for: entry),
-                  fileManager.fileExists(atPath: sourceURL.path)
-            else {
-                continue
+    func currentAudioArchiveStorageStats(completion: @escaping (HistoryAudioStorageStats) -> Void) {
+        let repository = repository
+        let rootURL = try? audioArchive.rootURL()
+        DispatchQueue.global(qos: .utility).async {
+            let audioPaths = (try? repository.audioRelativePaths()) ?? []
+            let stats = HistoryAudioArchiveService.storageStats(rootURL: rootURL, audioPaths: audioPaths)
+            DispatchQueue.main.async {
+                completion(stats)
             }
-
-            storedFileCount += 1
-            let fileSize = (try? sourceURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-            totalBytes += Int64(fileSize)
         }
-
-        return HistoryAudioStorageStats(
-            storedFileCount: storedFileCount,
-            totalBytes: totalBytes
-        )
     }
 
     func applyDictionarySuggestedTerms(_ snapshotsByHistoryID: [UUID: [DictionarySuggestionSnapshot]]) {
@@ -618,20 +657,21 @@ final class TranscriptionHistoryStore: ObservableObject {
 
         var didChange = false
         for (historyID, snapshots) in snapshotsByHistoryID {
-            guard let index = allEntries.firstIndex(where: { $0.id == historyID }) else { continue }
+            guard let existingEntry = entry(id: historyID) else { continue }
             let merged = mergeSnapshots(
-                existing: allEntries[index].dictionarySuggestedTerms,
+                existing: existingEntry.dictionarySuggestedTerms,
                 incoming: snapshots
             )
-            guard merged != allEntries[index].dictionarySuggestedTerms else { continue }
-            allEntries[index] = allEntries[index].updatingDictionarySuggestedTerms(merged)
+            guard merged != existingEntry.dictionarySuggestedTerms else { continue }
+            let updatedEntry = existingEntry.updatingDictionarySuggestedTerms(merged)
+            cacheUpdatedEntry(updatedEntry)
+            persistEntry(updatedEntry)
             didChange = true
         }
 
         guard didChange else { return }
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
     }
 
     func applyDictionaryCorrectedTerms(_ correctedTermsByHistoryID: [UUID: [String]]) {
@@ -639,20 +679,21 @@ final class TranscriptionHistoryStore: ObservableObject {
 
         var didChange = false
         for (historyID, correctedTerms) in correctedTermsByHistoryID {
-            guard let index = allEntries.firstIndex(where: { $0.id == historyID }) else { continue }
+            guard let existingEntry = entry(id: historyID) else { continue }
             let merged = mergeUniqueTerms(
-                existing: allEntries[index].dictionaryCorrectedTerms,
+                existing: existingEntry.dictionaryCorrectedTerms,
                 incoming: correctedTerms
             )
-            guard merged != allEntries[index].dictionaryCorrectedTerms else { continue }
-            allEntries[index] = allEntries[index].updatingDictionaryCorrectedTerms(merged)
+            guard merged != existingEntry.dictionaryCorrectedTerms else { continue }
+            let updatedEntry = existingEntry.updatingDictionaryCorrectedTerms(merged)
+            cacheUpdatedEntry(updatedEntry)
+            persistEntry(updatedEntry)
             didChange = true
         }
 
         guard didChange else { return }
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
     }
 
     func applyDictionaryCorrectionSnapshots(_ snapshotsByHistoryID: [UUID: [DictionaryCorrectionSnapshot]]) {
@@ -660,20 +701,21 @@ final class TranscriptionHistoryStore: ObservableObject {
 
         var didChange = false
         for (historyID, snapshots) in snapshotsByHistoryID {
-            guard let index = allEntries.firstIndex(where: { $0.id == historyID }) else { continue }
+            guard let existingEntry = entry(id: historyID) else { continue }
             let merged = mergeCorrectionSnapshots(
-                existing: allEntries[index].dictionaryCorrectionSnapshots,
+                existing: existingEntry.dictionaryCorrectionSnapshots,
                 incoming: snapshots
             )
-            guard merged != allEntries[index].dictionaryCorrectionSnapshots else { continue }
-            allEntries[index] = allEntries[index].updatingDictionaryCorrectionSnapshots(merged)
+            guard merged != existingEntry.dictionaryCorrectionSnapshots else { continue }
+            let updatedEntry = existingEntry.updatingDictionaryCorrectionSnapshots(merged)
+            cacheUpdatedEntry(updatedEntry)
+            persistEntry(updatedEntry)
             didChange = true
         }
 
         guard didChange else { return }
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
     }
 
     func applyDictionaryCorrectionResult(
@@ -682,33 +724,34 @@ final class TranscriptionHistoryStore: ObservableObject {
         correctedTerms: [String],
         correctionSnapshots: [DictionaryCorrectionSnapshot]
     ) {
-        guard let index = allEntries.firstIndex(where: { $0.id == historyID }) else { return }
+        guard let existingEntry = entry(id: historyID) else { return }
 
         let trimmedUpdatedText = updatedText.trimmingCharacters(in: .whitespacesAndNewlines)
         let mergedTerms = mergeUniqueTerms(
-            existing: allEntries[index].dictionaryCorrectedTerms,
+            existing: existingEntry.dictionaryCorrectedTerms,
             incoming: correctedTerms
         )
         let mergedSnapshots = mergeCorrectionSnapshots(
-            existing: allEntries[index].dictionaryCorrectionSnapshots,
+            existing: existingEntry.dictionaryCorrectionSnapshots,
             incoming: correctionSnapshots
         )
 
         guard !trimmedUpdatedText.isEmpty else { return }
-        let didTextChange = trimmedUpdatedText != allEntries[index].text
-        let didTermsChange = mergedTerms != allEntries[index].dictionaryCorrectedTerms
-        let didSnapshotsChange = mergedSnapshots != allEntries[index].dictionaryCorrectionSnapshots
+        let didTextChange = trimmedUpdatedText != existingEntry.text
+        let didTermsChange = mergedTerms != existingEntry.dictionaryCorrectedTerms
+        let didSnapshotsChange = mergedSnapshots != existingEntry.dictionaryCorrectionSnapshots
         guard didTextChange || didTermsChange || didSnapshotsChange else { return }
 
-        allEntries[index] = allEntries[index].updatingDictionaryCorrectionResult(
+        let updatedEntry = existingEntry.updatingDictionaryCorrectionResult(
             text: trimmedUpdatedText,
             dictionaryCorrectedTerms: mergedTerms,
             dictionaryCorrectionSnapshots: mergedSnapshots
         )
+        cacheUpdatedEntry(updatedEntry)
 
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
+        persistEntry(updatedEntry)
     }
 
     func replaceDictionaryCorrectionResult(
@@ -717,59 +760,63 @@ final class TranscriptionHistoryStore: ObservableObject {
         correctedTerms: [String],
         correctionSnapshots: [DictionaryCorrectionSnapshot]
     ) {
-        guard let index = allEntries.firstIndex(where: { $0.id == historyID }) else { return }
+        guard let existingEntry = entry(id: historyID) else { return }
 
         let trimmedUpdatedText = updatedText.trimmingCharacters(in: .whitespacesAndNewlines)
         let mergedTerms = mergeUniqueTerms(
-            existing: allEntries[index].dictionaryCorrectedTerms,
+            existing: existingEntry.dictionaryCorrectedTerms,
             incoming: correctedTerms
         )
 
         guard !trimmedUpdatedText.isEmpty else { return }
-        let didTextChange = trimmedUpdatedText != allEntries[index].text
-        let didTermsChange = mergedTerms != allEntries[index].dictionaryCorrectedTerms
-        let didSnapshotsChange = correctionSnapshots != allEntries[index].dictionaryCorrectionSnapshots
+        let didTextChange = trimmedUpdatedText != existingEntry.text
+        let didTermsChange = mergedTerms != existingEntry.dictionaryCorrectedTerms
+        let didSnapshotsChange = correctionSnapshots != existingEntry.dictionaryCorrectionSnapshots
         guard didTextChange || didTermsChange || didSnapshotsChange else { return }
 
-        allEntries[index] = allEntries[index].updatingDictionaryCorrectionResult(
+        let updatedEntry = existingEntry.updatingDictionaryCorrectionResult(
             text: trimmedUpdatedText,
             dictionaryCorrectedTerms: mergedTerms,
             dictionaryCorrectionSnapshots: correctionSnapshots
         )
+        cacheUpdatedEntry(updatedEntry)
 
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
+        persistEntry(updatedEntry)
     }
 
     @discardableResult
     func updateTranscriptSummary(_ summary: TranscriptSummarySnapshot?, for entryID: UUID) -> TranscriptionHistoryEntry? {
-        guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
-        allEntries[index] = allEntries[index].updatingTranscriptSummary(summary)
+        guard let existingEntry = entry(id: entryID) else { return nil }
+        let updatedEntry = existingEntry.updatingTranscriptSummary(summary)
+        cacheUpdatedEntry(updatedEntry)
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
-        return allEntries[index]
+        persistEntry(updatedEntry)
+        return updatedEntry
     }
 
     @discardableResult
     func updateSummaryChatMessages(_ messages: [TranscriptSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
-        guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
-        allEntries[index] = allEntries[index].updatingSummaryChatMessages(messages)
+        guard let existingEntry = entry(id: entryID) else { return nil }
+        let updatedEntry = existingEntry.updatingSummaryChatMessages(messages)
+        cacheUpdatedEntry(updatedEntry)
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
-        return allEntries[index]
+        persistEntry(updatedEntry)
+        return updatedEntry
     }
 
     @discardableResult
     func updateTranscriptionChatMessages(_ messages: [TranscriptSummaryChatMessage], for entryID: UUID) -> TranscriptionHistoryEntry? {
-        guard let index = allEntries.firstIndex(where: { $0.id == entryID }) else { return nil }
-        allEntries[index] = allEntries[index].updatingTranscriptionChatMessages(messages)
+        guard let existingEntry = entry(id: entryID) else { return nil }
+        let updatedEntry = existingEntry.updatingTranscriptionChatMessages(messages)
+        cacheUpdatedEntry(updatedEntry)
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
-        return allEntries[index]
+        persistEntry(updatedEntry)
+        return updatedEntry
     }
 
     @discardableResult
@@ -789,12 +836,12 @@ final class TranscriptionHistoryStore: ObservableObject {
     ) -> TranscriptionHistoryEntry? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
-              let index = allEntries.firstIndex(where: { $0.id == entryID })
+              let existingEntry = entry(id: entryID)
         else {
             return nil
         }
 
-        allEntries[index] = allEntries[index].updatingTranscriptionEntry(
+        let updatedEntry = existingEntry.updatingTranscriptionEntry(
             text: trimmed,
             createdAt: createdAt,
             audioDurationSeconds: audioDurationSeconds,
@@ -807,17 +854,16 @@ final class TranscriptionHistoryStore: ObservableObject {
             dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
             dictionarySuggestedTerms: dictionarySuggestedTerms
         )
-        allEntries.sort { $0.createdAt > $1.createdAt }
+        cacheUpdatedEntry(updatedEntry)
         refreshEntryIndexes()
         publishVisibleEntries()
-        persist()
-        return allEntries.first(where: { $0.id == entryID })
+        persistEntry(updatedEntry)
+        return updatedEntry
     }
 
-    private func persist() {
+    private func persistEntry(_ entry: TranscriptionHistoryEntry) {
         do {
-            let url = try historyFileURL()
-            persistenceCoordinator.scheduleWrite(allEntries, to: url)
+            try repository.upsert(entry)
         } catch {
             // Keep UI responsive even if persistence fails.
         }
@@ -839,7 +885,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         allEntries = decodedEntries
             .filter { $0.kind != .transcript }
             .sorted { $0.createdAt > $1.createdAt }
-        let didPrune = applyRetentionPolicyIfNeeded()
+        totalEntryCount = allEntries.count
 
         let targetLoadedCount: Int
         if resetPagination || loadedCount == 0 {
@@ -851,22 +897,43 @@ final class TranscriptionHistoryStore: ObservableObject {
         loadedCount = min(targetLoadedCount, allEntries.count)
         refreshEntryIndexes()
         publishVisibleEntries()
-
-        if didPrune {
-            persist()
-        }
     }
 
-    private func applyRetentionPolicyIfNeeded(referenceDate: Date = Date()) -> Bool {
-        guard historyCleanupEnabled else { return false }
-        guard let days = historyRetentionPeriod.days else { return false }
+    private func applyLoadedEntries(
+        _ loadedEntries: [TranscriptionHistoryEntry],
+        totalCount: Int,
+        resetPagination: Bool
+    ) {
+        allEntries = uniqueSortedEntries(loadedEntries.filter { $0.kind != .transcript })
+        totalEntryCount = max(0, totalCount)
+
+        let targetLoadedCount: Int
+        if resetPagination || loadedCount == 0 {
+            targetLoadedCount = min(pageSize, allEntries.count)
+        } else {
+            targetLoadedCount = min(max(loadedCount, pageSize), allEntries.count)
+        }
+
+        loadedCount = targetLoadedCount
+        refreshEntryIndexes()
+        publishVisibleEntries()
+        cleanupRetainedEntriesIfNeeded()
+    }
+
+    private func cleanupRetainedEntriesIfNeeded(referenceDate: Date = Date()) {
+        guard historyCleanupEnabled else { return }
+        guard let days = historyRetentionPeriod.days else { return }
 
         let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: referenceDate) ?? referenceDate
-        let originalCount = allEntries.count
-        let removedEntries = allEntries.filter { $0.createdAt < cutoff }
-        allEntries.removeAll { $0.createdAt < cutoff }
-        removedEntries.forEach(removeAudioIfNeeded(for:))
-        return allEntries.count != originalCount
+        let removedEntries = (try? repository.deleteEntries(olderThan: cutoff)) ?? []
+        guard !removedEntries.isEmpty else { return }
+        removedEntries.forEach(audioArchive.removeArchive(for:))
+        let removedIDs = Set(removedEntries.map(\.id))
+        allEntries.removeAll { removedIDs.contains($0.id) }
+        totalEntryCount = max(0, totalEntryCount - removedEntries.count)
+        loadedCount = min(loadedCount, allEntries.count)
+        refreshEntryIndexes()
+        publishVisibleEntries()
     }
 
     private func refreshEntryIndexes() {
@@ -875,6 +942,46 @@ final class TranscriptionHistoryStore: ObservableObject {
 
     private func publishVisibleEntries() {
         entries = Array(allEntries.prefix(loadedCount))
+    }
+
+    private func cacheUpdatedEntry(_ entry: TranscriptionHistoryEntry) {
+        if let index = allEntries.firstIndex(where: { $0.id == entry.id }) {
+            allEntries[index] = entry
+        } else {
+            allEntries.append(entry)
+        }
+        allEntries = uniqueSortedEntries(allEntries)
+        if loadedCount == 0 {
+            loadedCount = min(pageSize, allEntries.count)
+        } else {
+            loadedCount = min(max(loadedCount, min(pageSize, allEntries.count)), allEntries.count)
+        }
+    }
+
+    private func mergeLoadedEntries(_ entries: [TranscriptionHistoryEntry]) {
+        allEntries = uniqueSortedEntries(allEntries + entries.filter { $0.kind != .transcript })
+    }
+
+    private func removeCachedEntry(id: UUID) {
+        allEntries.removeAll { $0.id == id }
+    }
+
+    private func uniqueSortedEntries(_ entries: [TranscriptionHistoryEntry]) -> [TranscriptionHistoryEntry] {
+        var seen = Set<UUID>()
+        return entries
+            .sorted { $0.createdAt > $1.createdAt }
+            .filter { seen.insert($0.id).inserted }
+    }
+
+    private func forEachHistoryBatch(_ body: ([TranscriptionHistoryEntry]) -> Void) {
+        let batchSize = 500
+        var offset = 0
+        while true {
+            let batch = allEntriesBatch(limit: batchSize, offset: offset)
+            guard !batch.isEmpty else { break }
+            body(batch)
+            offset += batch.count
+        }
     }
 
     private func historyFileURL() throws -> URL {
@@ -889,21 +996,8 @@ final class TranscriptionHistoryStore: ObservableObject {
             .appendingPathComponent("transcription-history.json")
     }
 
-    private func historyAssetsDirectoryURL() throws -> URL {
-        try HistoryAudioStorageDirectoryManager.ensureRootDirectoryExists()
-    }
-
-    private func removeAudioIfNeeded(for entry: TranscriptionHistoryEntry) {
-        let relativePath = entry.audioRelativePath ?? entry.transcriptAudioRelativePath
-        guard let relativePath, !relativePath.isEmpty else { return }
-        do {
-            let url = try historyAssetsDirectoryURL().appendingPathComponent(relativePath)
-            if fileManager.fileExists(atPath: url.path) {
-                try fileManager.removeItem(at: url)
-            }
-        } catch {
-            return
-        }
+    private func legacyHistoryFileExists() -> Bool {
+        (try? historyFileURL()).map { fileManager.fileExists(atPath: $0.path) } ?? false
     }
 
     private func mergeSnapshots(
@@ -937,40 +1031,6 @@ final class TranscriptionHistoryStore: ObservableObject {
         }
     }
 
-    private func audioFolderName(for kind: TranscriptionHistoryKind) -> String {
-        switch kind {
-        case .normal:
-            return "transcription"
-        case .translation:
-            return "translation"
-        case .rewrite:
-            return "rewrite"
-        case .transcript:
-            return "transcript"
-        }
-    }
-
-    private func sanitizedAudioFileName(_ preferredFileName: String?, fallbackKind: TranscriptionHistoryKind) -> String {
-        let trimmedPreferred = preferredFileName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let baseName = trimmedPreferred.isEmpty ? "\(audioFolderName(for: fallbackKind))-\(UUID().uuidString)" : trimmedPreferred
-        let filtered = baseName.map { character -> Character in
-            if character.isLetter || character.isNumber || character == "-" || character == "_" {
-                return character
-            }
-            return "-"
-        }
-        let normalized = String(filtered).trimmingCharacters(in: CharacterSet(charactersIn: "-_"))
-        let resolved = normalized.isEmpty ? "\(audioFolderName(for: fallbackKind))-\(UUID().uuidString)" : normalized
-        return resolved.hasSuffix(".wav") ? resolved : "\(resolved).wav"
-    }
-
-    private func exportFileName(for entry: TranscriptionHistoryEntry) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return "\(formatter.string(from: entry.createdAt))-\(audioFolderName(for: entry.kind))-\(entry.id.uuidString).wav"
-    }
-
     private func mergeUniqueTerms(existing: [String], incoming: [String]) -> [String] {
         var merged = existing
         let existingNormalized = Set(existing.map(DictionaryStore.normalizeTerm))
@@ -985,403 +1045,5 @@ final class TranscriptionHistoryStore: ObservableObject {
         }
 
         return merged
-    }
-}
-
-struct HistoryAudioExportSummary: Equatable {
-    let exportedCount: Int
-    let skippedCount: Int
-    let failedCount: Int
-}
-
-struct HistoryAudioStorageStats: Equatable {
-    let storedFileCount: Int
-    let totalBytes: Int64
-}
-
-private extension TranscriptionHistoryEntry {
-    func updatingDictionaryCorrectionResult(
-        text: String,
-        dictionaryCorrectedTerms: [String],
-        dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot]
-    ) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: transcriptSummary,
-            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
-    }
-
-    func updatingDictionaryCorrectedTerms(_ dictionaryCorrectedTerms: [String]) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: transcriptSummary,
-            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
-    }
-
-    func updatingDictionaryCorrectionSnapshots(_ dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot]) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: transcriptSummary,
-            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
-    }
-
-    func updatingDictionarySuggestedTerms(_ dictionarySuggestedTerms: [DictionarySuggestionSnapshot]) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: transcriptSummary,
-            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
-    }
-
-    func updatingTranscriptSummary(_ summary: TranscriptSummarySnapshot?) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: summary,
-            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
-    }
-
-    func updatingSummaryChatMessages(_ summaryChatMessages: [TranscriptSummaryChatMessage]) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: transcriptSummary,
-            transcriptSummaryChatMessages: summaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
-    }
-
-    func updatingTranscriptionChatMessages(_ transcriptionChatMessages: [TranscriptSummaryChatMessage]) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: transcriptSummary,
-            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
-    }
-
-    func updatingTranscriptionEntry(
-        text: String,
-        createdAt: Date,
-        audioDurationSeconds: TimeInterval?,
-        transcriptionProcessingDurationSeconds: TimeInterval?,
-        llmDurationSeconds: TimeInterval?,
-        whisperWordTimings: [WhisperHistoryWordTiming]?,
-        transcriptionChatMessages: [TranscriptSummaryChatMessage],
-        dictionaryHitTerms: [String],
-        dictionaryCorrectedTerms: [String],
-        dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot],
-        dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
-    ) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: transcriptSummary,
-            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
-    }
-
-    func updatingAudioRelativePath(_ audioRelativePath: String?) -> TranscriptionHistoryEntry {
-        TranscriptionHistoryEntry(
-            id: id,
-            text: text,
-            createdAt: createdAt,
-            transcriptionEngine: transcriptionEngine,
-            transcriptionModel: transcriptionModel,
-            enhancementMode: enhancementMode,
-            enhancementModel: enhancementModel,
-            kind: kind,
-            isTranslation: isTranslation,
-            audioDurationSeconds: audioDurationSeconds,
-            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
-            llmDurationSeconds: llmDurationSeconds,
-            focusedAppName: focusedAppName,
-            focusedAppBundleID: focusedAppBundleID,
-            matchedGroupID: matchedGroupID,
-            matchedGroupName: matchedGroupName,
-            matchedAppGroupName: matchedAppGroupName,
-            matchedURLGroupName: matchedURLGroupName,
-            remoteASRProvider: remoteASRProvider,
-            remoteASRModel: remoteASRModel,
-            remoteASREndpoint: remoteASREndpoint,
-            remoteLLMProvider: remoteLLMProvider,
-            remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint,
-            audioRelativePath: audioRelativePath,
-            whisperWordTimings: whisperWordTimings,
-            transcriptSegments: transcriptSegments,
-            transcriptAudioRelativePath: transcriptAudioRelativePath,
-            transcriptSummary: transcriptSummary,
-            transcriptSummaryChatMessages: transcriptSummaryChatMessages,
-            displayTitle: displayTitle,
-            transcriptionChatMessages: transcriptionChatMessages,
-            dictionaryHitTerms: dictionaryHitTerms,
-            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
-            dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
-            dictionarySuggestedTerms: dictionarySuggestedTerms
-        )
     }
 }

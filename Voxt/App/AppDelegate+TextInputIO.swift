@@ -904,7 +904,7 @@ extension AppDelegate {
             return cached
         }
 
-        let historyText = historyStore.allHistoryEntries.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let historyText = historyStore.latestEntryText()?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return historyText.isEmpty ? nil : historyText
     }
 

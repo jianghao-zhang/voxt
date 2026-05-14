@@ -334,36 +334,6 @@ enum DictionaryStoreError: LocalizedError {
     }
 }
 
-private struct DictionaryPreparedEntryInput {
-    let display: String
-    let normalized: String
-    let replacementTerms: [DictionaryReplacementTerm]
-}
-
-private struct DictionaryScopeKey: Hashable {
-    let groupID: UUID?
-}
-
-private struct DictionaryValidationIndex {
-    private(set) var usedMatchKeysByScope: [DictionaryScopeKey: Set<String>] = [:]
-
-    init(entries: [DictionaryEntry], excluding excludedID: UUID? = nil) {
-        for entry in entries where entry.id != excludedID {
-            insert(entry)
-        }
-    }
-
-    func contains(_ normalizedKey: String, groupID: UUID?) -> Bool {
-        usedMatchKeysByScope[DictionaryScopeKey(groupID: groupID)]?.contains(normalizedKey) == true
-    }
-
-    mutating func insert(_ entry: DictionaryEntry) {
-        var keys = usedMatchKeysByScope[DictionaryScopeKey(groupID: entry.groupID)] ?? []
-        keys.formUnion(entry.matchKeys)
-        usedMatchKeysByScope[DictionaryScopeKey(groupID: entry.groupID)] = keys
-    }
-}
-
 @MainActor
 final class DictionaryStore: ObservableObject {
     @Published private(set) var entries: [DictionaryEntry] = []
@@ -373,30 +343,24 @@ final class DictionaryStore: ObservableObject {
     private var reloadGeneration = 0
     private var filteredEntriesCache: [DictionaryFilter: [DictionaryEntry]] = [:]
     private var validationIndex = DictionaryValidationIndex(entries: [])
-    private let persistenceCoordinator: AsyncJSONPersistenceCoordinator
     private let persistenceEnabled: Bool
+    private let repository: DictionaryRepositoryProtocol?
 
     convenience init() {
-        self.init(
-            defaults: .standard,
-            fileManager: .default,
-            persistenceCoordinator: AsyncJSONPersistenceCoordinator(
-                label: "com.voxt.dictionary.persistence"
-            )
-        )
+        self.init(defaults: .standard, fileManager: .default)
     }
 
     init(
         defaults: UserDefaults,
         fileManager: FileManager,
-        persistenceCoordinator: AsyncJSONPersistenceCoordinator,
         initialEntries: [DictionaryEntry]? = nil,
-        persistenceEnabled: Bool = true
+        persistenceEnabled: Bool = true,
+        repository: DictionaryRepositoryProtocol? = nil
     ) {
         self.defaults = defaults
         self.fileManager = fileManager
-        self.persistenceCoordinator = persistenceCoordinator
         self.persistenceEnabled = persistenceEnabled
+        self.repository = persistenceEnabled ? (repository ?? DictionaryRepository()) : repository
         if let initialEntries {
             applyReloadedEntries(initialEntries)
         } else {
@@ -406,6 +370,14 @@ final class DictionaryStore: ObservableObject {
 
     func reload() {
         do {
+            if let repository {
+                let decoded = try repository.allEntries()
+                if !decoded.isEmpty || !legacyDictionaryFileExists() {
+                    applyReloadedEntries(decoded)
+                    return
+                }
+            }
+
             let url = try dictionaryFileURL()
             guard fileManager.fileExists(atPath: url.path) else {
                 applyReloadedEntries([])
@@ -423,6 +395,7 @@ final class DictionaryStore: ObservableObject {
         reloadGeneration += 1
         let generation = reloadGeneration
 
+        let repository = repository
         let url: URL?
         do {
             url = try dictionaryFileURL()
@@ -433,7 +406,11 @@ final class DictionaryStore: ObservableObject {
 
         DispatchQueue.global(qos: .utility).async { [weak self, url] in
             let decodedEntries: [DictionaryEntry]
-            if let url, FileManager.default.fileExists(atPath: url.path) {
+            if let repository,
+               let repositoryEntries = try? repository.allEntries(),
+               !repositoryEntries.isEmpty || url.map({ !FileManager.default.fileExists(atPath: $0.path) }) == true {
+                decodedEntries = repositoryEntries
+            } else if let url, FileManager.default.fileExists(atPath: url.path) {
                 do {
                     let data = try Data(contentsOf: url)
                     decodedEntries = try JSONDecoder().decode([DictionaryEntry].self, from: data)
@@ -453,6 +430,72 @@ final class DictionaryStore: ObservableObject {
 
     func filteredEntries(for filter: DictionaryFilter) -> [DictionaryEntry] {
         filteredEntriesCache[filter] ?? entries
+    }
+
+    func entries(
+        filter: DictionaryFilter,
+        query: String = "",
+        limit: Int,
+        offset: Int
+    ) -> [DictionaryEntry] {
+        if let repository,
+           let pagedEntries = try? repository.entries(
+            filter: filter,
+            query: query,
+            limit: limit,
+            offset: offset
+           ) {
+            return pagedEntries
+        }
+
+        let filteredEntries = filteredEntries(for: filter)
+        let searchedEntries = DictionaryEntryCollection.searchEntries(filteredEntries, query: query)
+        guard offset < searchedEntries.count else { return [] }
+        return Array(searchedEntries.dropFirst(offset).prefix(limit))
+    }
+
+    func entryCount(filter: DictionaryFilter, query: String = "") -> Int {
+        if let repository,
+           let count = try? repository.entryCount(filter: filter, query: query) {
+            return count
+        }
+        return DictionaryEntryCollection.searchEntries(filteredEntries(for: filter), query: query).count
+    }
+
+    func loadEntries(
+        filter: DictionaryFilter,
+        query: String = "",
+        limit: Int,
+        offset: Int,
+        completion: @escaping (Int, [DictionaryEntry]) -> Void
+    ) {
+        guard let repository else {
+            let searchedEntries = DictionaryEntryCollection.searchEntries(filteredEntries(for: filter), query: query)
+            let page = offset < searchedEntries.count
+                ? Array(searchedEntries.dropFirst(offset).prefix(limit))
+                : []
+            completion(searchedEntries.count, page)
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let count = (try? repository.entryCount(filter: filter, query: query)) ?? 0
+            let page = (try? repository.entries(filter: filter, query: query, limit: limit, offset: offset)) ?? []
+            DispatchQueue.main.async {
+                completion(count, page)
+            }
+        }
+    }
+
+    func allTerms(limit: Int? = nil) -> [String] {
+        if let repository,
+           let terms = try? repository.allTerms(limit: limit) {
+            return terms
+        }
+        if let limit {
+            return Array(entries.map(\.term).prefix(limit))
+        }
+        return entries.map(\.term)
     }
 
     func promptBiasTermsText(
@@ -523,8 +566,8 @@ final class DictionaryStore: ObservableObject {
         )
         var updatedEntries = entries
         updatedEntries.insert(entry, at: 0)
+        try upsertPersistedEntry(entry)
         replaceEntries(updatedEntries)
-        persist()
     }
 
     func updateEntry(
@@ -541,27 +584,31 @@ final class DictionaryStore: ObservableObject {
             excluding: id
         )
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
-        entries[index].term = prepared.display
-        entries[index].normalizedTerm = prepared.normalized
-        entries[index].groupID = groupID
-        entries[index].groupNameSnapshot = groupNameSnapshot
-        entries[index].replacementTerms = prepared.replacementTerms
-        entries[index].updatedAt = Date()
+        var updatedEntry = entries[index]
+        updatedEntry.term = prepared.display
+        updatedEntry.normalizedTerm = prepared.normalized
+        updatedEntry.groupID = groupID
+        updatedEntry.groupNameSnapshot = groupNameSnapshot
+        updatedEntry.replacementTerms = prepared.replacementTerms
+        updatedEntry.updatedAt = Date()
 
         let reservedKeys = Set([prepared.normalized] + prepared.replacementTerms.map(\.normalizedText))
-        entries[index].observedVariants.removeAll { reservedKeys.contains($0.normalizedText) }
-        replaceEntries(entries)
-        persist()
+        updatedEntry.observedVariants.removeAll { reservedKeys.contains($0.normalizedText) }
+        try upsertPersistedEntry(updatedEntry)
+
+        var updatedEntries = entries
+        updatedEntries[index] = updatedEntry
+        replaceEntries(updatedEntries)
     }
 
     func delete(id: UUID) {
+        guard deletePersistedEntry(id: id) else { return }
         replaceEntries(entries.filter { $0.id != id }, sort: false)
-        persist()
     }
 
     func clearAll() {
+        guard clearPersistedEntries() else { return }
         replaceEntries([], sort: false)
-        persist()
     }
 
     func exportTransferJSONString() throws -> String {
@@ -612,6 +659,11 @@ final class DictionaryStore: ObservableObject {
         let normalized = normalizedTerm.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return false }
 
+        if let repository,
+           let hasEntry = try? repository.hasEntry(normalizedTerm: normalized, activeGroupID: activeGroupID) {
+            return hasEntry
+        }
+
         let configuration = matcherConfiguration(for: activeGroupID)
         return configuration.entries.contains { entry in
             entry.visibleMatchKeys(blockedKeys: configuration.blockedGlobalMatchKeys).contains(normalized)
@@ -627,35 +679,14 @@ final class DictionaryStore: ObservableObject {
     }
 
     func recordMatches(_ candidates: [DictionaryMatchCandidate]) {
-        recordCandidates(candidates)
+        let updatedEntries = recordCandidates(candidates)
         guard !candidates.isEmpty else { return }
         replaceEntries(entries)
-        persist()
+        persistEntries(updatedEntries)
     }
 
     nonisolated static func normalizeTerm(_ input: String) -> String {
-        let folded = input.folding(
-            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
-            locale: .current
-        )
-        var output = ""
-        var previousWasWhitespace = false
-
-        for scalar in folded.unicodeScalars {
-            if dictionaryIsWordScalar(scalar) {
-                output.unicodeScalars.append(scalar)
-                previousWasWhitespace = false
-            } else if CharacterSet.whitespacesAndNewlines.contains(scalar)
-                        || CharacterSet.punctuationCharacters.contains(scalar)
-                        || CharacterSet.symbols.contains(scalar) {
-                if !previousWasWhitespace && !output.isEmpty {
-                    output.append(" ")
-                    previousWasWhitespace = true
-                }
-            }
-        }
-
-        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        DictionaryTermNormalizer.normalize(input)
     }
 
     private func matcherConfiguration(for activeGroupID: UUID?) -> (entries: [DictionaryEntry], blockedGlobalMatchKeys: Set<String>) {
@@ -679,57 +710,23 @@ final class DictionaryStore: ObservableObject {
         existingEntries: [DictionaryEntry]? = nil,
         validationIndex providedValidationIndex: DictionaryValidationIndex? = nil
     ) throws -> DictionaryPreparedEntryInput {
-        let display = term.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalized = Self.normalizeTerm(display)
-        guard !display.isEmpty, !normalized.isEmpty else {
-            throw DictionaryStoreError.emptyTerm
-        }
-
-        let resolvedValidationIndex: DictionaryValidationIndex
-        if let providedValidationIndex {
-            resolvedValidationIndex = providedValidationIndex
-        } else if let existingEntries {
-            resolvedValidationIndex = DictionaryValidationIndex(entries: existingEntries, excluding: excludedID)
-        } else if excludedID != nil {
-            resolvedValidationIndex = DictionaryValidationIndex(entries: entries, excluding: excludedID)
+        let resolvedEntries: [DictionaryEntry]?
+        if providedValidationIndex == nil, existingEntries == nil, excludedID != nil {
+            resolvedEntries = entries
         } else {
-            resolvedValidationIndex = validationIndex
+            resolvedEntries = existingEntries
         }
 
-        if resolvedValidationIndex.contains(normalized, groupID: groupID) {
-            throw DictionaryStoreError.duplicateTerm
-        }
+        let resolvedValidationIndex = providedValidationIndex
+            ?? (resolvedEntries == nil ? validationIndex : nil)
 
-        var preparedReplacementTerms: [DictionaryReplacementTerm] = []
-        var seenReplacementKeys = Set<String>()
-
-        for rawValue in replacementTerms {
-            let displayValue = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            let normalizedValue = Self.normalizeTerm(displayValue)
-            guard !displayValue.isEmpty, !normalizedValue.isEmpty else { continue }
-
-            if normalizedValue == normalized {
-                throw DictionaryStoreError.replacementMatchesDictionaryTerm
-            }
-
-            guard seenReplacementKeys.insert(normalizedValue).inserted else { continue }
-
-            if resolvedValidationIndex.contains(normalizedValue, groupID: groupID) {
-                throw DictionaryStoreError.duplicateReplacementTerm(displayValue)
-            }
-
-            preparedReplacementTerms.append(
-                DictionaryReplacementTerm(
-                    text: displayValue,
-                    normalizedText: normalizedValue
-                )
-            )
-        }
-
-        return DictionaryPreparedEntryInput(
-            display: display,
-            normalized: normalized,
-            replacementTerms: preparedReplacementTerms
+        return try DictionaryEntryInputPreparer.prepare(
+            term: term,
+            replacementTerms: replacementTerms,
+            groupID: groupID,
+            excluding: excludedID,
+            entries: resolvedEntries,
+            validationIndex: resolvedValidationIndex
         )
     }
 
@@ -771,10 +768,11 @@ final class DictionaryStore: ObservableObject {
         return DictionaryImportResult(addedCount: addedCount, skippedCount: skippedCount)
     }
 
-    private func recordCandidates(_ candidates: [DictionaryMatchCandidate]) {
-        guard !candidates.isEmpty else { return }
+    private func recordCandidates(_ candidates: [DictionaryMatchCandidate]) -> [DictionaryEntry] {
+        guard !candidates.isEmpty else { return [] }
         let now = Date()
         let grouped = Dictionary(grouping: candidates, by: \.entryID)
+        var updatedEntries: [DictionaryEntry] = []
 
         for (entryID, matches) in grouped {
             guard let index = entries.firstIndex(where: { $0.id == entryID }) else { continue }
@@ -794,7 +792,10 @@ final class DictionaryStore: ObservableObject {
                     confidence: confidence(for: candidate)
                 )
             }
+            updatedEntries.append(entries[index])
         }
+
+        return updatedEntries
     }
 
     private func upsertVariant(
@@ -843,13 +844,60 @@ final class DictionaryStore: ObservableObject {
     }
 
     private func persist() {
-        guard persistenceEnabled else { return }
+        guard persistenceEnabled, let repository else { return }
         do {
-            let url = try dictionaryFileURL()
-            persistenceCoordinator.scheduleWrite(entries, to: url)
+            try repository.replaceAll(entries)
         } catch {
             // Keep UI responsive even if persistence fails.
         }
+    }
+
+    private func persistEntry(_ entry: DictionaryEntry) {
+        do {
+            try upsertPersistedEntry(entry)
+        } catch {
+            persist()
+        }
+    }
+
+    private func upsertPersistedEntry(_ entry: DictionaryEntry) throws {
+        guard persistenceEnabled, let repository else { return }
+        try repository.upsert(entry)
+    }
+
+    private func persistEntries(_ updatedEntries: [DictionaryEntry]) {
+        guard persistenceEnabled, let repository else { return }
+        do {
+            for entry in updatedEntries {
+                try repository.upsert(entry)
+            }
+        } catch {
+            persist()
+        }
+    }
+
+    private func deletePersistedEntry(id: UUID) -> Bool {
+        guard persistenceEnabled, let repository else { return true }
+        do {
+            try repository.delete(id: id)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func clearPersistedEntries() -> Bool {
+        guard persistenceEnabled, let repository else { return true }
+        do {
+            try repository.clearAll()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func legacyDictionaryFileExists() -> Bool {
+        (try? dictionaryFileURL()).map { fileManager.fileExists(atPath: $0.path) } ?? false
     }
 
     private func dictionaryFileURL() throws -> URL {

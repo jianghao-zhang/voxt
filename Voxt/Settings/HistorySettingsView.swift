@@ -42,17 +42,18 @@ struct HistorySettingsView: View {
     @State private var selectedHistoryInfoEntry: TranscriptionHistoryEntry?
     @State private var historySearchText = ""
     @State private var showHistorySearchDialog = false
+    @State private var visibleHistoryEntries: [TranscriptionHistoryEntry] = []
+    @State private var totalHistoryEntryCount = 0
+    @State private var isLoadingHistoryEntries = false
+    @State private var historyPageGeneration = 0
+    @State private var historyAudioStatsGeneration = 0
+
+    private let historyPageSize = 80
+    private let historyRowHeight: CGFloat = 70
+    private let historyRowSpacing: CGFloat = 4
 
     private var historyRetentionPeriod: HistoryRetentionPeriod {
         HistoryRetentionPeriod(rawValue: historyRetentionPeriodRaw) ?? .ninetyDays
-    }
-
-    private var filteredEntries: [TranscriptionHistoryEntry] {
-        let entries = HistorySettingsData.filteredEntries(
-            for: selectedFilter,
-            allEntries: historyStore.allHistoryEntries
-        )
-        return HistorySettingsData.searchEntries(entries, query: historySearchText)
     }
 
     private var allNotes: [VoxtNoteItem] {
@@ -64,7 +65,7 @@ struct HistorySettingsView: View {
     }
 
     private var visibleEntries: [TranscriptionHistoryEntry] {
-        filteredEntries
+        visibleHistoryEntries
     }
 
     private var isNoteTabSelected: Bool {
@@ -76,12 +77,10 @@ struct HistorySettingsView: View {
     }
 
     private var emptyState: HistoryContentEmptyState {
-        HistorySettingsData.emptyState(
-            selectedFilter: selectedFilter,
-            allEntries: historyStore.allHistoryEntries,
-            filteredEntries: filteredEntries,
-            notes: allNotes
-        )
+        if selectedFilter == .note {
+            return allNotes.isEmpty ? .noNotes : .none
+        }
+        return totalHistoryEntryCount == 0 ? .noEntriesInCategory : .none
     }
 
     var body: some View {
@@ -89,7 +88,7 @@ struct HistorySettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     GroupBox {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack(alignment: .center, spacing: 12) {
                                 HistoryFilterTabPicker(selectedTab: $selectedFilter)
                                 Spacer(minLength: 12)
@@ -107,7 +106,7 @@ struct HistorySettingsView: View {
                                 }
                                 .buttonStyle(SettingsCompactIconButtonStyle(tone: .destructive))
                                 .help(localized("Delete All"))
-                                .disabled(isNoteTabSelected ? allNotes.isEmpty : historyStore.allHistoryEntries.isEmpty)
+                                .disabled(isNoteTabSelected ? allNotes.isEmpty : totalHistoryEntryCount == 0)
                                 Button {
                                     historyAudioStorageSelectionError = nil
                                     historyAudioExportResultMessage = nil
@@ -206,19 +205,26 @@ struct HistorySettingsView: View {
             }
             refreshHistoryAudioStorageDisplayPath()
             refreshHistoryAudioStorageStats()
-            historyStore.reloadAsync()
+            reloadHistoryEntries(reset: true)
+        }
+        .onChange(of: selectedFilter) { _, _ in
+            reloadHistoryEntries(reset: true)
+        }
+        .onChange(of: historySearchText) { _, _ in
+            reloadHistoryEntries(reset: true)
         }
         .onChange(of: historyCleanupEnabled) { _, _ in
-            historyStore.reloadAsync()
+            applyRetentionPolicyAndReload()
         }
         .onChange(of: historyRetentionPeriodRaw) { _, newValue in
             if !HistoryRetentionPeriod.allCases.contains(where: { $0.rawValue == newValue }) {
                 historyRetentionPeriodRaw = HistoryRetentionPeriod.ninetyDays.rawValue
             }
-            historyStore.reloadAsync()
+            applyRetentionPolicyAndReload()
         }
         .onReceive(historyStore.$entries) { _ in
             refreshHistoryAudioStorageStats()
+            reloadHistoryEntries(reset: true)
         }
     }
 
@@ -250,19 +256,24 @@ struct HistorySettingsView: View {
                 }
             )
         }
-        .frame(minHeight: 260, idealHeight: 480, maxHeight: 580, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: 260, idealHeight: 480, maxHeight: 580, alignment: .top)
     }
 
+    @ViewBuilder
     private var historyList: some View {
-        VirtualizedVerticalList(
+        let list = PagedVerticalList(
             items: visibleEntries,
-            rowHeight: 104,
-            rowSpacing: 8
+            totalCount: totalHistoryEntryCount,
+            rowHeight: historyRowHeight,
+            rowSpacing: historyRowSpacing,
+            isLoading: isLoadingHistoryEntries,
+            onLoadMore: { reloadHistoryEntries(reset: false) }
         ) { entry in
             HistoryRow(
                 entry: entry,
                 audioURL: historyStore.audioURL(for: entry),
                 isCopied: copiedEntryID == entry.id,
+                isCompact: false,
                 onCopy: {
                     copyStringToPasteboard(
                         HistoryCorrectionPresentation.correctedText(
@@ -284,10 +295,24 @@ struct HistorySettingsView: View {
                 onDelete: {
                     copiedEntryID = nil
                     historyStore.delete(id: entry.id)
+                    reloadHistoryEntries(reset: true)
                 }
             )
         }
-        .frame(minHeight: 260, idealHeight: 480, maxHeight: 580, alignment: .top)
+
+        if isSearchActive {
+            list.frame(height: historySearchListHeight, alignment: .top)
+        } else {
+            list.frame(minHeight: 260, idealHeight: 480, maxHeight: 580, alignment: .top)
+        }
+    }
+
+    private var historySearchListHeight: CGFloat {
+        let visibleRowCount = max(1, min(visibleEntries.count, 5))
+        let rowsHeight = CGFloat(visibleRowCount) * historyRowHeight
+            + CGFloat(max(0, visibleRowCount - 1)) * historyRowSpacing
+        let footerHeight: CGFloat = (isLoadingHistoryEntries || visibleEntries.count < totalHistoryEntryCount) ? 40 : 0
+        return min(max(rowsHeight + footerHeight, historyRowHeight), 360)
     }
 
     private func scrollToNavigationTargetIfNeeded(using proxy: ScrollViewProxy) {
@@ -311,8 +336,59 @@ struct HistorySettingsView: View {
         switch target {
         case .history:
             historyStore.clearAll()
+            reloadHistoryEntries(reset: true)
         case .notes:
             noteStore.clearAll()
+        }
+    }
+
+    private func reloadHistoryEntries(reset: Bool) {
+        guard !isNoteTabSelected else {
+            visibleHistoryEntries = []
+            totalHistoryEntryCount = 0
+            isLoadingHistoryEntries = false
+            return
+        }
+
+        let offset = reset ? 0 : visibleHistoryEntries.count
+        guard reset || offset < totalHistoryEntryCount else { return }
+        guard reset || !isLoadingHistoryEntries else { return }
+
+        historyPageGeneration += 1
+        let generation = historyPageGeneration
+        let kind = selectedHistoryKind
+        let query = historySearchText
+        isLoadingHistoryEntries = true
+
+        historyStore.loadEntries(
+            kind: kind,
+            query: query,
+            limit: historyPageSize,
+            offset: offset
+        ) { count, page in
+            guard generation == historyPageGeneration else { return }
+            totalHistoryEntryCount = count
+            visibleHistoryEntries = reset ? page : visibleHistoryEntries + page
+            isLoadingHistoryEntries = false
+        }
+    }
+
+    private func applyRetentionPolicyAndReload() {
+        historyStore.updateRetentionPolicy()
+        reloadHistoryEntries(reset: true)
+        refreshHistoryAudioStorageStats()
+    }
+
+    private var selectedHistoryKind: TranscriptionHistoryKind? {
+        switch selectedFilter {
+        case .transcription:
+            return .normal
+        case .translation:
+            return .translation
+        case .rewrite:
+            return .rewrite
+        case .note:
+            return nil
         }
     }
 
@@ -364,7 +440,12 @@ struct HistorySettingsView: View {
     }
 
     private func refreshHistoryAudioStorageStats() {
-        historyAudioStorageStats = historyStore.currentAudioArchiveStorageStats()
+        historyAudioStatsGeneration += 1
+        let generation = historyAudioStatsGeneration
+        historyStore.currentAudioArchiveStorageStats { stats in
+            guard generation == historyAudioStatsGeneration else { return }
+            historyAudioStorageStats = stats
+        }
     }
 
     private var historyAudioStorageStatsSummary: String {
