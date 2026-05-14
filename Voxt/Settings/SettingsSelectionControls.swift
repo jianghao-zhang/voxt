@@ -129,8 +129,26 @@ private struct SettingsNativeMenuPicker<Value: Hashable>: NSViewRepresentable {
     let selectedTitle: String
     let preferredWidth: CGFloat
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
+    private var state: SettingsNativeMenuPickerState {
+        let selectionBinding = $selection
+        return SettingsNativeMenuPickerState(
+            options: options.map { option in
+                SettingsNativeMenuPickerOption(value: AnyHashable(option.value), title: option.title)
+            },
+            selectedValue: AnyHashable(selection),
+            selectedTitle: selectedTitle,
+            preferredWidth: preferredWidth,
+            onSelectValue: { selectedValue in
+                guard let value = selectedValue.base as? Value else { return }
+                if selectionBinding.wrappedValue != value {
+                    selectionBinding.wrappedValue = value
+                }
+            }
+        )
+    }
+
+    func makeCoordinator() -> SettingsNativeMenuPickerCoordinator {
+        SettingsNativeMenuPickerCoordinator(state: state)
     }
 
     func makeNSView(context: Context) -> SettingsMenuHostView {
@@ -142,62 +160,72 @@ private struct SettingsNativeMenuPicker<Value: Hashable>: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: SettingsMenuHostView, context: Context) {
-        context.coordinator.parent = self
+        context.coordinator.state = state
         nsView.onSelectIndex = { [weak coordinator = context.coordinator] index in
             coordinator?.selectionDidChange(index: index)
         }
         context.coordinator.update(nsView)
     }
+}
 
-    final class Coordinator: NSObject {
-        var parent: SettingsNativeMenuPicker
+private final class SettingsNativeMenuPickerCoordinator: NSObject {
+    var state: SettingsNativeMenuPickerState
 
-        init(parent: SettingsNativeMenuPicker) {
-            self.parent = parent
-        }
+    init(state: SettingsNativeMenuPickerState) {
+        self.state = state
+    }
 
-        func update(_ hostView: SettingsMenuHostView) {
-            let titles = parent.options.map(\.title)
-            if let selectedIndex = parent.options.firstIndex(where: { $0.value == parent.selection }) {
-                hostView.toolTip = parent.options[selectedIndex].title
-                hostView.updateMenu(
-                    titles: titles,
-                    selectedIndex: selectedIndex,
-                    fallbackTitle: parent.options[selectedIndex].title,
-                    preferredWidth: parent.preferredWidth
-                )
-            } else if let firstOption = parent.options.first {
-                hostView.toolTip = firstOption.title
-                hostView.updateMenu(
-                    titles: titles,
-                    selectedIndex: 0,
-                    fallbackTitle: firstOption.title,
-                    preferredWidth: parent.preferredWidth
-                )
-                if parent.selection != firstOption.value {
-                    DispatchQueue.main.async {
-                        self.parent.selection = firstOption.value
-                    }
+    func update(_ hostView: SettingsMenuHostView) {
+        let titles = state.options.map(\.title)
+        if let selectedIndex = state.options.firstIndex(where: { $0.value == state.selectedValue }) {
+            hostView.toolTip = state.options[selectedIndex].title
+            hostView.updateMenu(
+                titles: titles,
+                selectedIndex: selectedIndex,
+                fallbackTitle: state.options[selectedIndex].title,
+                preferredWidth: state.preferredWidth
+            )
+        } else if let firstOption = state.options.first {
+            hostView.toolTip = firstOption.title
+            hostView.updateMenu(
+                titles: titles,
+                selectedIndex: 0,
+                fallbackTitle: firstOption.title,
+                preferredWidth: state.preferredWidth
+            )
+            if state.selectedValue != firstOption.value {
+                DispatchQueue.main.async { [weak self] in
+                    self?.state.onSelectValue(firstOption.value)
                 }
-            } else {
-                hostView.toolTip = parent.selectedTitle
-                hostView.updateMenu(
-                    titles: [],
-                    selectedIndex: nil,
-                    fallbackTitle: parent.selectedTitle,
-                    preferredWidth: parent.preferredWidth
-                )
             }
-        }
-
-        func selectionDidChange(index: Int) {
-            guard parent.options.indices.contains(index) else { return }
-            let selectedValue = parent.options[index].value
-            if parent.selection != selectedValue {
-                parent.selection = selectedValue
-            }
+        } else {
+            hostView.toolTip = state.selectedTitle
+            hostView.updateMenu(
+                titles: [],
+                selectedIndex: nil,
+                fallbackTitle: state.selectedTitle,
+                preferredWidth: state.preferredWidth
+            )
         }
     }
+
+    func selectionDidChange(index: Int) {
+        guard state.options.indices.contains(index) else { return }
+        state.onSelectValue(state.options[index].value)
+    }
+}
+
+private struct SettingsNativeMenuPickerState {
+    let options: [SettingsNativeMenuPickerOption]
+    let selectedValue: AnyHashable
+    let selectedTitle: String
+    let preferredWidth: CGFloat
+    let onSelectValue: (AnyHashable) -> Void
+}
+
+private struct SettingsNativeMenuPickerOption {
+    let value: AnyHashable
+    let title: String
 }
 
 private final class SettingsMenuHostView: NSView {
