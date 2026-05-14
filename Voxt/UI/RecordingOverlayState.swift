@@ -283,6 +283,7 @@ class OverlayState: ObservableObject {
     }
 
     private func transformedTranscribedText(from sourceText: String) -> String {
-        transcribedTextTransformer?(sourceText) ?? sourceText
+        let transformed = transcribedTextTransformer?(sourceText) ?? sourceText
+        return RecordingSessionSupport.textAfterSuppressingPromptEcho(transformed)
     }
 }
