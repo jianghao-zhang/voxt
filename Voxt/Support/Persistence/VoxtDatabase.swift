@@ -15,17 +15,12 @@ final class VoxtDatabase: @unchecked Sendable {
             )
 
             var configuration = Configuration()
+            configuration.journalMode = .wal
             configuration.prepareDatabase { db in
                 try db.execute(sql: "PRAGMA foreign_keys = ON")
             }
 
             dbQueue = try DatabaseQueue(path: resolvedURL.path, configuration: configuration)
-            try dbQueue.writeWithoutTransaction { db in
-                try db.execute(sql: "PRAGMA journal_mode = WAL")
-            }
-            try dbQueue.write { db in
-                try db.execute(sql: "PRAGMA foreign_keys = ON")
-            }
             try Self.migrator.migrate(dbQueue)
         } catch {
             fatalError("Failed to initialize Voxt database: \(error)")
