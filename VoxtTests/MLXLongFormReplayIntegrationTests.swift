@@ -22,11 +22,8 @@ final class MLXLongFormReplayIntegrationTests: XCTestCase {
     private let minimumLongFormDurationSeconds = 30.0
     private let replayStepSeconds = 4.0
 
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Official audio fixture integration tests are local-only and are skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("MLX long-form replay integration tests")
     }
 
     private func officialFixtureDirectoryURL() -> URL {
@@ -143,7 +140,7 @@ final class MLXLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testReplayLongFormClipTracksOfflineBaselineAndTail() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let clipPaths = resolvedLongFormClipPaths()
         guard let clipPath = clipPaths.first else {
             throw XCTSkip("No long-form MLX replay clip is available.")
@@ -185,7 +182,7 @@ final class MLXLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testReplaySampledLongFormClipsProduceNonEmptyFinalTranscript() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let clipPaths = sampledLongFormClipPaths()
         guard !clipPaths.isEmpty else {
             throw XCTSkip("No long-form MLX replay clips are available.")
@@ -210,7 +207,7 @@ final class MLXLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testReplaySampledLongFormClipsTrackOfflineTailAndLateCoverage() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let clipPaths = sampledLongFormClipPaths()
         guard !clipPaths.isEmpty else {
             throw XCTSkip("No long-form MLX replay clips are available.")
@@ -255,7 +252,7 @@ final class MLXLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testOfficialLongFormFixturesAreAvailableLocally() throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let paths = resolvedOfficialLongFormClipPaths()
         XCTAssertEqual(paths.count, 2, "Expected both official composite long-form fixtures to be present locally.")
 
@@ -270,7 +267,7 @@ final class MLXLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testOfficialCompositeLongFixturesPreserveTailAnchors() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let manifest = try officialFixtureManifest()
         let resolved = try resolvedModelRepoAndHubURL()
         let transcriber = MLXTranscriber(

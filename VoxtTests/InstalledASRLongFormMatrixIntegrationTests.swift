@@ -9,11 +9,8 @@ final class InstalledASRLongFormMatrixIntegrationTests: XCTestCase {
         let maximumReasonableCharacters: Int
     }
 
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Installed-model matrix integration tests are local-only and are skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("Installed-model matrix integration tests")
     }
 
     private func officialFixtureDirectoryURL() -> URL {
@@ -85,7 +82,7 @@ final class InstalledASRLongFormMatrixIntegrationTests: XCTestCase {
     }
 
     func testInstalledWhisperModelsProduceReasonableLongFormResults() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let clips = longFormClips()
         guard !clips.isEmpty else {
             throw XCTSkip("No long-form clips are available for installed-model matrix testing.")
@@ -121,7 +118,7 @@ final class InstalledASRLongFormMatrixIntegrationTests: XCTestCase {
     }
 
     func testInstalledMultilingualMLXModelsProduceReasonableLongFormResults() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let clips = longFormClips()
         guard !clips.isEmpty else {
             throw XCTSkip("No long-form clips are available for installed-model matrix testing.")

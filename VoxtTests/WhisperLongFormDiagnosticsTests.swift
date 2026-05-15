@@ -3,11 +3,8 @@ import XCTest
 
 @MainActor
 final class WhisperLongFormDiagnosticsTests: XCTestCase {
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Whisper long-form diagnostics are local-only and are skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("Whisper long-form diagnostics")
     }
 
     private func fixtureURL(named fileName: String) throws -> URL {
@@ -40,7 +37,7 @@ final class WhisperLongFormDiagnosticsTests: XCTestCase {
     }
 
     func testPrintChineseLongFixtureAutoVsForcedLanguageDiagnostics() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let resolved = try resolvedModelManager()
         let transcriber = WhisperKitTranscriber(modelManager: resolved.manager)
         let fixture = try fixtureURL(named: "qwen_audio_long_zh_composite.wav")
@@ -64,7 +61,7 @@ final class WhisperLongFormDiagnosticsTests: XCTestCase {
     }
 
     func testPrintOfficialLongFixtureReplayTraceDiagnostics() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let resolved = try resolvedModelManager()
         let transcriber = WhisperKitTranscriber(modelManager: resolved.manager)
 
@@ -89,7 +86,7 @@ final class WhisperLongFormDiagnosticsTests: XCTestCase {
     }
 
     func testCompareInstalledWhisperModelsOnChineseFixtures() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let defaults = UserDefaults.standard
         defaults.set("/Users/guanwei/x/models", forKey: AppPreferenceKey.modelStorageRootPath)
         defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)

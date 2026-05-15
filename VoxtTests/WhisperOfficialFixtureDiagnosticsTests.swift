@@ -3,11 +3,8 @@ import XCTest
 
 @MainActor
 final class WhisperOfficialFixtureDiagnosticsTests: XCTestCase {
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Whisper diagnostics are local-only and are skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("Whisper diagnostics")
     }
 
     private func fixtureDirectoryURL() -> URL {
@@ -43,7 +40,7 @@ final class WhisperOfficialFixtureDiagnosticsTests: XCTestCase {
     }
 
     func testPrintOfficialShortFixtureOfflineDiagnostics() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let resolved = try resolvedModelManager()
         let transcriber = WhisperKitTranscriber(modelManager: resolved.manager)
 

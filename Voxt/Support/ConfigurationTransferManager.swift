@@ -580,93 +580,125 @@ enum ConfigurationTransferManager {
     }
 
     struct HotkeySettings: Codable {
+        var hotkeyInputType: String
         var hotkeyKeyCode: Int
+        var hotkeyMouseButtonNumber: Int?
         var hotkeyModifiers: Int
         var hotkeySidedModifiers: Int
+        var translationHotkeyInputType: String
         var translationHotkeyKeyCode: Int
+        var translationHotkeyMouseButtonNumber: Int?
         var translationHotkeyModifiers: Int
         var translationHotkeySidedModifiers: Int
+        var rewriteHotkeyInputType: String
         var rewriteHotkeyKeyCode: Int
+        var rewriteHotkeyMouseButtonNumber: Int?
         var rewriteHotkeyModifiers: Int
         var rewriteHotkeySidedModifiers: Int
+        var customPasteHotkeyInputType: String
+        var customPasteHotkeyMouseButtonNumber: Int?
         var rewriteHotkeyActivationMode: String
         var hotkeyTriggerMode: String
         var hotkeyDistinguishModifierSides: Bool
         var hotkeyPreset: String
         var escapeKeyCancelsOverlaySession: Bool
-        var mouseTriggersEnabled: Bool
-        var mouseTriggerMode: String
-        var mouseTranscriptionButtonNumber: Int?
 
         private enum CodingKeys: String, CodingKey {
+            case hotkeyInputType
             case hotkeyKeyCode
+            case hotkeyMouseButtonNumber
             case hotkeyModifiers
             case hotkeySidedModifiers
+            case translationHotkeyInputType
             case translationHotkeyKeyCode
+            case translationHotkeyMouseButtonNumber
             case translationHotkeyModifiers
             case translationHotkeySidedModifiers
+            case rewriteHotkeyInputType
             case rewriteHotkeyKeyCode
+            case rewriteHotkeyMouseButtonNumber
             case rewriteHotkeyModifiers
             case rewriteHotkeySidedModifiers
+            case customPasteHotkeyInputType
+            case customPasteHotkeyMouseButtonNumber
             case rewriteHotkeyActivationMode
             case hotkeyTriggerMode
             case hotkeyDistinguishModifierSides
             case hotkeyPreset
             case escapeKeyCancelsOverlaySession
-            case mouseTriggersEnabled
-            case mouseTriggerMode
-            case mouseTranscriptionButtonNumber
         }
 
         init(
+            hotkeyInputType: String,
             hotkeyKeyCode: Int,
+            hotkeyMouseButtonNumber: Int?,
             hotkeyModifiers: Int,
             hotkeySidedModifiers: Int,
+            translationHotkeyInputType: String,
             translationHotkeyKeyCode: Int,
+            translationHotkeyMouseButtonNumber: Int?,
             translationHotkeyModifiers: Int,
             translationHotkeySidedModifiers: Int,
+            rewriteHotkeyInputType: String,
             rewriteHotkeyKeyCode: Int,
+            rewriteHotkeyMouseButtonNumber: Int?,
             rewriteHotkeyModifiers: Int,
             rewriteHotkeySidedModifiers: Int,
+            customPasteHotkeyInputType: String,
+            customPasteHotkeyMouseButtonNumber: Int?,
             rewriteHotkeyActivationMode: String,
             hotkeyTriggerMode: String,
             hotkeyDistinguishModifierSides: Bool,
             hotkeyPreset: String,
-            escapeKeyCancelsOverlaySession: Bool,
-            mouseTriggersEnabled: Bool,
-            mouseTriggerMode: String,
-            mouseTranscriptionButtonNumber: Int?
+            escapeKeyCancelsOverlaySession: Bool
         ) {
+            self.hotkeyInputType = hotkeyInputType
             self.hotkeyKeyCode = hotkeyKeyCode
+            self.hotkeyMouseButtonNumber = hotkeyMouseButtonNumber
             self.hotkeyModifiers = hotkeyModifiers
             self.hotkeySidedModifiers = hotkeySidedModifiers
+            self.translationHotkeyInputType = translationHotkeyInputType
             self.translationHotkeyKeyCode = translationHotkeyKeyCode
+            self.translationHotkeyMouseButtonNumber = translationHotkeyMouseButtonNumber
             self.translationHotkeyModifiers = translationHotkeyModifiers
             self.translationHotkeySidedModifiers = translationHotkeySidedModifiers
+            self.rewriteHotkeyInputType = rewriteHotkeyInputType
             self.rewriteHotkeyKeyCode = rewriteHotkeyKeyCode
+            self.rewriteHotkeyMouseButtonNumber = rewriteHotkeyMouseButtonNumber
             self.rewriteHotkeyModifiers = rewriteHotkeyModifiers
             self.rewriteHotkeySidedModifiers = rewriteHotkeySidedModifiers
+            self.customPasteHotkeyInputType = customPasteHotkeyInputType
+            self.customPasteHotkeyMouseButtonNumber = customPasteHotkeyMouseButtonNumber
             self.rewriteHotkeyActivationMode = rewriteHotkeyActivationMode
             self.hotkeyTriggerMode = hotkeyTriggerMode
             self.hotkeyDistinguishModifierSides = hotkeyDistinguishModifierSides
             self.hotkeyPreset = hotkeyPreset
             self.escapeKeyCancelsOverlaySession = escapeKeyCancelsOverlaySession
-            self.mouseTriggersEnabled = mouseTriggersEnabled
-            self.mouseTriggerMode = mouseTriggerMode
-            self.mouseTranscriptionButtonNumber = mouseTranscriptionButtonNumber
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            hotkeyInputType = try container.decodeIfPresent(String.self, forKey: .hotkeyInputType)
+                ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
             hotkeyKeyCode = try container.decode(Int.self, forKey: .hotkeyKeyCode)
+            hotkeyMouseButtonNumber = try container.decodeIfPresent(Int.self, forKey: .hotkeyMouseButtonNumber)
             hotkeyModifiers = try container.decode(Int.self, forKey: .hotkeyModifiers)
             hotkeySidedModifiers = try container.decode(Int.self, forKey: .hotkeySidedModifiers)
+            translationHotkeyInputType = try container.decodeIfPresent(String.self, forKey: .translationHotkeyInputType)
+                ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
             translationHotkeyKeyCode = try container.decode(Int.self, forKey: .translationHotkeyKeyCode)
+            translationHotkeyMouseButtonNumber = try container.decodeIfPresent(Int.self, forKey: .translationHotkeyMouseButtonNumber)
             translationHotkeyModifiers = try container.decode(Int.self, forKey: .translationHotkeyModifiers)
             translationHotkeySidedModifiers = try container.decode(Int.self, forKey: .translationHotkeySidedModifiers)
+            rewriteHotkeyInputType = try container.decodeIfPresent(String.self, forKey: .rewriteHotkeyInputType)
+                ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
             rewriteHotkeyKeyCode = try container.decode(Int.self, forKey: .rewriteHotkeyKeyCode)
+            rewriteHotkeyMouseButtonNumber = try container.decodeIfPresent(Int.self, forKey: .rewriteHotkeyMouseButtonNumber)
             rewriteHotkeyModifiers = try container.decode(Int.self, forKey: .rewriteHotkeyModifiers)
             rewriteHotkeySidedModifiers = try container.decode(Int.self, forKey: .rewriteHotkeySidedModifiers)
+            customPasteHotkeyInputType = try container.decodeIfPresent(String.self, forKey: .customPasteHotkeyInputType)
+                ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
+            customPasteHotkeyMouseButtonNumber = try container.decodeIfPresent(Int.self, forKey: .customPasteHotkeyMouseButtonNumber)
             rewriteHotkeyActivationMode = try container.decodeIfPresent(
                 String.self,
                 forKey: .rewriteHotkeyActivationMode
@@ -678,18 +710,6 @@ enum ConfigurationTransferManager {
                 Bool.self,
                 forKey: .escapeKeyCancelsOverlaySession
             ) ?? true
-            mouseTriggersEnabled = try container.decodeIfPresent(
-                Bool.self,
-                forKey: .mouseTriggersEnabled
-            ) ?? false
-            mouseTriggerMode = try container.decodeIfPresent(
-                String.self,
-                forKey: .mouseTriggerMode
-            ) ?? MouseTriggerPreference.defaultTriggerMode.rawValue
-            mouseTranscriptionButtonNumber = try container.decodeIfPresent(
-                Int.self,
-                forKey: .mouseTranscriptionButtonNumber
-            )
         }
     }
 
@@ -967,25 +987,28 @@ enum ConfigurationTransferManager {
                 customBrowsersJSON: defaults.string(forKey: AppPreferenceKey.appBranchCustomBrowsers) ?? "[]"
             ),
             hotkey: .init(
+                hotkeyInputType: defaults.string(forKey: AppPreferenceKey.hotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
                 hotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.hotkeyKeyCode),
+                hotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.hotkeyMouseButtonNumber) as? Int,
                 hotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.hotkeyModifiers),
                 hotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.hotkeySidedModifiers),
+                translationHotkeyInputType: defaults.string(forKey: AppPreferenceKey.translationHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
                 translationHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.translationHotkeyKeyCode),
+                translationHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.translationHotkeyMouseButtonNumber) as? Int,
                 translationHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.translationHotkeyModifiers),
                 translationHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.translationHotkeySidedModifiers),
+                rewriteHotkeyInputType: defaults.string(forKey: AppPreferenceKey.rewriteHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
                 rewriteHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyKeyCode),
+                rewriteHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.rewriteHotkeyMouseButtonNumber) as? Int,
                 rewriteHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyModifiers),
                 rewriteHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeySidedModifiers),
+                customPasteHotkeyInputType: defaults.string(forKey: AppPreferenceKey.customPasteHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
+                customPasteHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.customPasteHotkeyMouseButtonNumber) as? Int,
                 rewriteHotkeyActivationMode: HotkeyPreference.loadRewriteActivationMode(defaults: defaults).rawValue,
                 hotkeyTriggerMode: HotkeyPreference.loadTriggerMode(defaults: defaults).rawValue,
                 hotkeyDistinguishModifierSides: defaults.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? HotkeyPreference.defaultDistinguishModifierSides,
                 hotkeyPreset: defaults.string(forKey: AppPreferenceKey.hotkeyPreset) ?? HotkeyPreference.defaultPreset.rawValue,
-                escapeKeyCancelsOverlaySession: defaults.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true,
-                mouseTriggersEnabled: MouseTriggerPreference.isEnabled(defaults: defaults),
-                mouseTriggerMode: MouseTriggerPreference.loadTriggerMode(defaults: defaults).rawValue,
-                mouseTranscriptionButtonNumber: MouseTriggerPreference.isEnabled(defaults: defaults)
-                    ? MouseTriggerPreference.middleButtonNumber
-                    : nil
+                escapeKeyCancelsOverlaySession: defaults.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true
             )
         )
     }
@@ -1129,15 +1152,23 @@ enum ConfigurationTransferManager {
         }
         defaults.set(appBranch.customBrowsersJSON, forKey: AppPreferenceKey.appBranchCustomBrowsers)
 
+        defaults.set(hotkey.hotkeyInputType, forKey: AppPreferenceKey.hotkeyInputType)
         defaults.set(hotkey.hotkeyKeyCode, forKey: AppPreferenceKey.hotkeyKeyCode)
+        setOptional(hotkey.hotkeyMouseButtonNumber, forKey: AppPreferenceKey.hotkeyMouseButtonNumber, defaults: defaults)
         defaults.set(hotkey.hotkeyModifiers, forKey: AppPreferenceKey.hotkeyModifiers)
         defaults.set(hotkey.hotkeySidedModifiers, forKey: AppPreferenceKey.hotkeySidedModifiers)
+        defaults.set(hotkey.translationHotkeyInputType, forKey: AppPreferenceKey.translationHotkeyInputType)
         defaults.set(hotkey.translationHotkeyKeyCode, forKey: AppPreferenceKey.translationHotkeyKeyCode)
+        setOptional(hotkey.translationHotkeyMouseButtonNumber, forKey: AppPreferenceKey.translationHotkeyMouseButtonNumber, defaults: defaults)
         defaults.set(hotkey.translationHotkeyModifiers, forKey: AppPreferenceKey.translationHotkeyModifiers)
         defaults.set(hotkey.translationHotkeySidedModifiers, forKey: AppPreferenceKey.translationHotkeySidedModifiers)
+        defaults.set(hotkey.rewriteHotkeyInputType, forKey: AppPreferenceKey.rewriteHotkeyInputType)
         defaults.set(hotkey.rewriteHotkeyKeyCode, forKey: AppPreferenceKey.rewriteHotkeyKeyCode)
+        setOptional(hotkey.rewriteHotkeyMouseButtonNumber, forKey: AppPreferenceKey.rewriteHotkeyMouseButtonNumber, defaults: defaults)
         defaults.set(hotkey.rewriteHotkeyModifiers, forKey: AppPreferenceKey.rewriteHotkeyModifiers)
         defaults.set(hotkey.rewriteHotkeySidedModifiers, forKey: AppPreferenceKey.rewriteHotkeySidedModifiers)
+        defaults.set(hotkey.customPasteHotkeyInputType, forKey: AppPreferenceKey.customPasteHotkeyInputType)
+        setOptional(hotkey.customPasteHotkeyMouseButtonNumber, forKey: AppPreferenceKey.customPasteHotkeyMouseButtonNumber, defaults: defaults)
         let rewriteActivationMode = HotkeyPreference.RewriteActivationMode(
             rawValue: hotkey.rewriteHotkeyActivationMode
         ) ?? HotkeyPreference.defaultRewriteActivationMode
@@ -1148,20 +1179,17 @@ enum ConfigurationTransferManager {
         defaults.set(hotkey.hotkeyDistinguishModifierSides, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
         defaults.set(hotkey.hotkeyPreset, forKey: AppPreferenceKey.hotkeyPreset)
         defaults.set(hotkey.escapeKeyCancelsOverlaySession, forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession)
-        defaults.set(hotkey.mouseTriggersEnabled, forKey: AppPreferenceKey.mouseTriggersEnabled)
-        let mouseTriggerMode = HotkeyPreference.TriggerMode(rawValue: hotkey.mouseTriggerMode)
-            ?? MouseTriggerPreference.defaultTriggerMode
-        MouseTriggerPreference.saveTriggerMode(mouseTriggerMode, defaults: defaults)
-        if hotkey.mouseTriggersEnabled {
-            defaults.set(MouseTriggerPreference.middleButtonNumber, forKey: AppPreferenceKey.mouseTranscriptionButtonNumber)
-        } else {
-            defaults.removeObject(forKey: AppPreferenceKey.mouseTranscriptionButtonNumber)
-        }
-        defaults.removeObject(forKey: "mouseTranslationButtonNumber")
-        defaults.removeObject(forKey: "mouseRewriteButtonNumber")
 
         let featureSettings = payload.feature ?? FeatureSettingsStore.deriveFromLegacy(defaults: defaults)
         FeatureSettingsStore.save(featureSettings, defaults: defaults)
+    }
+
+    private static func setOptional(_ value: Int?, forKey key: String, defaults: UserDefaults) {
+        if let value {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     static func sanitizeSensitive(_ value: String) -> String {

@@ -645,6 +645,7 @@
 "Preset" = "Preset";
 "fn Combo" = "fn Combo";
 "Command Combo" = "Command Combo";
+"Mouse Middle + fn Shift" = "Mouse Middle + fn Shift";
 "Custom" = "Custom";
 "Distinguish Left/Right Modifiers" = "Distinguish Left/Right Modifiers";
 "When enabled, Left Shift and Right Shift are treated as different shortcuts." = "When enabled, Left Shift and Right Shift are treated as different shortcuts.";
@@ -1529,9 +1530,7 @@
 "Generation: Default" = "Generation: Default";
 "Configuration: Default" = "Configuration: Default";
 "Generation Settings" = "Generation Settings";
-"Middle-Click Transcription" = "Middle-Click Transcription";
-"Enable Middle Click" = "Enable Middle Click";
-"Use the middle mouse button to start transcription." = "Use the middle mouse button to start transcription.";
-"Middle Mouse Button" = "Middle Mouse Button";
-"No Buttons Assigned" = "No Buttons Assigned";
-"%d Assigned" = "%d Assigned";
+"Mouse Middle Button" = "Mouse Middle Button";
+"Mouse Button %d" = "Mouse Button %d";
+"Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys." = "Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys.";
+"Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite." = "Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite.";

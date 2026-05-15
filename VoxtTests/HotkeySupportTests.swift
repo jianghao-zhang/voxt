@@ -392,72 +392,149 @@ final class HotkeySupportTests: XCTestCase {
         )
     }
 
-    func testMouseTriggerPreferenceRequiresEnabledSwitch() {
-        let suiteName = "MouseTriggerPreferenceTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+    func testMouseHotkeyPersistsAndLoadsWithModifiers() {
+        withRestoredDefaults([
+            AppPreferenceKey.hotkeyPreset,
+            AppPreferenceKey.hotkeyInputType,
+            AppPreferenceKey.hotkeyKeyCode,
+            AppPreferenceKey.hotkeyMouseButtonNumber,
+            AppPreferenceKey.hotkeyModifiers,
+            AppPreferenceKey.hotkeySidedModifiers
+        ]) {
+            UserDefaults.standard.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
 
-        XCTAssertFalse(MouseTriggerPreference.isRuntimeEnabled(defaults: defaults))
+            HotkeyPreference.save(
+                HotkeyPreference.Hotkey(
+                    mouseButtonNumber: 4,
+                    modifiers: [.command],
+                    sidedModifiers: [.rightCommand]
+                )
+            )
 
-        defaults.set(true, forKey: AppPreferenceKey.mouseTriggersEnabled)
-        XCTAssertTrue(MouseTriggerPreference.isRuntimeEnabled(defaults: defaults))
-        XCTAssertTrue(MouseTriggerPreference.isMiddleButton(2))
-        XCTAssertFalse(MouseTriggerPreference.isMiddleButton(3))
-    }
-
-    func testMouseTriggerPreferencePersistsIndependentTriggerMode() {
-        let suiteName = "MouseTriggerPreferenceTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
-
-        defaults.set(HotkeyPreference.TriggerMode.longPress.rawValue, forKey: AppPreferenceKey.hotkeyTriggerMode)
-        XCTAssertEqual(MouseTriggerPreference.loadTriggerMode(defaults: defaults), .tap)
-
-        HotkeyPreference.saveTriggerMode(.tap, defaults: defaults)
-        MouseTriggerPreference.saveTriggerMode(.longPress, defaults: defaults)
-        XCTAssertEqual(MouseTriggerPreference.loadTriggerMode(defaults: defaults), .longPress)
-        XCTAssertEqual(HotkeyPreference.loadTriggerMode(defaults: defaults), .tap)
-
-        defaults.set("invalid", forKey: AppPreferenceKey.mouseTriggerMode)
-        XCTAssertEqual(MouseTriggerPreference.loadTriggerMode(defaults: defaults), .tap)
-    }
-
-    func testMouseLongPressIgnoresDelayedOrphanDownAfterRelease() async {
-        let defaults = UserDefaults.standard
-        let savedTriggerMode = defaults.object(forKey: AppPreferenceKey.mouseTriggerMode)
-        defer { restoreDefaultsValue(savedTriggerMode, forKey: AppPreferenceKey.mouseTriggerMode) }
-
-        MouseTriggerPreference.saveTriggerMode(.longPress)
-        let manager = MouseTriggerManager()
-        var downCount = 0
-        manager.onTranscriptionDown = {
-            downCount += 1
+            XCTAssertEqual(
+                HotkeyPreference.load(),
+                HotkeyPreference.Hotkey(
+                    mouseButtonNumber: 4,
+                    modifiers: [.command],
+                    sidedModifiers: [.rightCommand]
+                )
+            )
+            XCTAssertEqual(
+                UserDefaults.standard.string(forKey: AppPreferenceKey.hotkeyInputType),
+                HotkeyPreference.Hotkey.Input.Kind.mouseButton.rawValue
+            )
+            XCTAssertEqual(UserDefaults.standard.integer(forKey: AppPreferenceKey.hotkeyMouseButtonNumber), 4)
         }
-
-        manager.debugHandleMiddleButtonUpForTests()
-        try? await Task.sleep(nanoseconds: 220_000_000)
-        manager.debugHandleMiddleButtonDownForTests()
-        try? await Task.sleep(nanoseconds: 90_000_000)
-
-        XCTAssertEqual(downCount, 0)
     }
 
-    func testMouseLongPressStartsWhenMiddleButtonIsStillPressed() async {
-        let defaults = UserDefaults.standard
-        let savedTriggerMode = defaults.object(forKey: AppPreferenceKey.mouseTriggerMode)
-        defer { restoreDefaultsValue(savedTriggerMode, forKey: AppPreferenceKey.mouseTriggerMode) }
+    func testMouseHotkeyDisplayStringsUseMouseLabels() {
+        XCTAssertEqual(
+            HotkeyPreference.displayString(
+                for: HotkeyPreference.Hotkey(mouseButtonNumber: 2),
+                distinguishModifierSides: false
+            ),
+            AppLocalization.localizedString("Mouse Middle Button")
+        )
+        XCTAssertEqual(
+            HotkeyPreference.displayString(
+                for: HotkeyPreference.Hotkey(
+                    mouseButtonNumber: 5,
+                    modifiers: [.command],
+                    sidedModifiers: []
+                ),
+                distinguishModifierSides: false
+            ),
+            "⌘ \(AppLocalization.format("Mouse Button %d", 5))"
+        )
+    }
 
-        MouseTriggerPreference.saveTriggerMode(.longPress)
-        let manager = MouseTriggerManager()
-        var downCount = 0
-        manager.onTranscriptionDown = {
-            downCount += 1
+    func testMouseMiddleFnShiftPresetPersistsUnifiedHotkeys() {
+        withRestoredDefaults([
+            AppPreferenceKey.hotkeyPreset,
+            AppPreferenceKey.hotkeyInputType,
+            AppPreferenceKey.hotkeyKeyCode,
+            AppPreferenceKey.hotkeyMouseButtonNumber,
+            AppPreferenceKey.hotkeyModifiers,
+            AppPreferenceKey.hotkeySidedModifiers,
+            AppPreferenceKey.translationHotkeyInputType,
+            AppPreferenceKey.translationHotkeyKeyCode,
+            AppPreferenceKey.translationHotkeyMouseButtonNumber,
+            AppPreferenceKey.translationHotkeyModifiers,
+            AppPreferenceKey.translationHotkeySidedModifiers,
+            AppPreferenceKey.rewriteHotkeyInputType,
+            AppPreferenceKey.rewriteHotkeyKeyCode,
+            AppPreferenceKey.rewriteHotkeyMouseButtonNumber,
+            AppPreferenceKey.rewriteHotkeyModifiers,
+            AppPreferenceKey.rewriteHotkeySidedModifiers,
+            AppPreferenceKey.customPasteHotkeyInputType,
+            AppPreferenceKey.customPasteHotkeyKeyCode,
+            AppPreferenceKey.customPasteHotkeyMouseButtonNumber,
+            AppPreferenceKey.customPasteHotkeyModifiers,
+            AppPreferenceKey.customPasteHotkeySidedModifiers,
+            AppPreferenceKey.hotkeyTriggerMode,
+            AppPreferenceKey.rewriteHotkeyActivationMode
+        ]) {
+            let values = HotkeyPreference.applyPreset(.mouseMiddleFnShift)
+
+            XCTAssertEqual(values?.transcription, HotkeyPreference.Hotkey(mouseButtonNumber: 2))
+            XCTAssertEqual(values?.rewrite, HotkeyPreference.Hotkey(mouseButtonNumber: 2))
+            XCTAssertEqual(values?.translation, HotkeyPreference.Hotkey(keyCode: HotkeyPreference.defaultTranslationKeyCode, modifiers: HotkeyPreference.defaultTranslationModifiers, sidedModifiers: []))
+            XCTAssertEqual(values?.triggerMode, .tap)
+            XCTAssertEqual(values?.rewriteActivationMode, .doubleTapTranscriptionHotkey)
+            XCTAssertEqual(HotkeyPreference.load(), HotkeyPreference.Hotkey(mouseButtonNumber: 2))
+            XCTAssertEqual(HotkeyPreference.loadRewriteActivationMode(), .doubleTapTranscriptionHotkey)
+            XCTAssertEqual(HotkeyPreference.loadTriggerMode(), .tap)
         }
+    }
 
-        manager.debugHandleMiddleButtonDownForTests()
-        try? await Task.sleep(nanoseconds: 90_000_000)
+    func testLegacyKeyboardHotkeyDefaultsWhenInputTypeIsMissing() {
+        withRestoredDefaults([
+            AppPreferenceKey.hotkeyPreset,
+            AppPreferenceKey.hotkeyInputType,
+            AppPreferenceKey.hotkeyKeyCode,
+            AppPreferenceKey.hotkeyMouseButtonNumber,
+            AppPreferenceKey.hotkeyModifiers,
+            AppPreferenceKey.hotkeySidedModifiers
+        ]) {
+            let defaults = UserDefaults.standard
+            defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+            defaults.removeObject(forKey: AppPreferenceKey.hotkeyInputType)
+            defaults.set(Int(UInt16(kVK_ANSI_L)), forKey: AppPreferenceKey.hotkeyKeyCode)
+            defaults.set(9, forKey: AppPreferenceKey.hotkeyMouseButtonNumber)
+            defaults.set(Int(NSEvent.ModifierFlags.command.rawValue), forKey: AppPreferenceKey.hotkeyModifiers)
+            defaults.set(0, forKey: AppPreferenceKey.hotkeySidedModifiers)
 
-        XCTAssertEqual(downCount, 1)
+            XCTAssertEqual(
+                HotkeyPreference.load(),
+                HotkeyPreference.Hotkey(
+                    keyCode: UInt16(kVK_ANSI_L),
+                    modifiers: [.command],
+                    sidedModifiers: []
+                )
+            )
+        }
+    }
+
+    func testKeyCaptureViewCapturesMouseButtonsWithModifiers() async {
+        let view = KeyCaptureView()
+        var captured: HotkeyPreference.Hotkey?
+        view.onHotkeyCaptured = { captured = $0 }
+
+        view.debugCaptureMouseButtonDownForTests(
+            buttonNumber: 4,
+            modifiers: [.command, .shift],
+            sidedModifiers: [.rightCommand, .leftShift]
+        )
+        try? await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertEqual(
+            captured,
+            HotkeyPreference.Hotkey(
+                mouseButtonNumber: 4,
+                modifiers: [.command, .shift],
+                sidedModifiers: [.rightCommand, .leftShift]
+            )
+        )
     }
 
     private func restoreDefaultsValue(_ value: Any?, forKey key: String) {
@@ -467,5 +544,16 @@ final class HotkeySupportTests: XCTestCase {
         } else {
             defaults.removeObject(forKey: key)
         }
+    }
+
+    private func withRestoredDefaults(_ keys: [String], _ body: () -> Void) {
+        let defaults = UserDefaults.standard
+        let savedValues = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        defer {
+            for key in keys {
+                restoreDefaultsValue(savedValues[key] ?? nil, forKey: key)
+            }
+        }
+        body()
     }
 }

@@ -3,11 +3,8 @@ import XCTest
 
 @MainActor
 final class QwenOfficialFixtureASRIntegrationTests: XCTestCase {
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Official audio fixture integration tests are local-only and are skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("Qwen official fixture ASR integration tests")
     }
 
     private func fixtureDirectoryURL() -> URL {
@@ -73,7 +70,7 @@ final class QwenOfficialFixtureASRIntegrationTests: XCTestCase {
     }
 
     func testOfficialEnglishFixtureContainsExpectedTranscriptAnchors() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let transcriber = try makeTranscriber()
         let text = try await transcriber.transcribeAudioFile(
             fixtureURL(named: "qwen_audio_short_en.wav")
@@ -91,7 +88,7 @@ final class QwenOfficialFixtureASRIntegrationTests: XCTestCase {
     }
 
     func testOfficialChongqingChineseFixtureContainsExpectedTranscriptAnchors() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let transcriber = try makeTranscriber()
         let text = try await transcriber.transcribeAudioFile(
             fixtureURL(named: "qwen_audio_short_zh_chongqing.wav")
@@ -109,7 +106,7 @@ final class QwenOfficialFixtureASRIntegrationTests: XCTestCase {
     }
 
     func testOfficialShortChineseEmotionFixturesPreserveCoreUtterance() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let transcriber = try makeTranscriber()
 
         for fileName in ["qwen_audio_short_zh_relaxed.wav", "qwen_audio_short_zh_negative.wav"] {

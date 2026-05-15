@@ -5,11 +5,8 @@ import XCTest
 final class MLXRealtimeReplayIntegrationTests: XCTestCase {
     private let minimumLongFormDurationSeconds = 30.0
 
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Official audio fixture integration tests are local-only and are skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("MLX realtime replay integration tests")
     }
 
     private func officialFixtureDirectoryURL() -> URL {
@@ -63,7 +60,7 @@ final class MLXRealtimeReplayIntegrationTests: XCTestCase {
     }
 
     func testReplayOfficialShortFixtureProducesLiveAndFinalEvents() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let transcriber = try makeTranscriber()
         let diagnostics = try await transcriber.debugReplayRealtimeAudioFileWithTrace(
             fixtureURL(named: "qwen_audio_short_zh_chongqing.wav"),
@@ -76,7 +73,7 @@ final class MLXRealtimeReplayIntegrationTests: XCTestCase {
     }
 
     func testReplayOfficialLongFixtureKeepsPublishingIntoLaterPortion() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let clipURL = try fixtureURL(named: "qwen_audio_long_zh_composite.wav")
         let transcriber = try makeTranscriber()
 
@@ -104,7 +101,7 @@ final class MLXRealtimeReplayIntegrationTests: XCTestCase {
     }
 
     func testReplayOfficialLongFixturePublishesStopPreviewBeforeFinal() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let clipURL = try fixtureURL(named: "qwen_audio_long_en_composite.wav")
         let transcriber = try makeTranscriber()
 

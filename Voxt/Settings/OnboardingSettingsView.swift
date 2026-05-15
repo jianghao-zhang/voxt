@@ -210,6 +210,8 @@ struct OnboardingSettingsView: View {
                 switch HotkeyPreference.Preset(rawValue: hotkeyPresetRaw) ?? .fnCombo {
                 case .commandCombo:
                     return .commandCombo
+                case .mouseMiddleFnShift:
+                    return .mouseMiddleFnShift
                 case .fnCombo, .custom:
                     return .fnCombo
                 }

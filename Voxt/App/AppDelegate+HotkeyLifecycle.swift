@@ -56,35 +56,7 @@ extension AppDelegate {
             self?.handleEscapeShortcut() ?? false
         }
         hotkeyManager.start()
-        setupMouseTriggerCallbacks()
-        refreshMouseTriggerManager()
-        if mouseShortcutDefaultsObserver == nil {
-            mouseShortcutDefaultsObserver = NotificationCenter.default.addObserver(
-                forName: UserDefaults.didChangeNotification,
-                object: UserDefaults.standard,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.refreshMouseTriggerManager()
-                }
-            }
-        }
         VoxtLog.hotkey("Hotkey callbacks configured.")
-    }
-
-    func setupMouseTriggerCallbacks() {
-        mouseTriggerManager.onTranscriptionDown = { [weak self] in
-            guard let self else { return }
-            self.handleTranscriptionMouseTriggerDown()
-        }
-        mouseTriggerManager.onTranscriptionUp = { [weak self] in
-            guard let self else { return }
-            self.handleTranscriptionMouseTriggerUp()
-        }
-    }
-
-    func refreshMouseTriggerManager() {
-        mouseTriggerManager.refresh()
     }
 
     func setupLifecycleRecoveryObservers() {
@@ -134,7 +106,6 @@ extension AppDelegate {
     func scheduleHotkeyTransientStateReset(reason: String) {
         Task { @MainActor [weak self] in
             self?.hotkeyManager.resetTransientState(reason: reason)
-            self?.mouseTriggerManager.resetTransientState(reason: reason)
         }
     }
 
@@ -231,18 +202,6 @@ extension AppDelegate {
         )
     }
 
-    func handleTranscriptionMouseTriggerDown() {
-        handleTranscriptionTriggerDown(
-            triggerMode: MouseTriggerPreference.loadTriggerMode(),
-            allowsDoubleTapRewrite: false,
-            source: "mouse",
-            pendingStartDelay: mouseLongPressActivationDelay,
-            pendingStartShouldStart: { [weak self] in
-                self?.mouseTriggerManager.isMiddleButtonPressed() == true
-            }
-        )
-    }
-
     private func handleTranscriptionTriggerDown(
         triggerMode: HotkeyPreference.TriggerMode,
         allowsDoubleTapRewrite: Bool,
@@ -307,33 +266,14 @@ extension AppDelegate {
         handleTranscriptionTriggerUp(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
     }
 
-    func handleTranscriptionMouseTriggerUp() {
-        handleTranscriptionTriggerUp(
-            triggerMode: MouseTriggerPreference.loadTriggerMode(),
-            source: "mouse",
-            cancelsFreshLongPressSession: true
-        )
-    }
-
     private func handleTranscriptionTriggerUp(
         triggerMode: HotkeyPreference.TriggerMode,
-        source: String,
-        cancelsFreshLongPressSession: Bool = false
+        source: String
     ) {
         guard triggerMode == .longPress else { return }
         VoxtLog.hotkey(
             "Trigger callback transcriptionUp. source=\(source), isSessionActive=\(isSessionActive), sessionOutput=\(sessionOutputMode == .translation ? "translation" : "transcription"), pendingStart=\(pendingTranscriptionStartTask != nil)",
         )
-        if cancelsFreshLongPressSession,
-           pendingTranscriptionStartTask == nil,
-           isSessionActive,
-           sessionOutputMode == .transcription,
-           let recordingStartedAt,
-           Date().timeIntervalSince(recordingStartedAt) < mouseLongPressQuickReleaseCancelInterval {
-            VoxtLog.hotkey("Mouse long-press transcription cancelled after quick release.")
-            cancelActiveRecordingSession()
-            return
-        }
         let actions = HotkeyActionResolver.resolveTranscriptionUp(
             state: HotkeyActionResolver.State(
                 triggerMode: triggerMode,
@@ -351,10 +291,6 @@ extension AppDelegate {
 
     func handleTranslationHotkeyDown() {
         handleTranslationTriggerDown(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
-    }
-
-    func handleTranslationMouseTriggerDown() {
-        handleTranslationTriggerDown(triggerMode: MouseTriggerPreference.loadTriggerMode(), source: "mouse")
     }
 
     private func handleTranslationTriggerDown(
@@ -402,10 +338,6 @@ extension AppDelegate {
         handleTranslationTriggerUp(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
     }
 
-    func handleTranslationMouseTriggerUp() {
-        handleTranslationTriggerUp(triggerMode: MouseTriggerPreference.loadTriggerMode(), source: "mouse")
-    }
-
     private func handleTranslationTriggerUp(
         triggerMode: HotkeyPreference.TriggerMode,
         source: String
@@ -431,10 +363,6 @@ extension AppDelegate {
 
     func handleRewriteHotkeyDown() {
         handleRewriteTriggerDown(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
-    }
-
-    func handleRewriteMouseTriggerDown() {
-        handleRewriteTriggerDown(triggerMode: MouseTriggerPreference.loadTriggerMode(), source: "mouse")
     }
 
     private func handleRewriteTriggerDown(
@@ -468,10 +396,6 @@ extension AppDelegate {
 
     func handleRewriteHotkeyUp() {
         handleRewriteTriggerUp(triggerMode: HotkeyPreference.loadTriggerMode(), source: "hotkey")
-    }
-
-    func handleRewriteMouseTriggerUp() {
-        handleRewriteTriggerUp(triggerMode: MouseTriggerPreference.loadTriggerMode(), source: "mouse")
     }
 
     private func handleRewriteTriggerUp(

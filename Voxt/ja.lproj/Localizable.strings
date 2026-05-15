@@ -643,6 +643,7 @@
 "Preset" = "プリセット";
 "fn Combo" = "fn コンボ";
 "Command Combo" = "Command コンボ";
+"Mouse Middle + fn Shift" = "中ボタン + fn Shift";
 "Custom" = "カスタム";
 "Distinguish Left/Right Modifiers" = "左右の修飾キーを区別する";
 "When enabled, Left Shift and Right Shift are treated as different shortcuts." = "有効にすると、左 Shift と右 Shift は別のショートカットとして扱われます。";
@@ -1474,9 +1475,7 @@
 "Generation: Default" = "生成: 既定";
 "Configuration: Default" = "設定: 既定";
 "Generation Settings" = "生成設定";
-"Middle-Click Transcription" = "中クリック文字起こし";
-"Enable Middle Click" = "中クリックを有効化";
-"Use the middle mouse button to start transcription." = "マウスの中ボタンで文字起こしを開始します。";
-"Middle Mouse Button" = "中ボタン";
-"No Buttons Assigned" = "ボタン未割り当て";
-"%d Assigned" = "%d 件割り当て済み";
+"Mouse Middle Button" = "マウス中ボタン";
+"Mouse Button %d" = "マウスボタン %d";
+"Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys." = "中クリックやサイドボタンなどのマウスボタンも、修飾キー付きでショートカットに登録できます。";
+"Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite." = "文字起こしはマウス中ボタン、翻訳は fn+shift、内容リライトは中ボタンのダブルタップを使います。";

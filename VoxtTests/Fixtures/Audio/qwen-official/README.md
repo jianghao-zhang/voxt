@@ -60,5 +60,5 @@ public, referenceable material instead of private local history clips.
 
 ### CI Policy
 
-Fixture-backed real-model tests must skip automatically when `CI=true` or
-`GITHUB_ACTIONS=true`.
+Fixture-backed real-model tests are skipped by default. Run them explicitly with
+`VOXT_RUN_MODEL_TESTS=1` plus the desired `-only-testing:` filter.

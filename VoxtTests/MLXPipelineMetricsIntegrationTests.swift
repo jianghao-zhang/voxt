@@ -12,11 +12,8 @@ final class MLXPipelineMetricsIntegrationTests: XCTestCase {
         let lateCoverageRate: Double
     }
 
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("MLX pipeline metrics regression is local-only and is skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("MLX pipeline metrics regression tests")
     }
 
     private func officialFixtureDirectoryURL() -> URL {
@@ -173,7 +170,7 @@ final class MLXPipelineMetricsIntegrationTests: XCTestCase {
     }
 
     func testFinalOnlyOfficialLongFixtureMetricsStayWithinExpectedEnvelope() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let resolved = try resolvedModelRepoAndHubURL()
         let transcriber = makeTranscriber(repo: resolved.repo, hubURL: resolved.hubURL)
         let diagnosticsList = try await officialLongFixtureURLs().asyncMap {
@@ -205,7 +202,7 @@ final class MLXPipelineMetricsIntegrationTests: XCTestCase {
     }
 
     func testRealtimeOfficialLongFixtureMetricsStayWithinExpectedEnvelope() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let resolved = try resolvedModelRepoAndHubURL()
         let transcriber = makeTranscriber(repo: resolved.repo, hubURL: resolved.hubURL)
         let diagnosticsList = try await officialLongFixtureURLs().asyncMap {

@@ -9,18 +9,26 @@ import IOKit.hidsystem
 final class HotkeyManagerTests: XCTestCase {
     private static var retainedManagers: [HotkeyManager] = []
     private let managedDefaultKeys = [
+        AppPreferenceKey.hotkeyInputType,
         AppPreferenceKey.hotkeyKeyCode,
+        AppPreferenceKey.hotkeyMouseButtonNumber,
         AppPreferenceKey.hotkeyModifiers,
         AppPreferenceKey.hotkeySidedModifiers,
+        AppPreferenceKey.translationHotkeyInputType,
         AppPreferenceKey.translationHotkeyKeyCode,
+        AppPreferenceKey.translationHotkeyMouseButtonNumber,
         AppPreferenceKey.translationHotkeyModifiers,
         AppPreferenceKey.translationHotkeySidedModifiers,
+        AppPreferenceKey.rewriteHotkeyInputType,
         AppPreferenceKey.rewriteHotkeyKeyCode,
+        AppPreferenceKey.rewriteHotkeyMouseButtonNumber,
         AppPreferenceKey.rewriteHotkeyModifiers,
         AppPreferenceKey.rewriteHotkeySidedModifiers,
         AppPreferenceKey.rewriteHotkeyActivationMode,
         AppPreferenceKey.customPasteHotkeyEnabled,
+        AppPreferenceKey.customPasteHotkeyInputType,
         AppPreferenceKey.customPasteHotkeyKeyCode,
+        AppPreferenceKey.customPasteHotkeyMouseButtonNumber,
         AppPreferenceKey.customPasteHotkeyModifiers,
         AppPreferenceKey.customPasteHotkeySidedModifiers,
         AppPreferenceKey.hotkeyTriggerMode,
@@ -1005,6 +1013,86 @@ final class HotkeyManagerTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(120))
 
         XCTAssertEqual(events, ["down", "up"])
+    }
+
+    func testMouseMiddleTapTriggersTranscriptionCallbacks() {
+        let defaults = UserDefaults.standard
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+        HotkeyPreference.save(HotkeyPreference.Hotkey(mouseButtonNumber: 2))
+
+        let manager = makeManager()
+        var events: [String] = []
+        manager.onKeyDown = { events.append("down") }
+        manager.onKeyUp = { events.append("up") }
+
+        XCTAssertTrue(manager.testingHandleMouseEvent(type: .otherMouseDown, buttonNumber: 2))
+        XCTAssertTrue(manager.testingHandleMouseEvent(type: .otherMouseUp, buttonNumber: 2))
+
+        XCTAssertEqual(events, ["down", "up"])
+    }
+
+    func testSecondMouseMiddleTapCanFeedDoubleTapRewriteResolver() {
+        let defaults = UserDefaults.standard
+        defaults.set(HotkeyPreference.Preset.custom.rawValue, forKey: AppPreferenceKey.hotkeyPreset)
+        defaults.set(
+            HotkeyPreference.RewriteActivationMode.doubleTapTranscriptionHotkey.rawValue,
+            forKey: AppPreferenceKey.rewriteHotkeyActivationMode
+        )
+        HotkeyPreference.save(HotkeyPreference.Hotkey(mouseButtonNumber: 2))
+        HotkeyPreference.saveRewrite(HotkeyPreference.Hotkey(mouseButtonNumber: 2))
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        var rewriteDownCount = 0
+        manager.onKeyDown = { transcriptionDownCount += 1 }
+        manager.onRewriteKeyDown = { rewriteDownCount += 1 }
+
+        manager.testingHandleMouseEvent(type: .otherMouseDown, buttonNumber: 2)
+        manager.testingHandleMouseEvent(type: .otherMouseUp, buttonNumber: 2)
+        manager.testingHandleMouseEvent(type: .otherMouseDown, buttonNumber: 2)
+        manager.testingHandleMouseEvent(type: .otherMouseUp, buttonNumber: 2)
+
+        XCTAssertEqual(transcriptionDownCount, 2)
+        XCTAssertEqual(rewriteDownCount, 0)
+    }
+
+    func testMousePresetKeepsFnShiftTranslationHigherPriority() async {
+        HotkeyPreference.applyPreset(.mouseMiddleFnShift)
+
+        let manager = makeManager()
+        var transcriptionDownCount = 0
+        var translationDownCount = 0
+        manager.onKeyDown = { transcriptionDownCount += 1 }
+        let callbackExpectation = expectation(description: "fn-shift translation callback with mouse transcription")
+        manager.onTranslationKeyDown = {
+            translationDownCount += 1
+            callbackExpectation.fulfill()
+        }
+
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Shift),
+            flags: .maskShift
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: combinedFlags(.maskShift, .maskSecondaryFn)
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Function),
+            flags: .maskShift
+        )
+        manager.testingHandleEvent(
+            type: .flagsChanged,
+            keyCode: UInt16(kVK_Shift),
+            flags: []
+        )
+
+        await fulfillment(of: [callbackExpectation], timeout: 1.0)
+        XCTAssertEqual(transcriptionDownCount, 0)
+        XCTAssertEqual(translationDownCount, 1)
     }
 
     private func combinedFlags(_ flags: CGEventFlags...) -> CGEventFlags {

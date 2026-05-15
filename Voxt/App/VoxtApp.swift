@@ -115,7 +115,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let systemAudioMuteController = SystemAudioMuteController()
 
     let hotkeyManager = HotkeyManager()
-    let mouseTriggerManager = MouseTriggerManager()
     let overlayWindow = RecordingOverlayWindow()
     let overlayState = OverlayState()
     lazy var noteWindowManager = VoxtNoteWindowManager(store: noteStore)
@@ -144,7 +143,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateAvailabilityObserver: NSObjectProtocol?
     private var selectedInputDeviceObserver: NSObjectProtocol?
     private var featureSettingsObserver: NSObjectProtocol?
-    var mouseShortcutDefaultsObserver: NSObjectProtocol?
     var workspaceWillSleepObserver: NSObjectProtocol?
     var workspaceDidWakeObserver: NSObjectProtocol?
     var workspaceSessionDidBecomeActiveObserver: NSObjectProtocol?
@@ -215,8 +213,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var activeSessionTranslationProviderResolution: TranslationProviderResolution?
     let tapStopGuardInterval: TimeInterval = 0.35
     let transcriptionStartDebounceInterval: TimeInterval = 0.08
-    let mouseLongPressActivationDelay: TimeInterval = 0.08
-    let mouseLongPressQuickReleaseCancelInterval: TimeInterval = 0.35
     var mainWindowPresentationState = MainWindowPresentationState()
 
     override init() {
