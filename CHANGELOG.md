@@ -6,6 +6,41 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.6-beta.2] - 2026-05-15
+
+### English
+
+#### Added
+- Added a Codex auth file picker so users can choose the local `auth.json` used by ChatGPT Codex.
+
+#### Changed
+- Beta GitHub releases are now marked as prereleases.
+
+#### Fixed
+- Fixed Codex auth lookup in sandboxed builds by resolving the real user home and preserving selected auth file access.
+
+### 简体中文
+
+#### 新增
+- 在 Codex 配置中新增 auth 文件选择器，用户可以选择 ChatGPT Codex 使用的本地 `auth.json`。
+
+#### 改进
+- Beta GitHub release 现在会标记为 prerelease。
+
+#### 修复
+- 修复 sandbox 构建中 Codex auth 查找路径不正确的问题，现在会解析真实用户 home 并保留已选择 auth 文件的访问权限。
+
+### 日本語
+
+#### 追加
+- Codex 設定に auth ファイルピッカーを追加し、ChatGPT Codex が使うローカル `auth.json` を選択できるようにしました。
+
+#### 変更
+- Beta の GitHub release を prerelease としてマークするようにしました。
+
+#### 修正
+- sandbox ビルドで Codex auth の参照先が誤る問題を修正し、実ユーザーの home 解決と選択済み auth ファイルへのアクセス保持に対応しました。
+
 ## [1.11.6-beta.1] - 2026-05-15
 
 ### English
