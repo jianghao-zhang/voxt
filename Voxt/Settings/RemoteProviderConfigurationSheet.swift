@@ -58,6 +58,7 @@ struct RemoteProviderConfigurationSheet: View {
     @State var omlxJSONSchema = ""
     @State var omlxIncludeUsageStreamOptions = false
     @State var omlxExtraBodyJSON = ""
+    @State var dynamicCodexModelOptions: [RemoteModelOption]?
     @State var isTestingConnection = false
     @State var testResultMessage: String?
     @State var testResultIsSuccess = false
@@ -91,7 +92,7 @@ struct RemoteProviderConfigurationSheet: View {
                         searchSection
                     }
 
-                    if llmProviderForPicker != nil {
+                    if llmProviderForPicker != nil && !isCodexLLMProvider {
                         advancedGenerationSettingsSection
                     }
 
@@ -149,7 +150,7 @@ struct RemoteProviderConfigurationSheet: View {
         .onAppear {
             configureModelSelection()
             customModelID = configuration.model
-            endpoint = configuration.endpoint
+            endpoint = initialEndpointValue()
             apiKey = configuration.apiKey
             appID = configuration.appID
             accessToken = configuration.accessToken
@@ -173,6 +174,7 @@ struct RemoteProviderConfigurationSheet: View {
             omlxJSONSchema = configuration.omlxJSONSchema
             omlxIncludeUsageStreamOptions = configuration.omlxIncludeUsageStreamOptions
             omlxExtraBodyJSON = configuration.omlxExtraBodyJSON
+            loadCodexModelOptionsIfNeeded()
         }
     }
 }

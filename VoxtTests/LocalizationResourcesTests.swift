@@ -118,4 +118,25 @@ final class LocalizationResourcesTests: XCTestCase {
         XCTAssertEqual(AppLocalization.localizedString("Correct", localeIdentifier: "zh-Hans"), "纠错")
         XCTAssertEqual(AppLocalization.localizedString("Correct", localeIdentifier: "ja"), "修正")
     }
+
+    func testCodexConfigurationTextIsLocalizedInSupportedLanguages() {
+        let keys = [
+            "Codex Login",
+            "Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails.",
+            "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials.",
+            "Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first."
+        ]
+
+        for key in keys {
+            XCTAssertEqual(AppLocalization.localizedString(key, localeIdentifier: "en"), key)
+
+            let chinese = AppLocalization.localizedString(key, localeIdentifier: "zh-Hans")
+            XCTAssertFalse(chinese.isEmpty, "Missing zh-Hans localization for \(key)")
+            XCTAssertNotEqual(chinese, key, "Expected zh-Hans translation for \(key)")
+
+            let japanese = AppLocalization.localizedString(key, localeIdentifier: "ja")
+            XCTAssertFalse(japanese.isEmpty, "Missing ja localization for \(key)")
+            XCTAssertNotEqual(japanese, key, "Expected ja translation for \(key)")
+        }
+    }
 }

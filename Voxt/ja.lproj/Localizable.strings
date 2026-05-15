@@ -1479,3 +1479,11 @@
 "Mouse Button %d" = "マウスボタン %d";
 "Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys." = "中クリックやサイドボタンなどのマウスボタンも、修飾キー付きでショートカットに登録できます。";
 "Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite." = "文字起こしはマウス中ボタン、翻訳は fn+shift、内容リライトは中ボタンのダブルタップを使います。";
+"ChatGPT Codex" = "ChatGPT Codex";
+"Codex Login" = "Codex ログイン";
+"Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails." = "Voxt は ~/.codex/auth.json のローカル Codex ログインを使用します。テストに失敗する場合は、先に `codex login` を実行してください。";
+"Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex は ChatGPT サブスクリプションのバックエンドとローカルの Codex OAuth 認証情報を使用します。";
+"Codex auth not found at %@. Run `codex login` first." = "%@ に Codex auth が見つかりません。先に `codex login` を実行してください。";
+"Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first." = "Codex auth.json に ChatGPT OAuth トークンがありません。先に `codex login` を実行してください。";
+"Invalid Codex auth.json: %@" = "Codex auth.json が無効です: %@";
+"Codex token refresh failed (HTTP %d). %@ Run `codex login` again." = "Codex トークンの更新に失敗しました（HTTP %d）。%@ `codex login` を再実行してください。";

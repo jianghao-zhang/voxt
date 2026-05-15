@@ -239,23 +239,32 @@ extension RemoteProviderConfigurationSheet {
                 }
             }
 
-            generationNumericField(
-                title: AppLocalization.localizedString("Max Output Tokens (Optional)"),
-                placeholder: AppLocalization.localizedString("e.g. 4096"),
-                text: $generationMaxOutputTokensText
-            )
+            if generationCapabilities?.supportsMaxOutputTokens == true {
+                generationNumericField(
+                    title: AppLocalization.localizedString("Max Output Tokens (Optional)"),
+                    placeholder: AppLocalization.localizedString("e.g. 4096"),
+                    text: $generationMaxOutputTokensText
+                )
+            }
 
-            HStack(alignment: .top, spacing: 12) {
-                generationNumericField(
-                    title: AppLocalization.localizedString("Temperature"),
-                    placeholder: "0.2",
-                    text: $generationTemperatureText
-                )
-                generationNumericField(
-                    title: AppLocalization.localizedString("Top P"),
-                    placeholder: "0.9",
-                    text: $generationTopPText
-                )
+            if generationCapabilities?.supportsTemperature == true ||
+                generationCapabilities?.supportsTopP == true {
+                HStack(alignment: .top, spacing: 12) {
+                    if generationCapabilities?.supportsTemperature == true {
+                        generationNumericField(
+                            title: AppLocalization.localizedString("Temperature"),
+                            placeholder: "0.2",
+                            text: $generationTemperatureText
+                        )
+                    }
+                    if generationCapabilities?.supportsTopP == true {
+                        generationNumericField(
+                            title: AppLocalization.localizedString("Top P"),
+                            placeholder: "0.9",
+                            text: $generationTopPText
+                        )
+                    }
+                }
             }
 
             if shouldShowGenerationAdvancedControls {
@@ -300,7 +309,9 @@ extension RemoteProviderConfigurationSheet {
                                 generationLogprobsSection
                             }
 
-                            generationStopSection
+                            if generationCapabilities?.supportsStopSequences == true {
+                                generationStopSection
+                            }
                         }
                         .padding(.top, 8)
                     },

@@ -284,13 +284,13 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertFalse(ids.contains("gpt-5.4"))
     }
 
-    func testCodexModelCatalogDefaultsToMini() {
-        XCTAssertEqual(RemoteLLMProvider.codex.suggestedModel, "gpt-5.4-mini")
+    func testCodexModelCatalogDefaultsToCurrentModel() {
+        XCTAssertEqual(RemoteLLMProvider.codex.suggestedModel, "gpt-5.4")
 
         let ids = RemoteLLMProvider.codex.modelOptions.map(\.id)
-        XCTAssertEqual(ids.first, "gpt-5.4-mini")
+        XCTAssertEqual(ids.first, "gpt-5.4")
         XCTAssertTrue(ids.contains("gpt-5.3-codex-spark"))
-        XCTAssertTrue(ids.contains("gpt-5.4"))
+        XCTAssertTrue(ids.contains("gpt-5.4-mini"))
     }
 
     func testOpenAIReasoningEffortOptionsFollowModelSupport() {
@@ -416,6 +416,30 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertTrue(RemoteLLMProvider.omlx.apiKeyIsOptional)
         XCTAssertTrue(RemoteLLMProvider.codex.apiKeyIsOptional)
         XCTAssertFalse(RemoteLLMProvider.omlx.usesResponsesAPI)
+    }
+
+    func testCodexModelCatalogUsesCurrentFallbackPresets() {
+        XCTAssertEqual(RemoteLLMProvider.codex.suggestedModel, "gpt-5.4")
+
+        let latestIDs = RemoteLLMProvider.codex.latestModelOptions.map(\.id)
+        XCTAssertEqual(latestIDs.first, "gpt-5.4")
+        XCTAssertTrue(latestIDs.contains("gpt-5.5"))
+        XCTAssertTrue(latestIDs.contains("gpt-5.3-codex"))
+        XCTAssertTrue(latestIDs.contains("gpt-5-codex-mini"))
+        XCTAssertTrue(latestIDs.contains("gpt-oss-120b"))
+    }
+
+    func testCodexGenerationCapabilitiesMatchCodexBackend() {
+        let capabilities = LLMProviderCapabilityRegistry.capabilities(for: .codex)
+
+        XCTAssertFalse(capabilities.supportsThinkingEffort)
+        XCTAssertFalse(capabilities.supportsResponseFormat)
+        XCTAssertFalse(capabilities.supportsMaxOutputTokens)
+        XCTAssertFalse(capabilities.supportsTemperature)
+        XCTAssertFalse(capabilities.supportsTopP)
+        XCTAssertFalse(capabilities.supportsLogprobs)
+        XCTAssertFalse(capabilities.supportsStopSequences)
+        XCTAssertFalse(capabilities.supportsExtraBody)
     }
 
     func testDeepSeekUsesCurrentSuggestedModelAndKeepsLegacyAliases() {

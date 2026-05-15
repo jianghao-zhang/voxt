@@ -18,11 +18,11 @@ extension RemoteProviderConfigurationSheet {
     }
 
     var usesOpenAIResponsesOptions: Bool {
-        isOpenAILLMProvider || isCodexLLMProvider
+        isOpenAILLMProvider
     }
 
     var showsLargeAdvancedProviderSection: Bool {
-        llmProviderForPicker != nil
+        llmProviderForPicker != nil && !isCodexLLMProvider
     }
 
     var apiKeyFieldTitle: String {
@@ -44,17 +44,6 @@ extension RemoteProviderConfigurationSheet {
     }
 
     var providerModelMenuOptions: [SettingsMenuOption<String>] {
-        if let llmProvider = llmProviderForPicker {
-            var options = (
-                llmProvider.latestModelOptions +
-                llmProvider.basicModelOptions +
-                llmProvider.advancedModelOptions
-            ).map { SettingsMenuOption(value: $0.id, title: $0.title) }
-            if supportsCustomProviderModelSelection {
-                options.append(SettingsMenuOption(value: customModelOptionID, title: AppLocalization.localizedString("Custom...")))
-            }
-            return options
-        }
         var options = providerModelOptions.map { SettingsMenuOption(value: $0.id, title: $0.title) }
         if supportsCustomProviderModelSelection {
             options.append(SettingsMenuOption(value: customModelOptionID, title: AppLocalization.localizedString("Custom...")))
@@ -280,13 +269,13 @@ extension RemoteProviderConfigurationSheet {
         }
         let capabilities = LLMProviderCapabilityRegistry.capabilities(for: provider)
         var settings = LLMGenerationSettings()
-        settings.maxOutputTokens = parsedOptionalInt(generationMaxOutputTokensText)
-        settings.temperature = parsedOptionalDouble(generationTemperatureText)
-        settings.topP = parsedOptionalDouble(generationTopPText)
+        settings.maxOutputTokens = capabilities.supportsMaxOutputTokens ? parsedOptionalInt(generationMaxOutputTokensText) : nil
+        settings.temperature = capabilities.supportsTemperature ? parsedOptionalDouble(generationTemperatureText) : nil
+        settings.topP = capabilities.supportsTopP ? parsedOptionalDouble(generationTopPText) : nil
         settings.topK = capabilities.supportsTopK ? parsedOptionalInt(generationTopKText) : nil
         settings.minP = capabilities.supportsMinP ? parsedOptionalDouble(generationMinPText) : nil
         settings.seed = capabilities.supportsSeed ? parsedOptionalInt(generationSeedText) : nil
-        settings.stop = parsedStopSequences()
+        settings.stop = capabilities.supportsStopSequences ? parsedStopSequences() : []
         if capabilities.supportsPenalties {
             settings.presencePenalty = parsedOptionalDouble(generationPresencePenaltyText)
             settings.frequencyPenalty = parsedOptionalDouble(generationFrequencyPenaltyText)
@@ -380,18 +369,39 @@ extension RemoteProviderConfigurationSheet {
     }
 
     var providerModelOptions: [RemoteModelOption] {
-        RemoteProviderConfigurationPolicy.providerModelOptions(
+        if isCodexLLMProvider,
+           let dynamicCodexModelOptions,
+           !dynamicCodexModelOptions.isEmpty {
+            return dynamicCodexModelOptions
+        }
+        return RemoteProviderConfigurationPolicy.providerModelOptions(
             target: testTarget,
             configuredModel: configuration.model
         )
     }
 
     var resolvedSelectionForPicker: String {
-        RemoteProviderConfigurationPolicy.resolvedSelection(
-            target: testTarget,
-            selectedProviderModel: selectedProviderModel,
-            configuredModel: configuration.model
-        )
+        let ids = pickerModelOptionIDs
+        let trimmedSelected = selectedProviderModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if ids.contains(trimmedSelected) {
+            return trimmedSelected
+        }
+        let trimmedConfigured = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if ids.contains(trimmedConfigured) {
+            return trimmedConfigured
+        }
+        if supportsCustomProviderModelSelection {
+            return customModelOptionID
+        }
+        return ids.first ?? trimmedSelected
+    }
+
+    var pickerModelOptionIDs: [String] {
+        var ids = providerModelOptions.map(\.id)
+        if supportsCustomProviderModelSelection {
+            ids.append(customModelOptionID)
+        }
+        return ids
     }
 
     var providerModelSelectionBinding: Binding<String> {
@@ -412,10 +422,13 @@ extension RemoteProviderConfigurationSheet {
     }
 
     func configureModelSelection() {
-        selectedProviderModel = RemoteProviderConfigurationPolicy.initialSelection(
-            target: testTarget,
-            configuredModel: configuration.model
-        )
+        let ids = pickerModelOptionIDs
+        if supportsCustomProviderModelSelection {
+            let trimmedConfigured = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+            selectedProviderModel = ids.contains(trimmedConfigured) ? trimmedConfigured : customModelOptionID
+            return
+        }
+        selectedProviderModel = ids.contains(configuration.model) ? configuration.model : (ids.first ?? configuration.model)
     }
 
     func handleProviderModelSelectionChange(_ newValue: String) {
@@ -474,6 +487,34 @@ extension RemoteProviderConfigurationSheet {
         )
     }
 
+    func initialEndpointValue() -> String {
+        let trimmedEndpoint = configuration.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedEndpoint.isEmpty, isCodexLLMProvider else {
+            return configuration.endpoint
+        }
+        return RemoteLLMRuntimeClient().resolvedLLMEndpoint(
+            provider: .codex,
+            endpoint: "",
+            model: resolvedModelValue()
+        )
+    }
+
+    func loadCodexModelOptionsIfNeeded() {
+        guard isCodexLLMProvider else { return }
+        var snapshot = configuration
+        snapshot.endpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task {
+            let options = await RemoteLLMRuntimeClient().codexModelOptions(configuration: snapshot)
+            await MainActor.run {
+                dynamicCodexModelOptions = options
+                if !pickerModelOptionIDs.contains(selectedProviderModel) {
+                    configureModelSelection()
+                }
+            }
+        }
+    }
+
     func testConnection() {
         guard let snapshot = validatedCurrentConfigurationSnapshot() else { return }
         runConnectionTest(for: testTarget, modelForLog: snapshot.model, snapshot: snapshot)
@@ -519,10 +560,13 @@ extension RemoteProviderConfigurationSheet {
 
     func validationMessageForGenerationSettings() -> String? {
         guard let capabilities = generationCapabilities else { return nil }
-        var positiveIntFields = [
-            (generationMaxOutputTokensText, AppLocalization.localizedString("Max Output Tokens")),
-            (generationTopKText, AppLocalization.localizedString("Top K"))
-        ]
+        var positiveIntFields = [(String, String)]()
+        if capabilities.supportsMaxOutputTokens {
+            positiveIntFields.append((generationMaxOutputTokensText, AppLocalization.localizedString("Max Output Tokens")))
+        }
+        if capabilities.supportsTopK {
+            positiveIntFields.append((generationTopKText, AppLocalization.localizedString("Top K")))
+        }
         if sanitizedGenerationThinkingMode == .budget {
             positiveIntFields.append((generationThinkingBudgetText, AppLocalization.localizedString("Thinking Budget")))
         }
@@ -535,10 +579,11 @@ extension RemoteProviderConfigurationSheet {
                 return AppLocalization.format("%@ must be a positive integer.", fieldName)
             }
         }
-        var integerFields = [
-            (generationSeedText, AppLocalization.localizedString("Seed"))
-        ]
-        if generationLogprobsEnabled {
+        var integerFields = [(String, String)]()
+        if capabilities.supportsSeed {
+            integerFields.append((generationSeedText, AppLocalization.localizedString("Seed")))
+        }
+        if capabilities.supportsLogprobs && generationLogprobsEnabled {
             integerFields.append((generationTopLogprobsText, AppLocalization.localizedString("Top Logprobs")))
         }
         for (text, fieldName) in integerFields where !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -546,14 +591,21 @@ extension RemoteProviderConfigurationSheet {
                 return AppLocalization.format("%@ must be a non-negative integer.", fieldName)
             }
         }
-        let doubleFields = [
-            (generationTemperatureText, AppLocalization.localizedString("Temperature")),
-            (generationTopPText, AppLocalization.localizedString("Top P")),
-            (generationMinPText, AppLocalization.localizedString("Min P")),
-            (generationPresencePenaltyText, AppLocalization.localizedString("Presence Penalty")),
-            (generationFrequencyPenaltyText, AppLocalization.localizedString("Frequency Penalty")),
-            (generationRepetitionPenaltyText, AppLocalization.localizedString("Repetition Penalty"))
-        ]
+        var doubleFields = [(String, String)]()
+        if capabilities.supportsTemperature {
+            doubleFields.append((generationTemperatureText, AppLocalization.localizedString("Temperature")))
+        }
+        if capabilities.supportsTopP {
+            doubleFields.append((generationTopPText, AppLocalization.localizedString("Top P")))
+        }
+        if capabilities.supportsMinP {
+            doubleFields.append((generationMinPText, AppLocalization.localizedString("Min P")))
+        }
+        if capabilities.supportsPenalties {
+            doubleFields.append((generationPresencePenaltyText, AppLocalization.localizedString("Presence Penalty")))
+            doubleFields.append((generationFrequencyPenaltyText, AppLocalization.localizedString("Frequency Penalty")))
+            doubleFields.append((generationRepetitionPenaltyText, AppLocalization.localizedString("Repetition Penalty")))
+        }
         for (text, fieldName) in doubleFields where !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             guard Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) != nil else {
                 return AppLocalization.format("%@ must be a number.", fieldName)

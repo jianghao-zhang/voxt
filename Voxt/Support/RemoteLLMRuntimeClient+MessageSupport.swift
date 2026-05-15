@@ -100,8 +100,9 @@ extension RemoteLLMRuntimeClient {
         request.httpMethod = "POST"
         request.timeoutInterval = requestTimeoutInterval(for: provider)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let effectiveStreamingEnabled = provider == .codex ? true : streamingEnabled
         request.setValue(
-            streamingEnabled ? "text/event-stream, application/json" : "application/json",
+            effectiveStreamingEnabled ? "text/event-stream, application/json" : "application/json",
             forHTTPHeaderField: "Accept"
         )
 
@@ -118,9 +119,13 @@ extension RemoteLLMRuntimeClient {
 
         var payload: [String: Any] = [
             "model": model,
-            "stream": streamingEnabled,
-            "max_output_tokens": maxOutputTokens
+            "stream": effectiveStreamingEnabled
         ]
+        if provider == .codex {
+            payload["store"] = false
+        } else {
+            payload["max_output_tokens"] = maxOutputTokens
+        }
         if provider != .openAI && provider != .codex {
             payload["temperature"] = tuning.temperature
             payload["top_p"] = tuning.topP
@@ -129,14 +134,16 @@ extension RemoteLLMRuntimeClient {
         let trimmedSystemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedSystemPrompt.isEmpty {
             payload["instructions"] = trimmedSystemPrompt
+        } else if provider == .codex {
+            payload["instructions"] = "Process the input and return only the final answer."
         }
 
         let trimmedPreviousResponseID = previousResponseID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedPreviousResponseID.isEmpty {
             payload["previous_response_id"] = trimmedPreviousResponseID
-            payload["input"] = inputPayload
+            payload["input"] = responsesInputPayload(inputPayload, provider: provider)
         } else {
-            payload["input"] = inputPayload
+            payload["input"] = responsesInputPayload(inputPayload, provider: provider)
         }
 
         if let reasoningEffort = responsesReasoningEffort(
@@ -155,8 +162,8 @@ extension RemoteLLMRuntimeClient {
             settings: generationSettings
         )
 
-        var textPayload = textFormat ?? [:]
-        if (provider == .openAI || provider == .codex),
+        var textPayload = textFormat ?? responsesTextPayload(for: generationSettings.responseFormat)
+        if provider == .openAI,
            let verbosity = OpenAITextVerbosity.apiValue(
             selection: configuration.openAITextVerbosity,
             model: model
@@ -167,11 +174,13 @@ extension RemoteLLMRuntimeClient {
             payload["text"] = textPayload
         }
 
-        try applyCommonExtraBody(
-            to: &payload,
-            settings: generationSettings,
-            fieldName: AppLocalization.localizedString("Extra Body JSON")
-        )
+        if LLMProviderCapabilityRegistry.capabilities(for: provider).supportsExtraBody {
+            try applyCommonExtraBody(
+                to: &payload,
+                settings: generationSettings,
+                fieldName: AppLocalization.localizedString("Extra Body JSON")
+            )
+        }
 
         if configuration.searchEnabled && provider.supportsHostedSearch {
             payload["tools"] = [
@@ -185,13 +194,48 @@ extension RemoteLLMRuntimeClient {
         return request
     }
 
+    func responsesInputPayload(_ inputPayload: Any, provider: RemoteLLMProvider) -> Any {
+        guard provider == .codex else { return inputPayload }
+        if inputPayload is [[String: Any]] {
+            return inputPayload
+        }
+        if let inputText = inputPayload as? String {
+            return [
+                [
+                    "role": "user",
+                    "content": inputText
+                ]
+            ]
+        }
+        return inputPayload
+    }
+
+    func responsesTextPayload(for responseFormat: LLMResponseFormat) -> [String: Any] {
+        switch responseFormat {
+        case .plain:
+            return [:]
+        case .json:
+            return [
+                "format": [
+                    "type": "json_object"
+                ]
+            ]
+        case .jsonSchema:
+            return [:]
+        }
+    }
+
     func responsesReasoningEffort(
         provider: RemoteLLMProvider,
         model: String,
         settings: LLMGenerationSettings,
         configuration: RemoteProviderConfiguration
     ) -> String? {
-        if provider == .openAI || provider == .codex {
+        if provider == .codex {
+            return nil
+        }
+
+        if provider == .openAI {
             if settings.thinking.mode == .effort,
                let effort = settings.thinking.effort,
                OpenAIReasoningEffort.apiValue(selection: effort, model: model) != nil {

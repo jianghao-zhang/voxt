@@ -576,10 +576,11 @@ struct RemoteLLMRuntimeClient {
             userPromptLength: requestContentForLog.count,
             intent: intent
         ).applying(configuration.effectiveGenerationSettings(provider: provider))
-        let shouldAttemptStreaming = onPartialText != nil && supportsStreaming(provider: provider, intent: intent)
+        let requiresStreaming = requiresResponsesStreaming(provider: provider)
+        let shouldAttemptStreaming = (onPartialText != nil || requiresStreaming) && supportsStreaming(provider: provider, intent: intent)
         let authHeaders = try await authorizationHeaders(provider: provider, configuration: configuration)
 
-        if shouldAttemptStreaming, let onPartialText {
+        if shouldAttemptStreaming {
             do {
                 let streamingRequest = try makeResponsesRequest(
                     provider: provider,
@@ -611,10 +612,13 @@ struct RemoteLLMRuntimeClient {
                     provider: provider,
                     endpointValue: endpointValue,
                     requestStartedAt: requestStartedAt,
-                    onPartialText: onPartialText,
+                    onPartialText: onPartialText ?? { _ in },
                     onResponseID: onResponseID
                 )
             } catch let streamingFailure as StreamingFailure where streamingFailure.emittedChunkCount == 0 {
+                if requiresStreaming {
+                    throw streamingFailure.underlying
+                }
                 VoxtLog.warning(
                     "Remote LLM Responses streaming unavailable, retrying non-streaming. provider=\(provider.rawValue), endpoint=\(endpointValue), detail=\(streamingFailure.underlying.localizedDescription)"
                 )
@@ -2006,8 +2010,15 @@ struct RemoteLLMRuntimeClient {
     }
 
     private func supportsStreaming(provider: RemoteLLMProvider, intent: CompletionIntent) -> Bool {
+        if requiresResponsesStreaming(provider: provider) {
+            return true
+        }
         guard intent == .rewrite else { return false }
         return true
+    }
+
+    private func requiresResponsesStreaming(provider: RemoteLLMProvider) -> Bool {
+        provider == .codex
     }
 
     func requestTimeoutInterval(for provider: RemoteLLMProvider) -> TimeInterval {

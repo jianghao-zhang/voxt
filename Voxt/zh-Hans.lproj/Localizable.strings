@@ -1536,3 +1536,11 @@
 "Mouse Button %d" = "鼠标按钮 %d";
 "Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys." = "可以把鼠标中键、侧键等录入为快捷键，也可以搭配修饰键。";
 "Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite." = "转录使用鼠标中键，翻译使用 fn+shift，内容转写使用双击鼠标中键。";
+"ChatGPT Codex" = "ChatGPT Codex";
+"Codex Login" = "Codex 登录";
+"Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails." = "Voxt 使用本地 Codex 登录凭证（~/.codex/auth.json）。如果测试失败，请先运行 `codex login`。";
+"Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex 使用 ChatGPT 订阅后端和本地 Codex OAuth 凭证。";
+"Codex auth not found at %@. Run `codex login` first." = "未在 %@ 找到 Codex auth。请先运行 `codex login`。";
+"Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first." = "Codex auth.json 中没有 ChatGPT OAuth token。请先运行 `codex login`。";
+"Invalid Codex auth.json: %@" = "Codex auth.json 无效：%@";
+"Codex token refresh failed (HTTP %d). %@ Run `codex login` again." = "Codex token 刷新失败（HTTP %d）。%@ 请重新运行 `codex login`。";

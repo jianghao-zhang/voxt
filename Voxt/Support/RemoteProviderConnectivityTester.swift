@@ -541,20 +541,27 @@ struct RemoteProviderConnectivityTester {
         model: String
     ) async throws -> String {
         let runtimeClient = RemoteLLMRuntimeClient()
+        let systemPrompt = provider == .codex
+            ? "Reply with exactly pong."
+            : ""
         let request = try runtimeClient.makeResponsesRequest(
             provider: provider,
             endpointValue: endpoint,
             model: model,
-            systemPrompt: "",
+            systemPrompt: systemPrompt,
             inputPayload: "ping",
             configuration: configuration,
             previousResponseID: nil,
             tuning: .init(maxTokens: 32, temperature: 0.2, topP: 0.9),
             textFormat: nil,
-            streamingEnabled: false
+            streamingEnabled: false,
+            additionalHeaders: headers
         )
-        let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any] ?? [:]
-        return try await testJSONPOSTReachability(endpoint: endpoint, headers: headers, body: body)
+        return try await sendLLMTestRequest(
+            request,
+            context: "LLM Responses test",
+            allowValidationErrorsAsReachable: provider != .codex
+        )
     }
 
     private func testAnthropicReachability(
@@ -647,7 +654,8 @@ struct RemoteProviderConnectivityTester {
     private func sendLLMTestRequest(
         _ request: URLRequest,
         context: String,
-        successMessage: String = ""
+        successMessage: String = "",
+        allowValidationErrorsAsReachable: Bool = true
     ) async throws -> String {
         let bodyPreview = request.httpBody.flatMap { String(data: $0, encoding: .utf8) } ?? "<empty>"
         RemoteProviderConnectivityTestLogging.logHTTPRequest(context: context, request: request, bodyPreview: bodyPreview)
@@ -664,7 +672,7 @@ struct RemoteProviderConnectivityTester {
             }
             return AppLocalization.format("Connection test succeeded (HTTP %d).", http.statusCode)
         }
-        if http.statusCode == 400 || http.statusCode == 422 {
+        if allowValidationErrorsAsReachable && (http.statusCode == 400 || http.statusCode == 422) {
             return AppLocalization.format("Endpoint reachable (HTTP %d). Authentication and routing look valid.", http.statusCode)
         }
         if http.statusCode == 401 || http.statusCode == 403 {

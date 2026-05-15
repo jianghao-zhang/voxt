@@ -190,7 +190,7 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
         case .openAI:
             return "gpt-5.2"
         case .codex:
-            return "gpt-5.4-mini"
+            return "gpt-5.4"
         case .ollama:
             return "qwen2.5"
         case .omlx:
@@ -253,10 +253,16 @@ enum RemoteLLMProvider: String, CaseIterable, Identifiable {
             ]
         case .codex:
             return [
-                RemoteModelOption(id: "gpt-5.4-mini", title: "GPT-5.4 Mini"),
                 RemoteModelOption(id: "gpt-5.4", title: "GPT-5.4"),
+                RemoteModelOption(id: "gpt-5.5", title: "GPT-5.5"),
+                RemoteModelOption(id: "gpt-5.4-mini", title: "GPT-5.4 Mini"),
+                RemoteModelOption(id: "gpt-5.3-codex", title: "GPT-5.3 Codex"),
                 RemoteModelOption(id: "gpt-5.3-codex-spark", title: "GPT-5.3 Codex Spark"),
-                RemoteModelOption(id: "gpt-5.5", title: "GPT-5.5")
+                RemoteModelOption(id: "gpt-5.2", title: "GPT-5.2"),
+                RemoteModelOption(id: "gpt-5-codex", title: "GPT-5 Codex"),
+                RemoteModelOption(id: "gpt-5-codex-mini", title: "GPT-5 Codex Mini"),
+                RemoteModelOption(id: "gpt-oss-120b", title: "GPT-OSS 120B"),
+                RemoteModelOption(id: "gpt-oss-20b", title: "GPT-OSS 20B")
             ]
         case .ollama:
             return [

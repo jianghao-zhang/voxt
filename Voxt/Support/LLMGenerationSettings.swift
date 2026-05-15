@@ -98,6 +98,7 @@ struct LLMProviderCapabilities: Equatable {
     var supportsThinkingToggle: Bool = false
     var supportsThinkingEffort: Bool = false
     var supportsThinkingBudget: Bool = false
+    var supportsMaxOutputTokens: Bool = true
     var supportsTemperature: Bool = true
     var supportsTopP: Bool = true
     var supportsTopK: Bool = false
@@ -106,6 +107,7 @@ struct LLMProviderCapabilities: Equatable {
     var supportsPenalties: Bool = false
     var supportsLogprobs: Bool = false
     var supportsResponseFormat: Bool = false
+    var supportsStopSequences: Bool = true
     var supportsExtraBody: Bool = true
     var supportsExtraOptions: Bool = false
 }
@@ -123,11 +125,19 @@ enum LLMProviderCapabilityRegistry {
 
     static func capabilities(for provider: RemoteLLMProvider) -> LLMProviderCapabilities {
         switch provider {
-        case .openAI, .codex:
+        case .openAI:
             return LLMProviderCapabilities(
                 supportsThinkingEffort: true,
                 supportsLogprobs: true,
                 supportsResponseFormat: true
+            )
+        case .codex:
+            return LLMProviderCapabilities(
+                supportsMaxOutputTokens: false,
+                supportsTemperature: false,
+                supportsTopP: false,
+                supportsStopSequences: false,
+                supportsExtraBody: false
             )
         case .anthropic:
             return LLMProviderCapabilities(
@@ -306,8 +316,57 @@ enum CustomLLMGenerationSettingsStore {
 }
 
 extension RemoteProviderConfiguration {
-    func effectiveGenerationSettings(provider _: RemoteLLMProvider) -> LLMGenerationSettings {
-        generationSettings
+    func effectiveGenerationSettings(provider: RemoteLLMProvider) -> LLMGenerationSettings {
+        guard provider == .codex else {
+            return generationSettings
+        }
+        var settings = generationSettings
+        let capabilities = LLMProviderCapabilityRegistry.capabilities(for: provider)
+        if !capabilities.supportsMaxOutputTokens {
+            settings.maxOutputTokens = nil
+        }
+        if !capabilities.supportsTemperature {
+            settings.temperature = nil
+        }
+        if !capabilities.supportsTopP {
+            settings.topP = nil
+        }
+        if !capabilities.supportsTopK {
+            settings.topK = nil
+        }
+        if !capabilities.supportsMinP {
+            settings.minP = nil
+        }
+        if !capabilities.supportsSeed {
+            settings.seed = nil
+        }
+        if !capabilities.supportsPenalties {
+            settings.presencePenalty = nil
+            settings.frequencyPenalty = nil
+            settings.repetitionPenalty = nil
+        }
+        if !capabilities.supportsLogprobs {
+            settings.logprobs = false
+            settings.topLogprobs = nil
+        }
+        if !capabilities.supportsResponseFormat {
+            settings.responseFormat = .plain
+        }
+        if !capabilities.supportsStopSequences {
+            settings.stop = []
+        }
+        if !capabilities.supportsThinkingToggle &&
+            !capabilities.supportsThinkingEffort &&
+            !capabilities.supportsThinkingBudget {
+            settings.thinking = .providerDefault
+        }
+        if !capabilities.supportsExtraBody {
+            settings.extraBodyJSON = ""
+        }
+        if !capabilities.supportsExtraOptions {
+            settings.extraOptionsJSON = ""
+        }
+        return settings
     }
 }
 

@@ -1534,3 +1534,11 @@
 "Mouse Button %d" = "Mouse Button %d";
 "Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys." = "Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys.";
 "Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite." = "Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite.";
+"ChatGPT Codex" = "ChatGPT Codex";
+"Codex Login" = "Codex Login";
+"Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails." = "Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails.";
+"Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials.";
+"Codex auth not found at %@. Run `codex login` first." = "Codex auth not found at %@. Run `codex login` first.";
+"Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first." = "Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first.";
+"Invalid Codex auth.json: %@" = "Invalid Codex auth.json: %@";
+"Codex token refresh failed (HTTP %d). %@ Run `codex login` again." = "Codex token refresh failed (HTTP %d). %@ Run `codex login` again.";
