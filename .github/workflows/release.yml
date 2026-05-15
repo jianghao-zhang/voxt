@@ -733,6 +733,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
       VERSION: ${{ needs.preflight.outputs.version }}
       TAG: ${{ needs.preflight.outputs.tag }}
+      CHANNEL: ${{ needs.preflight.outputs.channel }}
       DRAFT_RELEASE: ${{ needs.preflight.outputs.draft_release }}
     steps:
       - uses: actions/checkout@v4
