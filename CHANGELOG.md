@@ -6,6 +6,50 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.6] - 2026-05-15
+
+### English
+
+#### Added
+- Added a Beta Updates switch on the About page so opted-in users can check beta appcast updates.
+- Added beta-aware update feed selection for both manual checks and Sparkle background checks.
+- Added a Codex auth file picker so users can choose the local `auth.json` used by ChatGPT Codex.
+
+#### Changed
+- Configuration export and import now preserves the Beta Updates preference.
+- Switching update channels now clears stale update status before the next check.
+
+#### Fixed
+- Fixed Codex auth lookup in sandboxed builds by resolving the real user home and preserving selected auth file access.
+
+### 简体中文
+
+#### 新增
+- 在 About 页新增 Beta 更新开关，让选择加入的用户可以检查 beta appcast 更新。
+- 手动检查更新和 Sparkle 后台检查现在都支持按开关选择 beta 更新通道。
+- 在 Codex 配置中新增 auth 文件选择器，用户可以选择 ChatGPT Codex 使用的本地 `auth.json`。
+
+#### 改进
+- 配置导入和导出现在会保留 Beta 更新偏好。
+- 切换更新通道时会清空旧的更新状态，避免展示过期结果。
+
+#### 修复
+- 修复 sandbox 构建中 Codex auth 查找路径不正确的问题，现在会解析真实用户 home 并保留已选择 auth 文件的访问权限。
+
+### 日本語
+
+#### 追加
+- About ページにベータ更新スイッチを追加し、希望するユーザーが beta appcast 更新を確認できるようにしました。
+- 手動更新確認と Sparkle のバックグラウンド確認で、スイッチに応じた beta 更新チャンネルを使えるようにしました。
+- Codex 設定に auth ファイルピッカーを追加し、ChatGPT Codex が使うローカル `auth.json` を選択できるようにしました。
+
+#### 変更
+- 設定のエクスポートとインポートで Beta Updates の設定を保持するようにしました。
+- 更新チャンネルを切り替えたとき、次回確認前に古い更新状態を消去するようにしました。
+
+#### 修正
+- sandbox ビルドで Codex auth の参照先が誤る問題を修正し、実ユーザーの home 解決と選択済み auth ファイルへのアクセス保持に対応しました。
+
 ## [1.11.6-beta.2] - 2026-05-15
 
 ### English
