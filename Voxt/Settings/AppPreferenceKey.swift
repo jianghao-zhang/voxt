@@ -134,6 +134,7 @@ enum AppPreferenceKey {
     static let dictionarySuggestionFilterSettings = "dictionarySuggestionFilterSettings"
     static let dictionarySuggestionIngestModelOptionID = "dictionarySuggestionIngestModelOptionID"
     static let autoCheckForUpdates = "autoCheckForUpdates"
+    static let betaUpdatesEnabled = "betaUpdatesEnabled"
     nonisolated static let hotkeyDebugLoggingEnabled = "hotkeyDebugLoggingEnabled"
     nonisolated static let llmDebugLoggingEnabled = "llmDebugLoggingEnabled"
     static let llmDebugCustomPrompt = "llmDebugCustomPrompt"

@@ -79,6 +79,7 @@ enum ConfigurationTransferManager {
         var historyCleanupEnabled: Bool
         var historyRetentionPeriod: String
         var autoCheckForUpdates: Bool
+        var betaUpdatesEnabled: Bool
         var hotkeyDebugLoggingEnabled: Bool
         var llmDebugLoggingEnabled: Bool
         var useSystemProxy: Bool
@@ -119,6 +120,7 @@ enum ConfigurationTransferManager {
             case historyCleanupEnabled
             case historyRetentionPeriod
             case autoCheckForUpdates
+            case betaUpdatesEnabled
             case hotkeyDebugLoggingEnabled
             case llmDebugLoggingEnabled
             case useSystemProxy
@@ -164,6 +166,7 @@ enum ConfigurationTransferManager {
             historyCleanupEnabled: Bool,
             historyRetentionPeriod: String,
             autoCheckForUpdates: Bool,
+            betaUpdatesEnabled: Bool,
             hotkeyDebugLoggingEnabled: Bool,
             llmDebugLoggingEnabled: Bool,
             useSystemProxy: Bool,
@@ -204,6 +207,7 @@ enum ConfigurationTransferManager {
             self.historyCleanupEnabled = historyCleanupEnabled
             self.historyRetentionPeriod = historyRetentionPeriod
             self.autoCheckForUpdates = autoCheckForUpdates
+            self.betaUpdatesEnabled = betaUpdatesEnabled
             self.hotkeyDebugLoggingEnabled = hotkeyDebugLoggingEnabled
             self.llmDebugLoggingEnabled = llmDebugLoggingEnabled
             self.useSystemProxy = useSystemProxy
@@ -254,6 +258,7 @@ enum ConfigurationTransferManager {
             historyCleanupEnabled = try container.decodeIfPresent(Bool.self, forKey: .historyCleanupEnabled) ?? true
             historyRetentionPeriod = try container.decodeIfPresent(String.self, forKey: .historyRetentionPeriod) ?? HistoryRetentionPeriod.ninetyDays.rawValue
             autoCheckForUpdates = try container.decode(Bool.self, forKey: .autoCheckForUpdates)
+            betaUpdatesEnabled = try container.decodeIfPresent(Bool.self, forKey: .betaUpdatesEnabled) ?? false
             hotkeyDebugLoggingEnabled = try container.decode(Bool.self, forKey: .hotkeyDebugLoggingEnabled)
             llmDebugLoggingEnabled = try container.decode(Bool.self, forKey: .llmDebugLoggingEnabled)
             useSystemProxy = try container.decode(Bool.self, forKey: .useSystemProxy)
@@ -296,6 +301,7 @@ enum ConfigurationTransferManager {
             try container.encode(historyCleanupEnabled, forKey: .historyCleanupEnabled)
             try container.encode(historyRetentionPeriod, forKey: .historyRetentionPeriod)
             try container.encode(autoCheckForUpdates, forKey: .autoCheckForUpdates)
+            try container.encode(betaUpdatesEnabled, forKey: .betaUpdatesEnabled)
             try container.encode(hotkeyDebugLoggingEnabled, forKey: .hotkeyDebugLoggingEnabled)
             try container.encode(llmDebugLoggingEnabled, forKey: .llmDebugLoggingEnabled)
             try container.encode(useSystemProxy, forKey: .useSystemProxy)
@@ -896,6 +902,7 @@ enum ConfigurationTransferManager {
             historyCleanupEnabled: defaults.object(forKey: AppPreferenceKey.historyCleanupEnabled) as? Bool ?? true,
             historyRetentionPeriod: defaults.string(forKey: AppPreferenceKey.historyRetentionPeriod) ?? HistoryRetentionPeriod.ninetyDays.rawValue,
             autoCheckForUpdates: defaults.object(forKey: AppPreferenceKey.autoCheckForUpdates) as? Bool ?? true,
+            betaUpdatesEnabled: defaults.object(forKey: AppPreferenceKey.betaUpdatesEnabled) as? Bool ?? false,
             hotkeyDebugLoggingEnabled: defaults.bool(forKey: AppPreferenceKey.hotkeyDebugLoggingEnabled),
             llmDebugLoggingEnabled: defaults.bool(forKey: AppPreferenceKey.llmDebugLoggingEnabled),
             useSystemProxy: defaults.object(forKey: AppPreferenceKey.useSystemProxy) as? Bool ?? true,
@@ -1062,6 +1069,7 @@ enum ConfigurationTransferManager {
         defaults.set(general.historyCleanupEnabled, forKey: AppPreferenceKey.historyCleanupEnabled)
         defaults.set(general.historyRetentionPeriod, forKey: AppPreferenceKey.historyRetentionPeriod)
         defaults.set(general.autoCheckForUpdates, forKey: AppPreferenceKey.autoCheckForUpdates)
+        defaults.set(general.betaUpdatesEnabled, forKey: AppPreferenceKey.betaUpdatesEnabled)
         defaults.set(general.hotkeyDebugLoggingEnabled, forKey: AppPreferenceKey.hotkeyDebugLoggingEnabled)
         defaults.set(general.llmDebugLoggingEnabled, forKey: AppPreferenceKey.llmDebugLoggingEnabled)
         defaults.set(general.useSystemProxy, forKey: AppPreferenceKey.useSystemProxy)

@@ -9,16 +9,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (push mode requires vX.Y.Z; manual mode supports vX.Y.Z-suffix)"
+        description: "Release tag: stable vX.Y.Z or beta vX.Y.Z-beta.N"
         required: true
-        default: "v1.1.8-draft1"
+        default: "v1.11.6-beta.1"
       draft_release:
         description: "Create or keep release as draft"
         required: true
         default: true
         type: boolean
       update_appcast:
-        description: "Commit updates/appcast.xml to main"
+        description: "Publish update metadata and regenerate the selected appcast"
         required: true
         default: false
         type: boolean
@@ -42,7 +42,8 @@ jobs:
       should_skip: ${{ steps.release_state.outputs.should_skip }}
       tag: ${{ steps.version_dispatch.outputs.tag || steps.version_push.outputs.tag }}
       version: ${{ steps.version_dispatch.outputs.version || steps.version_push.outputs.version }}
-      channel: ${{ steps.channel_dispatch.outputs.channel || steps.channel_push.outputs.channel }}
+      channel: ${{ steps.version_dispatch.outputs.channel || steps.version_push.outputs.channel }}
+      release_build_number: ${{ steps.version_dispatch.outputs.release_build_number || steps.version_push.outputs.release_build_number }}
       draft_release: ${{ steps.flags_dispatch.outputs.draft_release || steps.flags_push.outputs.draft_release }}
       update_appcast: ${{ steps.flags_dispatch.outputs.update_appcast || steps.flags_push.outputs.update_appcast }}
       skip_if_assets_exist: ${{ steps.flags_dispatch.outputs.skip_if_assets_exist || steps.flags_push.outputs.skip_if_assets_exist }}
@@ -71,25 +72,29 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ github.event.inputs.tag }}"
-          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Manual tag must be vX.Y.Z or vX.Y.Z-suffix, got: $TAG"
+          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-beta\.([0-9]+))?$ ]]; then
+            echo "::error::Manual tag must be stable vX.Y.Z or beta vX.Y.Z-beta.N, got: $TAG"
             exit 1
           fi
+          MAJOR="${BASH_REMATCH[1]}"
+          MINOR="${BASH_REMATCH[2]}"
+          PATCH="${BASH_REMATCH[3]}"
+          BETA_NUMBER="${BASH_REMATCH[5]:-}"
           VERSION="${TAG#v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve channel (dispatch)
-        id: channel_dispatch
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          set -euo pipefail
-          TAG="${{ github.event.inputs.tag }}"
-          if [[ "$TAG" == *-* ]]; then
+          RELEASE_BUILD_BASE="$((10#$MAJOR * 100000000 + 10#$MINOR * 100000 + 10#$PATCH * 100))"
+          if [ -n "$BETA_NUMBER" ]; then
+            if (( 10#$BETA_NUMBER < 1 || 10#$BETA_NUMBER > 98 )); then
+              echo "::error::Beta release number must be between 1 and 98, got: $BETA_NUMBER"
+              exit 1
+            fi
             echo "channel=beta" >> "$GITHUB_OUTPUT"
+            echo "release_build_number=$((RELEASE_BUILD_BASE + 10#$BETA_NUMBER))" >> "$GITHUB_OUTPUT"
           else
             echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "release_build_number=$((RELEASE_BUILD_BASE + 99))" >> "$GITHUB_OUTPUT"
           fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Validate tag and extract version (push)
         id: version_push
@@ -97,25 +102,29 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Tag must be vX.Y.Z or vX.Y.Z-suffix, got: $TAG"
+          if ! [[ "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-beta\.([0-9]+))?$ ]]; then
+            echo "::error::Tag must be stable vX.Y.Z or beta vX.Y.Z-beta.N, got: $TAG"
             exit 1
           fi
+          MAJOR="${BASH_REMATCH[1]}"
+          MINOR="${BASH_REMATCH[2]}"
+          PATCH="${BASH_REMATCH[3]}"
+          BETA_NUMBER="${BASH_REMATCH[5]:-}"
           VERSION="${TAG#v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve channel (push)
-        id: channel_push
-        if: github.event_name != 'workflow_dispatch'
-        run: |
-          set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" == *-* ]]; then
+          RELEASE_BUILD_BASE="$((10#$MAJOR * 100000000 + 10#$MINOR * 100000 + 10#$PATCH * 100))"
+          if [ -n "$BETA_NUMBER" ]; then
+            if (( 10#$BETA_NUMBER < 1 || 10#$BETA_NUMBER > 98 )); then
+              echo "::error::Beta release number must be between 1 and 98, got: $BETA_NUMBER"
+              exit 1
+            fi
             echo "channel=beta" >> "$GITHUB_OUTPUT"
+            echo "release_build_number=$((RELEASE_BUILD_BASE + 10#$BETA_NUMBER))" >> "$GITHUB_OUTPUT"
           else
             echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "release_build_number=$((RELEASE_BUILD_BASE + 99))" >> "$GITHUB_OUTPUT"
           fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Check existing release assets
         id: release_state
@@ -149,6 +158,7 @@ jobs:
       VERSION: ${{ needs.preflight.outputs.version }}
       TAG: ${{ needs.preflight.outputs.tag }}
       CHANNEL: ${{ needs.preflight.outputs.channel }}
+      RELEASE_BUILD_NUMBER: ${{ needs.preflight.outputs.release_build_number }}
       UPDATE_APPCAST: ${{ needs.preflight.outputs.update_appcast }}
       DEVELOPER_ID_APP_CERT_P12: ${{ secrets.DEVELOPER_ID_APP_CERT_P12 }}
       DEVELOPER_ID_APP_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APP_CERT_PASSWORD }}
@@ -283,6 +293,7 @@ jobs:
             -destination "generic/platform=macOS" \
             -derivedDataPath build/DerivedData \
             build \
+            CURRENT_PROJECT_VERSION="$RELEASE_BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
@@ -322,6 +333,12 @@ jobs:
           require_non_empty_string "SUPublicEDKey"
           require_non_empty_string "CFBundleShortVersionString"
           require_non_empty_string "CFBundleVersion"
+
+          BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH" 2>/dev/null || true)"
+          if [ "$BUNDLE_VERSION" != "$RELEASE_BUILD_NUMBER" ]; then
+            echo "::error::CFBundleVersion($BUNDLE_VERSION) does not match release build number($RELEASE_BUILD_NUMBER)"
+            exit 1
+          fi
 
       - name: Sign Sparkle and app bundle with Developer ID
         run: |
@@ -813,6 +830,7 @@ jobs:
       VERSION: ${{ needs.preflight.outputs.version }}
       TAG: ${{ needs.preflight.outputs.tag }}
       CHANNEL: ${{ needs.preflight.outputs.channel }}
+      RELEASE_BUILD_NUMBER: ${{ needs.preflight.outputs.release_build_number }}
       GH_TOKEN: ${{ github.token }}
       VOXT_UPDATE_API_BASE: ${{ secrets.VOXT_UPDATE_API_BASE }}
       VOXT_RELEASE_API_KEY: ${{ secrets.VOXT_RELEASE_API_KEY }}
@@ -906,9 +924,7 @@ jobs:
             RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
           fi
 
-          BASE_VERSION="$(printf '%s' "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
-          SPARKLE_VERSION="$((10#$MAJOR * 1000000 + 10#$MINOR * 1000 + 10#$PATCH))"
+          SPARKLE_VERSION="$RELEASE_BUILD_NUMBER"
           update_args=(
             --fail
             --silent

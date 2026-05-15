@@ -6,6 +6,41 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.6-beta.1] - 2026-05-15
+
+### English
+
+#### Added
+- Added a Beta Updates switch on the About page so opted-in users can check beta appcast updates.
+- Added beta-aware update feed selection for both manual checks and Sparkle background checks.
+- Added beta appcast publishing support in release CI and documented the Voxt Server update contract.
+
+#### Changed
+- Configuration export and import now preserves the Beta Updates preference.
+- Switching update channels now clears stale update status before the next check.
+
+### 简体中文
+
+#### 新增
+- 在 About 页新增 Beta 更新开关，让选择加入的用户可以检查 beta appcast 更新。
+- 手动检查更新和 Sparkle 后台检查现在都支持按开关选择 beta 更新通道。
+- 发布 CI 新增 beta appcast 发布支持，并补充 Voxt Server 更新协议文档。
+
+#### 改进
+- 配置导入和导出现在会保留 Beta 更新偏好。
+- 切换更新通道时会清空旧的更新状态，避免展示过期结果。
+
+### 日本語
+
+#### 追加
+- About ページにベータ更新スイッチを追加し、希望するユーザーが beta appcast 更新を確認できるようにしました。
+- 手動更新確認と Sparkle のバックグラウンド確認で、スイッチに応じた beta 更新チャンネルを使えるようにしました。
+- リリース CI に beta appcast 公開サポートを追加し、Voxt Server の更新契約を文書化しました。
+
+#### 変更
+- 設定のエクスポートとインポートで Beta Updates の設定を保持するようにしました。
+- 更新チャンネルを切り替えたとき、次回確認前に古い更新状態を消去するようにしました。
+
 ## [1.11.5] - 2026-05-15
 
 ### English

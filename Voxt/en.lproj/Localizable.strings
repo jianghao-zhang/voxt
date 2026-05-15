@@ -282,6 +282,8 @@
 "Request" = "Request";
 "Open Settings" = "Open Settings";
 "Check for Updates…" = "Check for Updates…";
+"Beta Updates" = "Beta Updates";
+"Check beta appcast updates when Voxt checks for app updates." = "Check beta appcast updates when Voxt checks for app updates.";
 "Automatically check for updates" = "Automatically check for updates";
 "Proxy" = "Proxy";
 "Follow System" = "Follow System";

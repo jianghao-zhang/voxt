@@ -10,6 +10,11 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         case manual
     }
 
+    enum UpdateChannel: String {
+        case stable
+        case beta
+    }
+
     private lazy var updaterController: SPUStandardUpdaterController? = {
         guard sparkleIsAvailable else { return nil }
         let controller = SPUStandardUpdaterController(
@@ -21,9 +26,10 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         return controller
     }()
 
-    private let stableFeedURLString = "https://voxt.actnow.dev/updates/stable/appcast.xml"
-    private let betaFeedURLString = "https://voxt.actnow.dev/updates/beta/appcast.xml"
-    private let betaFeedEnableEnvKey = "VOXT_ENABLE_BETA_UPDATES"
+    static let stableFeedURLString = "https://voxt.actnow.dev/updates/stable/appcast.xml"
+    static let betaFeedURLString = "https://voxt.actnow.dev/updates/beta/appcast.xml"
+    static let betaFeedEnableEnvKey = "VOXT_ENABLE_BETA_UPDATES"
+    private let defaults: UserDefaults
     private let interactiveUIPresentationTimeout: Duration = .seconds(4)
     private var lastCheckSource: CheckSource = .automatic
     private var isPresentingUpdateUI = false
@@ -48,6 +54,11 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         return available
     }()
 
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        super.init()
+    }
+
     // Background/dockless apps should opt into Sparkle's gentle reminder support
     // to avoid missing scheduled update alerts.
     var supportsGentleScheduledUpdateReminders: Bool { true }
@@ -68,6 +79,21 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         guard automaticallyChecksForUpdates != newValue else { return }
         automaticallyChecksForUpdates = newValue
     }
+
+    func betaUpdatesPreferenceDidChange() {
+        guard hasUpdate || latestVersion != nil || updateCheckIssueMessage != nil || latestDownloadedUpdateURL != nil else {
+            return
+        }
+
+        setUpdateState(hasUpdate: false, latestVersion: nil, issue: nil, downloadedURL: nil)
+        VoxtLog.info("Sparkle update state cleared because update channel preference changed.")
+    }
+
+    #if DEBUG
+    func setUpdateStateForTesting(hasUpdate: Bool, latestVersion: String?, issue: String?) {
+        setUpdateState(hasUpdate: hasUpdate, latestVersion: latestVersion, issue: issue, downloadedURL: nil)
+    }
+    #endif
 
     func checkForUpdatesWithUserInterface() {
         lastCheckSource = .manual
@@ -289,39 +315,16 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
     }
 
     private var selectedFeedURLString: String {
-        let baseFeedURLString: String
-        // Prefer stable feed by default. Beta feed should be explicitly opted in
-        // because local/dev beta channels may contain test-only appcast entries.
-        if let channel = ProcessInfo.processInfo.environment["VOXT_UPDATE_CHANNEL"]?.lowercased() {
-            switch channel {
-            case "beta":
-                if canUseBetaFeed {
-                    baseFeedURLString = betaFeedURLString
-                    break
-                }
-
-                VoxtLog.info("VOXT_UPDATE_CHANNEL=beta ignored; using stable appcast unless beta is explicitly enabled.")
-                baseFeedURLString = stableFeedURLString
-                break
-            case "stable":
-                baseFeedURLString = stableFeedURLString
-                break
-            default:
-                baseFeedURLString = stableFeedURLString
-            }
-        } else {
-            baseFeedURLString = stableFeedURLString
-        }
+        let betaUpdatesEnabled = defaults.object(forKey: AppPreferenceKey.betaUpdatesEnabled) as? Bool ?? false
+        let channel = Self.resolvedUpdateChannel(
+            betaUpdatesEnabled: betaUpdatesEnabled,
+            environment: ProcessInfo.processInfo.environment
+        )
+        let baseFeedURLString = Self.feedURLString(for: channel)
         return Self.localizedFeedURLString(
             baseURLString: baseFeedURLString,
             interfaceLanguage: AppLocalization.language
         )
-    }
-
-    private var canUseBetaFeed: Bool {
-        let explicitEnable = ProcessInfo.processInfo.environment[betaFeedEnableEnvKey]
-            .map { $0.lowercased() } ?? ""
-        return ["1", "true", "yes", "on"].contains(explicitEnable)
     }
 
     private func handleInstallerFailureIfNeeded(_ error: NSError) {
@@ -506,6 +509,57 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         )
         components.queryItems = queryItems
         return components.url?.absoluteString ?? baseURLString
+    }
+
+    static func feedURLString(for channel: UpdateChannel) -> String {
+        switch channel {
+        case .stable:
+            return stableFeedURLString
+        case .beta:
+            return betaFeedURLString
+        }
+    }
+
+    static func resolvedUpdateChannel(
+        betaUpdatesEnabled: Bool,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> UpdateChannel {
+        if let channel = environment["VOXT_UPDATE_CHANNEL"]?.lowercased() {
+            switch channel {
+            case "beta":
+                if canUseBetaFeed(environment: environment) {
+                    return .beta
+                }
+                return betaUpdatesEnabled ? .beta : .stable
+            case "stable":
+                return .stable
+            default:
+                break
+            }
+        }
+
+        return betaUpdatesEnabled ? .beta : .stable
+    }
+
+    static func selectedFeedURLString(
+        betaUpdatesEnabled: Bool,
+        interfaceLanguage: AppInterfaceLanguage,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String {
+        localizedFeedURLString(
+            baseURLString: feedURLString(
+                for: resolvedUpdateChannel(
+                    betaUpdatesEnabled: betaUpdatesEnabled,
+                    environment: environment
+                )
+            ),
+            interfaceLanguage: interfaceLanguage
+        )
+    }
+
+    private static func canUseBetaFeed(environment: [String: String]) -> Bool {
+        let explicitEnable = environment[betaFeedEnableEnvKey]?.lowercased() ?? ""
+        return ["1", "true", "yes", "on"].contains(explicitEnable)
     }
 
     static func updateRequestHeaders(interfaceLanguage: AppInterfaceLanguage) -> [String: String] {

@@ -280,6 +280,8 @@
 "Request" = "許可を要求";
 "Open Settings" = "設定を開く";
 "Check for Updates…" = "アップデートを確認…";
+"Beta Updates" = "ベータ更新";
+"Check beta appcast updates when Voxt checks for app updates." = "Voxt がアプリ更新を確認するときにベータ更新チャンネルを使用します。";
 "Automatically check for updates" = "更新を自動確認";
 "Proxy" = "プロキシ";
 "Follow System" = "システムに従う";

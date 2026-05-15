@@ -6,10 +6,15 @@ private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
 }
 
+private func localizedKey(_ key: String) -> LocalizedStringKey {
+    LocalizedStringKey(localized(key))
+}
+
 struct AboutSettingsView: View {
     let appUpdateManager: AppUpdateManager
     let navigationRequest: SettingsNavigationRequest?
     @Environment(\.locale) private var locale
+    @AppStorage(AppPreferenceKey.betaUpdatesEnabled) private var betaUpdatesEnabled = false
 
     @State private var latestLogUpdateDate: Date?
     @State private var logExportStatus: String?
@@ -58,6 +63,13 @@ struct AboutSettingsView: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                    GeneralToggleRow(
+                        title: localizedKey("Beta Updates"),
+                        description: localizedKey("Check beta appcast updates when Voxt checks for app updates."),
+                        isOn: $betaUpdatesEnabled
+                    )
+                    .font(.caption)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
@@ -158,6 +170,9 @@ struct AboutSettingsView: View {
         )
         .onAppear {
             refreshLogUpdateDate()
+        }
+        .onChange(of: betaUpdatesEnabled) { _, _ in
+            appUpdateManager.betaUpdatesPreferenceDidChange()
         }
     }
 

@@ -284,6 +284,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.dictionaryAutoLearningPrompt: "",
             AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled: true,
             AppPreferenceKey.autoCheckForUpdates: true,
+            AppPreferenceKey.betaUpdatesEnabled: false,
             AppPreferenceKey.hotkeyDebugLoggingEnabled: false,
             AppPreferenceKey.llmDebugLoggingEnabled: false,
             AppPreferenceKey.networkProxyMode: VoxtNetworkSession.ProxyMode.system.rawValue,

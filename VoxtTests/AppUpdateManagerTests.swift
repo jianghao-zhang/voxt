@@ -3,6 +3,73 @@ import XCTest
 
 final class AppUpdateManagerTests: XCTestCase {
     @MainActor
+    func testSelectedFeedURLStringDefaultsToStableFeed() {
+        let url = AppUpdateManager.selectedFeedURLString(
+            betaUpdatesEnabled: false,
+            interfaceLanguage: .english,
+            environment: [:]
+        )
+
+        XCTAssertTrue(url.hasPrefix("https://voxt.actnow.dev/updates/stable/appcast.xml"))
+        XCTAssertEqual(URLComponents(string: url)?.queryItems?.first(where: { $0.name == "lang" })?.value, "en")
+    }
+
+    @MainActor
+    func testSelectedFeedURLStringUsesBetaFeedWhenPreferenceIsEnabled() {
+        let url = AppUpdateManager.selectedFeedURLString(
+            betaUpdatesEnabled: true,
+            interfaceLanguage: .chineseSimplified,
+            environment: [:]
+        )
+
+        XCTAssertTrue(url.hasPrefix("https://voxt.actnow.dev/updates/beta/appcast.xml"))
+        XCTAssertEqual(URLComponents(string: url)?.queryItems?.first(where: { $0.name == "lang" })?.value, "zh-Hans")
+    }
+
+    @MainActor
+    func testEnvironmentCanForceStableFeedForDevelopment() {
+        let url = AppUpdateManager.selectedFeedURLString(
+            betaUpdatesEnabled: true,
+            interfaceLanguage: .japanese,
+            environment: ["VOXT_UPDATE_CHANNEL": "stable"]
+        )
+
+        XCTAssertTrue(url.hasPrefix("https://voxt.actnow.dev/updates/stable/appcast.xml"))
+        XCTAssertEqual(URLComponents(string: url)?.queryItems?.first(where: { $0.name == "lang" })?.value, "ja")
+    }
+
+    @MainActor
+    func testEnvironmentCanForceBetaFeedWhenExplicitlyEnabledForDevelopment() {
+        let url = AppUpdateManager.selectedFeedURLString(
+            betaUpdatesEnabled: false,
+            interfaceLanguage: .english,
+            environment: [
+                "VOXT_UPDATE_CHANNEL": "beta",
+                "VOXT_ENABLE_BETA_UPDATES": "true"
+            ]
+        )
+
+        XCTAssertTrue(url.hasPrefix("https://voxt.actnow.dev/updates/beta/appcast.xml"))
+        XCTAssertEqual(URLComponents(string: url)?.queryItems?.first(where: { $0.name == "lang" })?.value, "en")
+    }
+
+    @MainActor
+    func testBetaUpdatesPreferenceChangeClearsExistingUpdateState() {
+        let manager = AppUpdateManager(defaults: TestDoubles.makeUserDefaults())
+        manager.setUpdateStateForTesting(
+            hasUpdate: true,
+            latestVersion: "1.4.0-beta.1 (1004001)",
+            issue: "Previous channel issue"
+        )
+
+        manager.betaUpdatesPreferenceDidChange()
+
+        XCTAssertFalse(manager.hasUpdate)
+        XCTAssertNil(manager.latestVersion)
+        XCTAssertNil(manager.updateCheckIssueMessage)
+    }
+
+    @MainActor
     func testLocalizedFeedURLStringUsesInterfaceLanguageQueryParameter() {
         let url = AppUpdateManager.localizedFeedURLString(
             baseURLString: "https://voxt.actnow.dev/updates/stable/appcast.xml",

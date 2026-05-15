@@ -282,6 +282,8 @@
 "Request" = "请求开启";
 "Open Settings" = "打开设置";
 "Check for Updates…" = "检查更新…";
+"Beta Updates" = "Beta 更新";
+"Check beta appcast updates when Voxt checks for app updates." = "Voxt 检查应用更新时使用 beta 更新通道。";
 "Automatically check for updates" = "自动检查更新";
 "Proxy" = "代理";
 "Follow System" = "跟随系统";

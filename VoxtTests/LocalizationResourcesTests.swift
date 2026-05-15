@@ -113,6 +113,12 @@ final class LocalizationResourcesTests: XCTestCase {
         XCTAssertEqual(AppLocalization.localizedString(key, localeIdentifier: "ja"), "更新ウィンドウを開いています…")
     }
 
+    func testBetaUpdatesLabelIsLocalizedInSupportedLanguages() {
+        XCTAssertEqual(AppLocalization.localizedString("Beta Updates", localeIdentifier: "en"), "Beta Updates")
+        XCTAssertEqual(AppLocalization.localizedString("Beta Updates", localeIdentifier: "zh-Hans"), "Beta 更新")
+        XCTAssertEqual(AppLocalization.localizedString("Beta Updates", localeIdentifier: "ja"), "ベータ更新")
+    }
+
     func testManualCorrectionActionIsLocalizedInSupportedLanguages() {
         XCTAssertEqual(AppLocalization.localizedString("Correct", localeIdentifier: "en"), "Correct")
         XCTAssertEqual(AppLocalization.localizedString("Correct", localeIdentifier: "zh-Hans"), "纠错")

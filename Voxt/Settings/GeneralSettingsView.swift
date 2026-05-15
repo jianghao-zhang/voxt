@@ -358,6 +358,7 @@ struct GeneralSettingsView: View {
             }
             try? AppBehaviorController.setLaunchAtLogin(defaults.bool(forKey: AppPreferenceKey.launchAtLogin))
             appUpdateManager.syncAutomaticallyChecksForUpdates(defaults.bool(forKey: AppPreferenceKey.autoCheckForUpdates))
+            appUpdateManager.betaUpdatesPreferenceDidChange()
             NotificationCenter.default.post(name: .voxtConfigurationDidImport, object: nil)
             NotificationCenter.default.post(name: .voxtInterfaceLanguageDidChange, object: nil)
             NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
