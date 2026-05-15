@@ -28,7 +28,7 @@ extension RemoteProviderConfigurationSheet {
 
     var apiKeyFieldTitle: String {
         if isCodexLLMProvider {
-            return AppLocalization.localizedString("Codex Login")
+            return AppLocalization.localizedString("Codex Credentials")
         }
         return (llmProviderForPicker?.apiKeyIsOptional == true)
             ? AppLocalization.localizedString("API Key (Optional)")
@@ -477,7 +477,7 @@ extension RemoteProviderConfigurationSheet {
         case .volcengine:
             return AppLocalization.localizedString("Volcengine models should use the Responses endpoint in the same region as the API key.")
         case .codex:
-            return AppLocalization.localizedString("Codex uses the ChatGPT subscription backend and local Codex OAuth credentials.")
+            return nil
         default:
             return nil
         }

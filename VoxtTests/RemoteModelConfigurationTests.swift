@@ -298,6 +298,25 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertEqual(headers["ChatGPT-Account-ID"], "acct_selected")
     }
 
+    func testCodexCredentialProviderReportsAuthFilePermissionDenied() async throws {
+        let directory = try TemporaryDirectory()
+        let authURL = directory.url.appendingPathComponent("auth.json")
+        try Data("{}".utf8).write(to: authURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: authURL.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: authURL.path)
+        }
+
+        do {
+            _ = try await CodexOAuthCredentialProvider(authFilePath: authURL.path).authorizationHeaders()
+            XCTFail("Expected auth file permission error")
+        } catch CodexOAuthCredentialProvider.CredentialError.authFilePermissionDenied(let path) {
+            XCTAssertEqual(path, authURL.path)
+        } catch {
+            XCTFail("Expected auth file permission error, got \(error)")
+        }
+    }
+
     func testCodexConfigurationRoundTripPreservesAuthFileSelection() {
         let bookmark = Data([1, 2, 3, 4])
         let stored: [String: RemoteProviderConfiguration] = [

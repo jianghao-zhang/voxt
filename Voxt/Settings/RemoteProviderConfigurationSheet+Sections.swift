@@ -117,10 +117,11 @@ extension RemoteProviderConfigurationSheet {
 
             if isCodexLLMProvider {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(apiKeyFieldTitle)
-                        .font(.subheadline)
+                    Text(AppLocalization.localizedString("Codex Credentials, Voxt uses local Codex OAuth credentials."))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(AppLocalization.localizedString("Voxt uses the local Codex login at ~/.codex/auth.json by default. Choose a different auth.json if Codex stores credentials elsewhere."))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(AppLocalization.localizedString("For first-time setup, manually choose the auth.json configuration file once."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -158,12 +159,6 @@ extension RemoteProviderConfigurationSheet {
                             }
                             .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 30))
                         }
-                    }
-
-                    if hasCustomCodexAuthFilePath {
-                        Text(AppLocalization.localizedString("Selected Codex auth file. Clear to return to the default path."))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
                     }
 
                     if let codexAuthFileSelectionError, !codexAuthFileSelectionError.isEmpty {

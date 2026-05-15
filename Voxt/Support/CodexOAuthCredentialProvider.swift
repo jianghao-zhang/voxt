@@ -9,6 +9,7 @@ struct CodexOAuthCredentialProvider {
 
     enum CredentialError: LocalizedError {
         case authFileNotFound(String)
+        case authFilePermissionDenied(String)
         case missingTokens
         case invalidAuthFile(String)
         case refreshFailed(Int, String)
@@ -17,6 +18,8 @@ struct CodexOAuthCredentialProvider {
             switch self {
             case .authFileNotFound(let path):
                 return AppLocalization.format("Codex auth not found at %@. Run `codex login` first.", path)
+            case .authFilePermissionDenied(let path):
+                return AppLocalization.format("Codex auth.json permission denied at %@. Click Choose and select auth.json to grant Voxt access.", path)
             case .missingTokens:
                 return AppLocalization.localizedString("Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first.")
             case .invalidAuthFile(let detail):
@@ -209,6 +212,8 @@ struct CodexOAuthCredentialProvider {
             return try JSONDecoder().decode(AuthFile.self, from: data)
         } catch let error as CredentialError {
             throw error
+        } catch where Self.isPermissionDenied(error) {
+            throw CredentialError.authFilePermissionDenied(path)
         } catch {
             throw CredentialError.invalidAuthFile(error.localizedDescription)
         }
@@ -253,9 +258,27 @@ struct CodexOAuthCredentialProvider {
             try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
             try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+        } catch where Self.isPermissionDenied(error) {
+            throw CredentialError.authFilePermissionDenied(path)
         } catch {
             throw CredentialError.invalidAuthFile(error.localizedDescription)
         }
+    }
+
+    private static func isPermissionDenied(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain,
+           nsError.code == NSFileReadNoPermissionError || nsError.code == NSFileWriteNoPermissionError {
+            return true
+        }
+        if nsError.domain == NSPOSIXErrorDomain,
+           nsError.code == Int(EACCES) || nsError.code == Int(EPERM) {
+            return true
+        }
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+            return isPermissionDenied(underlying)
+        }
+        return false
     }
 
     private func isTokenExpired(_ accessToken: String, lastRefresh: String?) -> Bool {

@@ -127,9 +127,10 @@ final class LocalizationResourcesTests: XCTestCase {
 
     func testCodexConfigurationTextIsLocalizedInSupportedLanguages() {
         let keys = [
-            "Codex Login",
-            "Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails.",
-            "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials.",
+            "Codex Credentials",
+            "Codex Credentials, Voxt uses local Codex OAuth credentials.",
+            "For first-time setup, manually choose the auth.json configuration file once.",
+            "Codex auth.json permission denied at %@. Click Choose and select auth.json to grant Voxt access.",
             "Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first."
         ]
 
