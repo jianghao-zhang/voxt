@@ -790,11 +790,16 @@ jobs:
           PKG_PATH="build/Voxt-${VERSION}.pkg"
           SHA_PATH="build/Voxt-${VERSION}.pkg.sha256"
           NOTES_FILE="build/release-notes.md"
+          PRERELEASE_ARGS=()
+          if [ "$CHANNEL" = "beta" ]; then
+            PRERELEASE_ARGS=(--prerelease)
+          fi
 
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$TAG" \
               --title "Voxt $TAG" \
               --notes-file "$NOTES_FILE" \
+              "${PRERELEASE_ARGS[@]}" \
               -R "$GITHUB_REPOSITORY"
             if [ "$DRAFT_RELEASE" = "true" ]; then
               gh release edit "$TAG" --draft -R "$GITHUB_REPOSITORY"
@@ -811,12 +816,14 @@ jobs:
                 --target "$GITHUB_SHA" \
                 --title "Voxt $TAG" \
                 --notes-file "$NOTES_FILE" \
+                "${PRERELEASE_ARGS[@]}" \
                 -R "$GITHUB_REPOSITORY"
             else
               gh release create "$TAG" "$ZIP_PATH" "$DMG_PATH" "$PKG_PATH" "$SHA_PATH" \
                 --target "$GITHUB_SHA" \
                 --title "Voxt $TAG" \
                 --notes-file "$NOTES_FILE" \
+                "${PRERELEASE_ARGS[@]}" \
                 -R "$GITHUB_REPOSITORY"
             fi
           fi
