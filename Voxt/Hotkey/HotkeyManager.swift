@@ -2,6 +2,7 @@ import Foundation
 import Carbon
 import AppKit
 import ApplicationServices
+import IOKit.hid
 
 /// Monitors a global hotkey via a CGEvent tap.
 /// - Press and hold hotkey key  → calls `onKeyDown`
@@ -32,12 +33,16 @@ class HotkeyManager {
     private var runLoopSource: CFRunLoopSource?
     private var isKeyDown = false
     private var activeKeyCode: UInt16?
+    private var activeMouseButtonNumber: Int?
     private var isTranslationKeyDown = false
     private var activeTranslationKeyCode: UInt16?
+    private var activeTranslationMouseButtonNumber: Int?
     private var isRewriteKeyDown = false
     private var activeRewriteKeyCode: UInt16?
+    private var activeRewriteMouseButtonNumber: Int?
     private var isCustomPasteKeyDown = false
     private var activeCustomPasteKeyCode: UInt16?
+    private var activeCustomPasteMouseButtonNumber: Int?
     private var hasTranscriptionModifierTapCandidate = false
     private var hasTranslationModifierTapCandidate = false
     private var hasRewriteModifierTapCandidate = false
@@ -90,7 +95,9 @@ class HotkeyManager {
         let eventMask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue) |
             (1 << CGEventType.keyUp.rawValue) |
-            (1 << CGEventType.flagsChanged.rawValue)
+            (1 << CGEventType.flagsChanged.rawValue) |
+            (1 << CGEventType.otherMouseDown.rawValue) |
+            (1 << CGEventType.otherMouseUp.rawValue)
 
         guard let (tap, tapLocation) = createEventTap(eventMask: eventMask) else {
             VoxtLog.error("Failed to create event tap. \(permissionStatusText())")
@@ -222,13 +229,23 @@ class HotkeyManager {
             return false
         }
         var eventWasConsumed = false
-        handleResolvedEvent(
-            type: type,
-            keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
-            flags: event.flags,
-            isAutoRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
-            eventWasConsumed: &eventWasConsumed
-        )
+        switch type {
+        case .otherMouseDown, .otherMouseUp:
+            handleResolvedMouseEvent(
+                type: type,
+                buttonNumber: Int(event.getIntegerValueField(.mouseEventButtonNumber)),
+                flags: event.flags,
+                eventWasConsumed: &eventWasConsumed
+            )
+        default:
+            handleResolvedEvent(
+                type: type,
+                keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
+                flags: event.flags,
+                isAutoRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+                eventWasConsumed: &eventWasConsumed
+            )
+        }
         return eventWasConsumed
     }
 
@@ -542,6 +559,190 @@ class HotkeyManager {
             break
         }
 
+    }
+
+    private func handleResolvedMouseEvent(
+        type: CGEventType,
+        buttonNumber: Int,
+        flags: CGEventFlags,
+        eventWasConsumed: inout Bool
+    ) {
+        defer {
+            lastEventAt = Date()
+        }
+
+        guard type == .otherMouseDown || type == .otherMouseUp else { return }
+        let configuration = HotkeyRuntimeConfiguration.load()
+        let rewriteHotkey = configuration.rewriteActivationMode == .dedicatedHotkey
+            ? configuration.rewriteHotkey
+            : nil
+        let triggerMode = configuration.triggerMode
+        let distinguishModifierSides = configuration.distinguishModifierSides
+
+        if activeCustomPasteHotkeyIsDisabled(configuration.customPasteHotkey) {
+            clearCustomPasteTransientState()
+        }
+        if rewriteHotkey == nil {
+            clearRewriteTransientState()
+        }
+
+        if handleMouseHotkey(
+            type: type,
+            buttonNumber: buttonNumber,
+            flags: flags,
+            hotkey: configuration.translationHotkey,
+            distinguishModifierSides: distinguishModifierSides,
+            triggerMode: triggerMode,
+            isKeyDown: &isTranslationKeyDown,
+            activeMouseButtonNumber: &activeTranslationMouseButtonNumber,
+            onDown: { [weak self] in self?.emitTranslationKeyDown() },
+            onUp: { [weak self] in self?.emitTranslationKeyUp() }
+        ) {
+            eventWasConsumed = true
+            return
+        }
+
+        if let rewriteHotkey,
+           handleMouseHotkey(
+            type: type,
+            buttonNumber: buttonNumber,
+            flags: flags,
+            hotkey: rewriteHotkey,
+            distinguishModifierSides: distinguishModifierSides,
+            triggerMode: triggerMode,
+            isKeyDown: &isRewriteKeyDown,
+            activeMouseButtonNumber: &activeRewriteMouseButtonNumber,
+            onDown: { [weak self] in self?.emitRewriteKeyDown() },
+            onUp: { [weak self] in self?.emitRewriteKeyUp() }
+           ) {
+            eventWasConsumed = true
+            return
+        }
+
+        if let customPasteHotkey = configuration.customPasteHotkey,
+           handleMouseCustomPasteHotkey(
+            type: type,
+            buttonNumber: buttonNumber,
+            flags: flags,
+            hotkey: customPasteHotkey,
+            distinguishModifierSides: distinguishModifierSides
+           ) {
+            eventWasConsumed = true
+            return
+        }
+
+        if handleMouseHotkey(
+            type: type,
+            buttonNumber: buttonNumber,
+            flags: flags,
+            hotkey: configuration.transcriptionHotkey,
+            distinguishModifierSides: distinguishModifierSides,
+            triggerMode: triggerMode,
+            isKeyDown: &isKeyDown,
+            activeMouseButtonNumber: &activeMouseButtonNumber,
+            onDown: { [weak self] in self?.emitKeyDown() },
+            onUp: { [weak self] in self?.emitKeyUp() }
+        ) {
+            eventWasConsumed = true
+            return
+        }
+    }
+
+    private func activeCustomPasteHotkeyIsDisabled(_ hotkey: HotkeyPreference.Hotkey?) -> Bool {
+        hotkey == nil
+    }
+
+    private func handleMouseHotkey(
+        type: CGEventType,
+        buttonNumber: Int,
+        flags: CGEventFlags,
+        hotkey: HotkeyPreference.Hotkey,
+        distinguishModifierSides: Bool,
+        triggerMode: HotkeyPreference.TriggerMode,
+        isKeyDown: inout Bool,
+        activeMouseButtonNumber: inout Int?,
+        onDown: () -> Void,
+        onUp: () -> Void
+    ) -> Bool {
+        guard mouseHotkey(hotkey, matchesButtonNumber: buttonNumber, flags: flags, distinguishModifierSides: distinguishModifierSides) else {
+            if type == .otherMouseUp, activeMouseButtonNumber == buttonNumber {
+                activeMouseButtonNumber = nil
+                if isKeyDown {
+                    isKeyDown = false
+                    onUp()
+                    return true
+                }
+            }
+            return false
+        }
+
+        switch type {
+        case .otherMouseDown:
+            activeMouseButtonNumber = buttonNumber
+            if triggerMode == .tap {
+                onDown()
+                return true
+            }
+            if !isKeyDown {
+                isKeyDown = true
+                onDown()
+            }
+            return true
+        case .otherMouseUp:
+            guard activeMouseButtonNumber == buttonNumber else { return false }
+            activeMouseButtonNumber = nil
+            if triggerMode == .tap {
+                onUp()
+                return true
+            }
+            guard isKeyDown else { return true }
+            isKeyDown = false
+            onUp()
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func handleMouseCustomPasteHotkey(
+        type: CGEventType,
+        buttonNumber: Int,
+        flags: CGEventFlags,
+        hotkey: HotkeyPreference.Hotkey,
+        distinguishModifierSides: Bool
+    ) -> Bool {
+        guard mouseHotkey(hotkey, matchesButtonNumber: buttonNumber, flags: flags, distinguishModifierSides: distinguishModifierSides) else {
+            return false
+        }
+        switch type {
+        case .otherMouseDown:
+            isCustomPasteKeyDown = true
+            activeCustomPasteMouseButtonNumber = buttonNumber
+            return true
+        case .otherMouseUp:
+            guard isCustomPasteKeyDown, activeCustomPasteMouseButtonNumber == buttonNumber else { return false }
+            isCustomPasteKeyDown = false
+            activeCustomPasteMouseButtonNumber = nil
+            emitCustomPasteKeyDown()
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func mouseHotkey(
+        _ hotkey: HotkeyPreference.Hotkey,
+        matchesButtonNumber buttonNumber: Int,
+        flags: CGEventFlags,
+        distinguishModifierSides: Bool
+    ) -> Bool {
+        guard hotkey.mouseButtonNumber == buttonNumber else { return false }
+        return HotkeyPreference.hotkeyMatches(
+            hotkey,
+            eventFlags: flags,
+            sidedModifiers: currentSidedModifiers,
+            distinguishModifierSides: distinguishModifierSides
+        )
     }
     private func resetTransientStateIfNeededForPotentialStaleFnEvent(
         type: CGEventType,
@@ -1147,6 +1348,7 @@ class HotkeyManager {
     private func clearRewriteTransientState() {
         isRewriteKeyDown = false
         activeRewriteKeyCode = nil
+        activeRewriteMouseButtonNumber = nil
         hasRewriteModifierTapCandidate = false
         cancelPendingRewriteLongPressRelease()
     }
@@ -1154,18 +1356,23 @@ class HotkeyManager {
     private func clearCustomPasteTransientState() {
         isCustomPasteKeyDown = false
         activeCustomPasteKeyCode = nil
+        activeCustomPasteMouseButtonNumber = nil
         hasCustomPasteModifierTapCandidate = false
     }
 
     private func clearTransientState() {
         isKeyDown = false
         activeKeyCode = nil
+        activeMouseButtonNumber = nil
         isTranslationKeyDown = false
         activeTranslationKeyCode = nil
+        activeTranslationMouseButtonNumber = nil
         isRewriteKeyDown = false
         activeRewriteKeyCode = nil
+        activeRewriteMouseButtonNumber = nil
         isCustomPasteKeyDown = false
         activeCustomPasteKeyCode = nil
+        activeCustomPasteMouseButtonNumber = nil
         hasTranscriptionModifierTapCandidate = false
         hasTranslationModifierTapCandidate = false
         hasRewriteModifierTapCandidate = false
@@ -1212,6 +1419,22 @@ extension HotkeyManager {
         }
         var eventWasConsumed = false
         handleResolvedEvent(type: type, keyCode: keyCode, flags: flags, isAutoRepeat: isAutoRepeat, eventWasConsumed: &eventWasConsumed)
+        return eventWasConsumed
+    }
+
+    @discardableResult
+    func testingHandleMouseEvent(
+        type: CGEventType,
+        buttonNumber: Int,
+        flags: CGEventFlags = []
+    ) -> Bool {
+        var eventWasConsumed = false
+        handleResolvedMouseEvent(
+            type: type,
+            buttonNumber: buttonNumber,
+            flags: flags,
+            eventWasConsumed: &eventWasConsumed
+        )
         return eventWasConsumed
     }
 

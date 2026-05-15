@@ -452,7 +452,7 @@ extension OnboardingSettingsView {
             GeneralSettingsCard(title: "Shortcut") {
                 OnboardingSegmentedTabs(
                     selection: hotkeyPresetSelection,
-                    items: [HotkeyPreference.Preset.fnCombo, .commandCombo].map { preset in
+                    items: [HotkeyPreference.Preset.fnCombo, .commandCombo, .mouseMiddleFnShift].map { preset in
                         OnboardingTabItem(value: preset, title: LocalizedStringKey(preset.title))
                     }
                 )
@@ -883,6 +883,8 @@ extension OnboardingSettingsView {
             return localized("Recommended default: fn for transcription, fn+shift for translation, and fn+control for rewrite.")
         case .commandCombo:
             return localized("Useful when function-key combinations are already reserved by the system or keyboard tools.")
+        case .mouseMiddleFnShift:
+            return localized("Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite.")
         case .custom:
             return localized("You can fine-tune every shortcut later from the Hotkey page.")
         }

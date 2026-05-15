@@ -12,11 +12,8 @@ final class WhisperPipelineMetricsIntegrationTests: XCTestCase {
         let lateCoverageRate: Double
     }
 
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Whisper pipeline metrics regression is local-only and is skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("Whisper pipeline metrics regression tests")
     }
 
     private func officialFixtureDirectoryURL() -> URL {
@@ -176,7 +173,7 @@ final class WhisperPipelineMetricsIntegrationTests: XCTestCase {
     }
 
     func testRealtimeOfficialLongFixtureMetricsStayWithinDiagnosticEnvelope() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let resolved = try resolvedModelManager()
         let transcriber = WhisperKitTranscriber(modelManager: resolved.manager)
         let diagnosticsList = try await officialLongFixtureURLs().asyncMap {

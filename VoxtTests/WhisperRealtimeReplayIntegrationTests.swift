@@ -28,6 +28,7 @@ final class WhisperRealtimeReplayIntegrationTests: XCTestCase {
     }
 
     private func resolvedModelManager() throws -> (modelID: String, manager: WhisperKitModelManager) {
+        try ModelTestGate.requireEnabled("Whisper realtime replay integration tests")
         let defaults = UserDefaults.standard
         defaults.set("/Users/guanwei/x/models", forKey: AppPreferenceKey.modelStorageRootPath)
         defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)

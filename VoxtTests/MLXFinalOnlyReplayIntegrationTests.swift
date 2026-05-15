@@ -5,11 +5,8 @@ import XCTest
 final class MLXFinalOnlyReplayIntegrationTests: XCTestCase {
     private let minimumLongFormDurationSeconds = 20.0
 
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Final-only MLX replay integration tests are local-only and are skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("Final-only MLX replay integration tests")
     }
 
     private func officialFixtureDirectoryURL() -> URL {
@@ -93,7 +90,7 @@ final class MLXFinalOnlyReplayIntegrationTests: XCTestCase {
     }
 
     func testFinalOnlyReplayOfficialLongFixturePublishesOnlyFinalTranscript() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let transcriber = try makeTranscriber()
         let diagnostics = try await transcriber.debugReplayFinalOnlyAudioFileWithTrace(
             fixtureURL(named: "qwen_audio_long_zh_composite.wav"),
@@ -105,7 +102,7 @@ final class MLXFinalOnlyReplayIntegrationTests: XCTestCase {
     }
 
     func testFinalOnlyReplayOfficialLongFixtureProducesMeaningfulFinalTranscript() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let transcriber = try makeTranscriber()
         let diagnostics = try await transcriber.debugReplayFinalOnlyAudioFileWithTrace(
             fixtureURL(named: "qwen_audio_long_en_composite.wav"),
@@ -127,7 +124,7 @@ final class MLXFinalOnlyReplayIntegrationTests: XCTestCase {
     }
 
     func testFinalOnlyReplayRecentHistoryClipsPublishFinalWithoutQuickPreview() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let historyURLs = discoveredRecentHistoryPaths()
         guard !historyURLs.isEmpty else {
             throw XCTSkip("No recent local history clips are available for final-only replay diagnostics.")

@@ -181,6 +181,7 @@ struct HotkeyPreference {
     enum Preset: String, CaseIterable, Identifiable {
         case fnCombo
         case commandCombo
+        case mouseMiddleFnShift
         case custom
 
         var id: String { rawValue }
@@ -191,6 +192,8 @@ struct HotkeyPreference {
                 return AppLocalization.localizedString("fn Combo")
             case .commandCombo:
                 return AppLocalization.localizedString("Command Combo")
+            case .mouseMiddleFnShift:
+                return AppLocalization.localizedString("Mouse Middle + fn Shift")
             case .custom:
                 return AppLocalization.localizedString("Custom")
             }
@@ -198,9 +201,76 @@ struct HotkeyPreference {
     }
 
     struct Hotkey: Equatable {
-        let keyCode: UInt16
+        enum Input: Equatable {
+            case keyboard(UInt16)
+            case mouseButton(Int)
+
+            enum Kind: String {
+                case keyboard
+                case mouseButton
+            }
+
+            var kind: Kind {
+                switch self {
+                case .keyboard:
+                    return .keyboard
+                case .mouseButton:
+                    return .mouseButton
+                }
+            }
+        }
+
+        let input: Input
         let modifiers: NSEvent.ModifierFlags
         let sidedModifiers: SidedModifierFlags
+
+        init(
+            input: Input,
+            modifiers: NSEvent.ModifierFlags,
+            sidedModifiers: SidedModifierFlags
+        ) {
+            self.input = input
+            self.modifiers = modifiers
+            self.sidedModifiers = sidedModifiers
+        }
+
+        init(
+            keyCode: UInt16,
+            modifiers: NSEvent.ModifierFlags,
+            sidedModifiers: SidedModifierFlags
+        ) {
+            self.init(input: .keyboard(keyCode), modifiers: modifiers, sidedModifiers: sidedModifiers)
+        }
+
+        init(
+            mouseButtonNumber: Int,
+            modifiers: NSEvent.ModifierFlags = [],
+            sidedModifiers: SidedModifierFlags = []
+        ) {
+            self.init(input: .mouseButton(mouseButtonNumber), modifiers: modifiers, sidedModifiers: sidedModifiers)
+        }
+
+        var keyCode: UInt16 {
+            switch input {
+            case .keyboard(let keyCode):
+                return keyCode
+            case .mouseButton:
+                return HotkeyPreference.modifierOnlyKeyCode
+            }
+        }
+
+        var mouseButtonNumber: Int? {
+            switch input {
+            case .keyboard:
+                return nil
+            case .mouseButton(let buttonNumber):
+                return buttonNumber
+            }
+        }
+
+        var isMouseButton: Bool {
+            mouseButtonNumber != nil
+        }
     }
 
     struct PresetHotkeys: Equatable {
@@ -209,6 +279,26 @@ struct HotkeyPreference {
         let translation: Hotkey
         let rewrite: Hotkey
         let customPaste: Hotkey
+        let triggerMode: TriggerMode
+        let rewriteActivationMode: RewriteActivationMode
+
+        init(
+            distinguishSides: Bool,
+            transcription: Hotkey,
+            translation: Hotkey,
+            rewrite: Hotkey,
+            customPaste: Hotkey,
+            triggerMode: TriggerMode = .tap,
+            rewriteActivationMode: RewriteActivationMode = .dedicatedHotkey
+        ) {
+            self.distinguishSides = distinguishSides
+            self.transcription = transcription
+            self.translation = translation
+            self.rewrite = rewrite
+            self.customPaste = customPaste
+            self.triggerMode = triggerMode
+            self.rewriteActivationMode = rewriteActivationMode
+        }
     }
 
     static let modifierOnlyKeyCode: UInt16 = 0xFFFF
@@ -224,25 +314,34 @@ struct HotkeyPreference {
     static let defaultRewriteActivationMode: RewriteActivationMode = .dedicatedHotkey
     static let defaultDistinguishModifierSides = false
     static let defaultPreset: Preset = .fnCombo
+    static let middleMouseButtonNumber = 2
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
+            AppPreferenceKey.hotkeyInputType: Hotkey.Input.Kind.keyboard.rawValue,
             AppPreferenceKey.hotkeyKeyCode: Int(defaultKeyCode),
+            AppPreferenceKey.hotkeyMouseButtonNumber: middleMouseButtonNumber,
             AppPreferenceKey.hotkeyModifiers: Int(defaultModifiers.rawValue),
             AppPreferenceKey.hotkeySidedModifiers: 0,
+            AppPreferenceKey.translationHotkeyInputType: Hotkey.Input.Kind.keyboard.rawValue,
             AppPreferenceKey.translationHotkeyKeyCode: Int(defaultTranslationKeyCode),
+            AppPreferenceKey.translationHotkeyMouseButtonNumber: middleMouseButtonNumber,
             AppPreferenceKey.translationHotkeyModifiers: Int(defaultTranslationModifiers.rawValue),
             AppPreferenceKey.translationHotkeySidedModifiers: 0,
+            AppPreferenceKey.rewriteHotkeyInputType: Hotkey.Input.Kind.keyboard.rawValue,
             AppPreferenceKey.rewriteHotkeyKeyCode: Int(defaultRewriteKeyCode),
+            AppPreferenceKey.rewriteHotkeyMouseButtonNumber: middleMouseButtonNumber,
             AppPreferenceKey.rewriteHotkeyModifiers: Int(defaultRewriteModifiers.rawValue),
             AppPreferenceKey.rewriteHotkeySidedModifiers: 0,
+            AppPreferenceKey.customPasteHotkeyInputType: Hotkey.Input.Kind.keyboard.rawValue,
             AppPreferenceKey.customPasteHotkeyKeyCode: Int(defaultCustomPasteKeyCode),
+            AppPreferenceKey.customPasteHotkeyMouseButtonNumber: middleMouseButtonNumber,
             AppPreferenceKey.customPasteHotkeyModifiers: Int(defaultCustomPasteModifiers.rawValue),
             AppPreferenceKey.customPasteHotkeySidedModifiers: 0,
             AppPreferenceKey.hotkeyTriggerMode: defaultTriggerMode.rawValue,
             AppPreferenceKey.rewriteHotkeyActivationMode: defaultRewriteActivationMode.rawValue,
             AppPreferenceKey.hotkeyDistinguishModifierSides: defaultDistinguishModifierSides,
-            AppPreferenceKey.hotkeyPreset: defaultPreset.rawValue
+            AppPreferenceKey.hotkeyPreset: defaultPreset.rawValue,
         ])
     }
 
@@ -270,7 +369,9 @@ struct HotkeyPreference {
             return presetHotkey
         }
         return load(
+            inputTypeKey: AppPreferenceKey.hotkeyInputType,
             keyCodeKey: AppPreferenceKey.hotkeyKeyCode,
+            mouseButtonKey: AppPreferenceKey.hotkeyMouseButtonNumber,
             modifiersKey: AppPreferenceKey.hotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.hotkeySidedModifiers,
             defaultKeyCode: defaultKeyCode,
@@ -279,9 +380,19 @@ struct HotkeyPreference {
     }
 
     static func save(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, sidedModifiers: SidedModifierFlags) {
-        UserDefaults.standard.set(Int(keyCode), forKey: AppPreferenceKey.hotkeyKeyCode)
-        UserDefaults.standard.set(Int(modifiers.rawValue), forKey: AppPreferenceKey.hotkeyModifiers)
-        UserDefaults.standard.set(sidedModifiers.rawValue, forKey: AppPreferenceKey.hotkeySidedModifiers)
+        save(.init(keyCode: keyCode, modifiers: modifiers, sidedModifiers: sidedModifiers))
+    }
+
+    static func save(_ hotkey: Hotkey, defaults: UserDefaults = .standard) {
+        save(
+            hotkey,
+            inputTypeKey: AppPreferenceKey.hotkeyInputType,
+            keyCodeKey: AppPreferenceKey.hotkeyKeyCode,
+            mouseButtonKey: AppPreferenceKey.hotkeyMouseButtonNumber,
+            modifiersKey: AppPreferenceKey.hotkeyModifiers,
+            sidedModifiersKey: AppPreferenceKey.hotkeySidedModifiers,
+            defaults: defaults
+        )
     }
 
     static func loadTranslation() -> Hotkey {
@@ -289,7 +400,9 @@ struct HotkeyPreference {
             return presetHotkey
         }
         return load(
+            inputTypeKey: AppPreferenceKey.translationHotkeyInputType,
             keyCodeKey: AppPreferenceKey.translationHotkeyKeyCode,
+            mouseButtonKey: AppPreferenceKey.translationHotkeyMouseButtonNumber,
             modifiersKey: AppPreferenceKey.translationHotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.translationHotkeySidedModifiers,
             defaultKeyCode: defaultTranslationKeyCode,
@@ -298,9 +411,19 @@ struct HotkeyPreference {
     }
 
     static func saveTranslation(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, sidedModifiers: SidedModifierFlags) {
-        UserDefaults.standard.set(Int(keyCode), forKey: AppPreferenceKey.translationHotkeyKeyCode)
-        UserDefaults.standard.set(Int(modifiers.rawValue), forKey: AppPreferenceKey.translationHotkeyModifiers)
-        UserDefaults.standard.set(sidedModifiers.rawValue, forKey: AppPreferenceKey.translationHotkeySidedModifiers)
+        saveTranslation(.init(keyCode: keyCode, modifiers: modifiers, sidedModifiers: sidedModifiers))
+    }
+
+    static func saveTranslation(_ hotkey: Hotkey, defaults: UserDefaults = .standard) {
+        save(
+            hotkey,
+            inputTypeKey: AppPreferenceKey.translationHotkeyInputType,
+            keyCodeKey: AppPreferenceKey.translationHotkeyKeyCode,
+            mouseButtonKey: AppPreferenceKey.translationHotkeyMouseButtonNumber,
+            modifiersKey: AppPreferenceKey.translationHotkeyModifiers,
+            sidedModifiersKey: AppPreferenceKey.translationHotkeySidedModifiers,
+            defaults: defaults
+        )
     }
 
     static func loadRewrite() -> Hotkey {
@@ -308,7 +431,9 @@ struct HotkeyPreference {
             return presetHotkey
         }
         return load(
+            inputTypeKey: AppPreferenceKey.rewriteHotkeyInputType,
             keyCodeKey: AppPreferenceKey.rewriteHotkeyKeyCode,
+            mouseButtonKey: AppPreferenceKey.rewriteHotkeyMouseButtonNumber,
             modifiersKey: AppPreferenceKey.rewriteHotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.rewriteHotkeySidedModifiers,
             defaultKeyCode: defaultRewriteKeyCode,
@@ -317,9 +442,19 @@ struct HotkeyPreference {
     }
 
     static func saveRewrite(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, sidedModifiers: SidedModifierFlags) {
-        UserDefaults.standard.set(Int(keyCode), forKey: AppPreferenceKey.rewriteHotkeyKeyCode)
-        UserDefaults.standard.set(Int(modifiers.rawValue), forKey: AppPreferenceKey.rewriteHotkeyModifiers)
-        UserDefaults.standard.set(sidedModifiers.rawValue, forKey: AppPreferenceKey.rewriteHotkeySidedModifiers)
+        saveRewrite(.init(keyCode: keyCode, modifiers: modifiers, sidedModifiers: sidedModifiers))
+    }
+
+    static func saveRewrite(_ hotkey: Hotkey, defaults: UserDefaults = .standard) {
+        save(
+            hotkey,
+            inputTypeKey: AppPreferenceKey.rewriteHotkeyInputType,
+            keyCodeKey: AppPreferenceKey.rewriteHotkeyKeyCode,
+            mouseButtonKey: AppPreferenceKey.rewriteHotkeyMouseButtonNumber,
+            modifiersKey: AppPreferenceKey.rewriteHotkeyModifiers,
+            sidedModifiersKey: AppPreferenceKey.rewriteHotkeySidedModifiers,
+            defaults: defaults
+        )
     }
 
     static func loadCustomPaste() -> Hotkey {
@@ -327,7 +462,9 @@ struct HotkeyPreference {
             return presetHotkey
         }
         return normalizeCustomPasteHotkey(load(
+            inputTypeKey: AppPreferenceKey.customPasteHotkeyInputType,
             keyCodeKey: AppPreferenceKey.customPasteHotkeyKeyCode,
+            mouseButtonKey: AppPreferenceKey.customPasteHotkeyMouseButtonNumber,
             modifiersKey: AppPreferenceKey.customPasteHotkeyModifiers,
             sidedModifiersKey: AppPreferenceKey.customPasteHotkeySidedModifiers,
             defaultKeyCode: defaultCustomPasteKeyCode,
@@ -336,9 +473,19 @@ struct HotkeyPreference {
     }
 
     static func saveCustomPaste(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, sidedModifiers: SidedModifierFlags) {
-        UserDefaults.standard.set(Int(keyCode), forKey: AppPreferenceKey.customPasteHotkeyKeyCode)
-        UserDefaults.standard.set(Int(modifiers.rawValue), forKey: AppPreferenceKey.customPasteHotkeyModifiers)
-        UserDefaults.standard.set(sidedModifiers.rawValue, forKey: AppPreferenceKey.customPasteHotkeySidedModifiers)
+        saveCustomPaste(.init(keyCode: keyCode, modifiers: modifiers, sidedModifiers: sidedModifiers))
+    }
+
+    static func saveCustomPaste(_ hotkey: Hotkey, defaults: UserDefaults = .standard) {
+        save(
+            hotkey,
+            inputTypeKey: AppPreferenceKey.customPasteHotkeyInputType,
+            keyCodeKey: AppPreferenceKey.customPasteHotkeyKeyCode,
+            mouseButtonKey: AppPreferenceKey.customPasteHotkeyMouseButtonNumber,
+            modifiersKey: AppPreferenceKey.customPasteHotkeyModifiers,
+            sidedModifiersKey: AppPreferenceKey.customPasteHotkeySidedModifiers,
+            defaults: defaults
+        )
     }
 
     static func loadTriggerMode(defaults: UserDefaults = .standard) -> TriggerMode {
@@ -405,32 +552,20 @@ struct HotkeyPreference {
 
     private static func applyPresetHotkeys(_ presetValues: PresetHotkeys) {
         UserDefaults.standard.set(presetValues.distinguishSides, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
-        save(
-            keyCode: presetValues.transcription.keyCode,
-            modifiers: presetValues.transcription.modifiers,
-            sidedModifiers: presetValues.transcription.sidedModifiers
-        )
-        saveTranslation(
-            keyCode: presetValues.translation.keyCode,
-            modifiers: presetValues.translation.modifiers,
-            sidedModifiers: presetValues.translation.sidedModifiers
-        )
-        saveRewrite(
-            keyCode: presetValues.rewrite.keyCode,
-            modifiers: presetValues.rewrite.modifiers,
-            sidedModifiers: presetValues.rewrite.sidedModifiers
-        )
-        saveCustomPaste(
-            keyCode: presetValues.customPaste.keyCode,
-            modifiers: presetValues.customPaste.modifiers,
-            sidedModifiers: presetValues.customPaste.sidedModifiers
-        )
+        save(presetValues.transcription)
+        saveTranslation(presetValues.translation)
+        saveRewrite(presetValues.rewrite)
+        saveCustomPaste(presetValues.customPaste)
+        saveRewriteActivationMode(presetValues.rewriteActivationMode)
+        saveTriggerMode(presetValues.triggerMode)
     }
 
     private static func normalizeCustomPasteHotkey(_ hotkey: Hotkey) -> Hotkey {
-        guard hotkey.keyCode != modifierOnlyKeyCode else { return hotkey }
+        guard case .keyboard(let keyCode) = hotkey.input,
+              keyCode != modifierOnlyKeyCode
+        else { return hotkey }
         return Hotkey(
-            keyCode: hotkey.keyCode,
+            input: hotkey.input,
             modifiers: hotkey.modifiers,
             sidedModifiers: []
         )
@@ -441,10 +576,10 @@ struct HotkeyPreference {
             for: hotkey.modifiers,
             sidedModifiers: distinguishModifierSides ? hotkey.sidedModifiers : []
         )
-        if hotkey.keyCode == modifierOnlyKeyCode {
+        if case .keyboard(let keyCode) = hotkey.input, keyCode == modifierOnlyKeyCode {
             return symbols.isEmpty ? "Unassigned" : symbols
         }
-        let key = keyCodeDisplayString(hotkey.keyCode)
+        let key = inputDisplayString(hotkey.input)
         return symbols.isEmpty ? key : "\(symbols) \(key)"
     }
 
@@ -489,6 +624,16 @@ struct HotkeyPreference {
                 translation: Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command, .shift], sidedModifiers: [.rightCommand, .rightShift]),
                 rewrite: Hotkey(keyCode: modifierOnlyKeyCode, modifiers: [.command, .option], sidedModifiers: [.rightCommand, .rightOption]),
                 customPaste: Hotkey(keyCode: defaultCustomPasteKeyCode, modifiers: defaultCustomPasteModifiers, sidedModifiers: [])
+            )
+        case .mouseMiddleFnShift:
+            return PresetHotkeys(
+                distinguishSides: false,
+                transcription: Hotkey(mouseButtonNumber: middleMouseButtonNumber),
+                translation: Hotkey(keyCode: defaultTranslationKeyCode, modifiers: defaultTranslationModifiers, sidedModifiers: []),
+                rewrite: Hotkey(mouseButtonNumber: middleMouseButtonNumber),
+                customPaste: Hotkey(keyCode: defaultCustomPasteKeyCode, modifiers: defaultCustomPasteModifiers, sidedModifiers: []),
+                triggerMode: .tap,
+                rewriteActivationMode: .doubleTapTranscriptionHotkey
             )
         case .custom:
             return nil
@@ -538,40 +683,77 @@ struct HotkeyPreference {
         return "Key \(keyCode)"
     }
 
+    static func inputDisplayString(_ input: Hotkey.Input) -> String {
+        switch input {
+        case .keyboard(let keyCode):
+            return keyCodeDisplayString(keyCode)
+        case .mouseButton(let buttonNumber):
+            return mouseButtonDisplayString(buttonNumber)
+        }
+    }
+
+    static func mouseButtonDisplayString(_ buttonNumber: Int) -> String {
+        switch buttonNumber {
+        case middleMouseButtonNumber:
+            return AppLocalization.localizedString("Mouse Middle Button")
+        default:
+            return AppLocalization.format("Mouse Button %d", buttonNumber)
+        }
+    }
+
     private static func load(
+        inputTypeKey: String,
         keyCodeKey: String,
+        mouseButtonKey: String,
         modifiersKey: String,
         sidedModifiersKey: String,
         defaultKeyCode: UInt16,
         defaultModifiers: NSEvent.ModifierFlags
     ) -> Hotkey {
         let defaults = UserDefaults.standard
+        let inputTypeRaw = defaults.string(forKey: inputTypeKey)
         let keyCodeValue = defaults.object(forKey: keyCodeKey) as? Int
+        let mouseButtonValue = defaults.object(forKey: mouseButtonKey) as? Int
         let modifiersValue = defaults.object(forKey: modifiersKey) as? Int
         let sidedValue = defaults.object(forKey: sidedModifiersKey) as? Int ?? 0
 
         let keyCode = UInt16(keyCodeValue ?? Int(defaultKeyCode))
+        let input: Hotkey.Input
+        if Hotkey.Input.Kind(rawValue: inputTypeRaw ?? "") == .mouseButton,
+           let mouseButtonValue,
+           mouseButtonValue >= middleMouseButtonNumber {
+            input = .mouseButton(mouseButtonValue)
+        } else {
+            input = .keyboard(keyCode)
+        }
         let modifiersRaw = modifiersValue ?? Int(defaultModifiers.rawValue)
         let modifiers = NSEvent.ModifierFlags(rawValue: UInt(modifiersRaw)).intersection(.hotkeyRelevant)
         let sidedModifiers = SidedModifierFlags(rawValue: sidedValue).filtered(by: modifiers)
 
         return canonicalHotkey(
-            keyCode: keyCode,
+            input: input,
             modifiers: modifiers,
             sidedModifiers: sidedModifiers
         )
     }
 
     private static func canonicalHotkey(
-        keyCode: UInt16,
+        input: Hotkey.Input,
         modifiers: NSEvent.ModifierFlags,
         sidedModifiers: SidedModifierFlags
     ) -> Hotkey {
+        guard case .keyboard(let keyCode) = input else {
+            return Hotkey(
+                input: input,
+                modifiers: modifiers,
+                sidedModifiers: sidedModifiers.filtered(by: modifiers)
+            )
+        }
         guard let representedModifier = SidedModifierFlags.fromModifierKeyCode(keyCode),
               modifiers.contains(representedModifier.modifiers)
         else {
             return Hotkey(
-                keyCode: keyCode,
+                input: input,
                 modifiers: modifiers,
                 sidedModifiers: sidedModifiers.filtered(by: modifiers)
             )
@@ -584,6 +766,27 @@ struct HotkeyPreference {
                 .union(representedModifier.sided)
                 .filtered(by: modifiers)
         )
+    }
+
+    private static func save(
+        _ hotkey: Hotkey,
+        inputTypeKey: String,
+        keyCodeKey: String,
+        mouseButtonKey: String,
+        modifiersKey: String,
+        sidedModifiersKey: String,
+        defaults: UserDefaults
+    ) {
+        defaults.set(hotkey.input.kind.rawValue, forKey: inputTypeKey)
+        switch hotkey.input {
+        case .keyboard(let keyCode):
+            defaults.set(Int(keyCode), forKey: keyCodeKey)
+            defaults.removeObject(forKey: mouseButtonKey)
+        case .mouseButton(let buttonNumber):
+            defaults.set(buttonNumber, forKey: mouseButtonKey)
+        }
+        defaults.set(Int(hotkey.modifiers.rawValue), forKey: modifiersKey)
+        defaults.set(hotkey.sidedModifiers.filtered(by: hotkey.modifiers).rawValue, forKey: sidedModifiersKey)
     }
 
     private static func sidedModifierLabel(

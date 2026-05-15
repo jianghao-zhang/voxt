@@ -12,8 +12,8 @@ struct HotkeyRecorderView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> KeyCaptureView {
         let view = KeyCaptureView()
-        view.onKeyCaptured = { keyCode, modifiers, sidedModifiers in
-            self.onCapture(.init(keyCode: keyCode, modifiers: modifiers, sidedModifiers: sidedModifiers))
+        view.onHotkeyCaptured = { hotkey in
+            self.onCapture(hotkey)
         }
         view.onCancel = {
             self.isRecording = false
@@ -44,7 +44,7 @@ final class KeyCaptureView: NSView {
         let count: Int
     }
 
-    var onKeyCaptured: ((UInt16, NSEvent.ModifierFlags, SidedModifierFlags) -> Void)?
+    var onHotkeyCaptured: ((HotkeyPreference.Hotkey) -> Void)?
     var onCancel: (() -> Void)?
     var onRecorderMessageChange: ((String?) -> Void)?
     var isRecording: Bool = false {
@@ -173,7 +173,8 @@ final class KeyCaptureView: NSView {
 
         let eventMask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue) |
-            (1 << CGEventType.flagsChanged.rawValue)
+            (1 << CGEventType.flagsChanged.rawValue) |
+            (1 << CGEventType.otherMouseDown.rawValue)
 
         guard let (tap, tapLocation) = createEventTap(eventMask: eventMask) else {
             onRecorderMessageChange?("System-reserved shortcuts such as fn+space may still be intercepted by macOS. If capture fails, disable or remap the Globe / input source shortcut in System Settings.")
@@ -279,6 +280,13 @@ final class KeyCaptureView: NSView {
                 modifiers: combinedModifiers(with: modifierFlags(from: event.flags).intersection(.hotkeyRelevant)),
                 sidedModifiers: currentSidedModifiers
             )
+        case .otherMouseDown:
+            let buttonNumber = Int(event.getIntegerValueField(.mouseEventButtonNumber))
+            captureMouseButtonDown(
+                buttonNumber: buttonNumber,
+                modifiers: combinedModifiers(with: modifierFlags(from: event.flags).intersection(.hotkeyRelevant)),
+                sidedModifiers: currentSidedModifiers
+            )
         case .flagsChanged:
             let modifiers = updateModifierFlags(
                 keyCode: keyCode,
@@ -322,7 +330,37 @@ final class KeyCaptureView: NSView {
         Task { @MainActor [weak self] in
             guard let self else { return }
             VoxtLog.hotkey("Hotkey recorder captured chord. keyCode=\(keyCode), modifiers=\(HotkeyPreference.modifierSymbols(for: capturedModifiers))")
-            self.onKeyCaptured?(keyCode, capturedModifiers, sidedModifiers.filtered(by: capturedModifiers))
+            self.onHotkeyCaptured?(
+                HotkeyPreference.Hotkey(
+                    keyCode: keyCode,
+                    modifiers: capturedModifiers,
+                    sidedModifiers: sidedModifiers.filtered(by: capturedModifiers)
+                )
+            )
+        }
+    }
+
+    private func captureMouseButtonDown(
+        buttonNumber: Int,
+        modifiers: NSEvent.ModifierFlags,
+        sidedModifiers: SidedModifierFlags
+    ) {
+        guard buttonNumber >= HotkeyPreference.middleMouseButtonNumber else { return }
+        let capturedModifiers = combinedModifiers(with: modifiers.intersection(.hotkeyRelevant))
+        pendingModifierCaptureTask?.cancel()
+        pendingModifierCapture = nil
+        hasCapturedChordDuringCurrentRecording = true
+        lastModifierOnlyCaptureCount = 0
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            VoxtLog.hotkey("Hotkey recorder captured mouse button. button=\(buttonNumber), modifiers=\(HotkeyPreference.modifierSymbols(for: capturedModifiers))")
+            self.onHotkeyCaptured?(
+                HotkeyPreference.Hotkey(
+                    mouseButtonNumber: buttonNumber,
+                    modifiers: capturedModifiers,
+                    sidedModifiers: sidedModifiers.filtered(by: capturedModifiers)
+                )
+            )
         }
     }
 
@@ -401,7 +439,13 @@ final class KeyCaptureView: NSView {
             self.lastModifierOnlyCaptureCount = capturedModifierCount
             self.pendingModifierCapture = nil
             VoxtLog.hotkey("Hotkey recorder captured modifier-only after hold. modifiers=\(HotkeyPreference.modifierSymbols(for: capturedModifiers))")
-            self.onKeyCaptured?(HotkeyPreference.modifierOnlyKeyCode, capturedModifiers, capturedSidedModifiers)
+            self.onHotkeyCaptured?(
+                HotkeyPreference.Hotkey(
+                    keyCode: HotkeyPreference.modifierOnlyKeyCode,
+                    modifiers: capturedModifiers,
+                    sidedModifiers: capturedSidedModifiers
+                )
+            )
         }
     }
 
@@ -414,7 +458,13 @@ final class KeyCaptureView: NSView {
         guard pendingModifierCapture.count >= lastModifierOnlyCaptureCount else { return }
         lastModifierOnlyCaptureCount = pendingModifierCapture.count
         VoxtLog.hotkey("Hotkey recorder captured modifier-only on \(reason). modifiers=\(HotkeyPreference.modifierSymbols(for: pendingModifierCapture.modifiers))")
-        onKeyCaptured?(HotkeyPreference.modifierOnlyKeyCode, pendingModifierCapture.modifiers, pendingModifierCapture.sidedModifiers)
+        onHotkeyCaptured?(
+            HotkeyPreference.Hotkey(
+                keyCode: HotkeyPreference.modifierOnlyKeyCode,
+                modifiers: pendingModifierCapture.modifiers,
+                sidedModifiers: pendingModifierCapture.sidedModifiers
+            )
+        )
     }
 
     private func modifierCount(for modifiers: NSEvent.ModifierFlags) -> Int {
@@ -495,3 +545,19 @@ private final class HotkeyRecorderHIDMonitor {
         }
     }
 }
+
+#if DEBUG
+extension KeyCaptureView {
+    func debugCaptureMouseButtonDownForTests(
+        buttonNumber: Int,
+        modifiers: NSEvent.ModifierFlags,
+        sidedModifiers: SidedModifierFlags
+    ) {
+        captureMouseButtonDown(
+            buttonNumber: buttonNumber,
+            modifiers: modifiers,
+            sidedModifiers: sidedModifiers
+        )
+    }
+}
+#endif

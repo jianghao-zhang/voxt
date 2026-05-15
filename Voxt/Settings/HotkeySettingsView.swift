@@ -37,18 +37,26 @@ struct HotkeySettingsView: View {
         case customPaste
     }
 
+    @AppStorage(AppPreferenceKey.hotkeyInputType) private var hotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
     @AppStorage(AppPreferenceKey.hotkeyKeyCode) private var hotkeyKeyCode = Int(HotkeyPreference.defaultKeyCode)
+    @AppStorage(AppPreferenceKey.hotkeyMouseButtonNumber) private var hotkeyMouseButtonNumber = HotkeyPreference.middleMouseButtonNumber
     @AppStorage(AppPreferenceKey.hotkeyModifiers) private var hotkeyModifiers = Int(HotkeyPreference.defaultModifiers.rawValue)
     @AppStorage(AppPreferenceKey.hotkeySidedModifiers) private var hotkeySidedModifiers = 0
+    @AppStorage(AppPreferenceKey.translationHotkeyInputType) private var translationHotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
     @AppStorage(AppPreferenceKey.translationHotkeyKeyCode) private var translationHotkeyKeyCode = Int(HotkeyPreference.defaultTranslationKeyCode)
+    @AppStorage(AppPreferenceKey.translationHotkeyMouseButtonNumber) private var translationHotkeyMouseButtonNumber = HotkeyPreference.middleMouseButtonNumber
     @AppStorage(AppPreferenceKey.translationHotkeyModifiers) private var translationHotkeyModifiers = Int(HotkeyPreference.defaultTranslationModifiers.rawValue)
     @AppStorage(AppPreferenceKey.translationHotkeySidedModifiers) private var translationHotkeySidedModifiers = 0
+    @AppStorage(AppPreferenceKey.rewriteHotkeyInputType) private var rewriteHotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
     @AppStorage(AppPreferenceKey.rewriteHotkeyKeyCode) private var rewriteHotkeyKeyCode = Int(HotkeyPreference.defaultRewriteKeyCode)
+    @AppStorage(AppPreferenceKey.rewriteHotkeyMouseButtonNumber) private var rewriteHotkeyMouseButtonNumber = HotkeyPreference.middleMouseButtonNumber
     @AppStorage(AppPreferenceKey.rewriteHotkeyModifiers) private var rewriteHotkeyModifiers = Int(HotkeyPreference.defaultRewriteModifiers.rawValue)
     @AppStorage(AppPreferenceKey.rewriteHotkeySidedModifiers) private var rewriteHotkeySidedModifiers = 0
     @AppStorage(AppPreferenceKey.rewriteHotkeyActivationMode) private var rewriteHotkeyActivationMode = HotkeyPreference.defaultRewriteActivationMode.rawValue
     @AppStorage(AppPreferenceKey.customPasteHotkeyEnabled) private var customPasteHotkeyEnabled = false
+    @AppStorage(AppPreferenceKey.customPasteHotkeyInputType) private var customPasteHotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
     @AppStorage(AppPreferenceKey.customPasteHotkeyKeyCode) private var customPasteHotkeyKeyCode = Int(HotkeyPreference.defaultCustomPasteKeyCode)
+    @AppStorage(AppPreferenceKey.customPasteHotkeyMouseButtonNumber) private var customPasteHotkeyMouseButtonNumber = HotkeyPreference.middleMouseButtonNumber
     @AppStorage(AppPreferenceKey.customPasteHotkeyModifiers) private var customPasteHotkeyModifiers = Int(HotkeyPreference.defaultCustomPasteModifiers.rawValue)
     @AppStorage(AppPreferenceKey.customPasteHotkeySidedModifiers) private var customPasteHotkeySidedModifiers = 0
     @AppStorage(AppPreferenceKey.hotkeyTriggerMode) private var hotkeyTriggerMode = HotkeyPreference.defaultTriggerMode.rawValue
@@ -83,9 +91,17 @@ struct HotkeySettingsView: View {
 
     private var currentHotkey: HotkeyPreference.Hotkey {
         HotkeyPreference.Hotkey(
-            keyCode: hotkeyBinding.wrappedValue,
+            input: hotkeyInput,
             modifiers: modifierBinding.wrappedValue,
             sidedModifiers: sidedModifierBinding.wrappedValue
+        )
+    }
+
+    private var hotkeyInput: HotkeyPreference.Hotkey.Input {
+        resolvedInput(
+            inputType: hotkeyInputType,
+            keyCode: hotkeyKeyCode,
+            mouseButtonNumber: hotkeyMouseButtonNumber
         )
     }
 
@@ -118,9 +134,17 @@ struct HotkeySettingsView: View {
 
     private var currentTranslationHotkey: HotkeyPreference.Hotkey {
         HotkeyPreference.Hotkey(
-            keyCode: translationHotkeyBinding.wrappedValue,
+            input: translationHotkeyInput,
             modifiers: translationModifierBinding.wrappedValue,
             sidedModifiers: translationSidedModifierBinding.wrappedValue
+        )
+    }
+
+    private var translationHotkeyInput: HotkeyPreference.Hotkey.Input {
+        resolvedInput(
+            inputType: translationHotkeyInputType,
+            keyCode: translationHotkeyKeyCode,
+            mouseButtonNumber: translationHotkeyMouseButtonNumber
         )
     }
 
@@ -153,9 +177,17 @@ struct HotkeySettingsView: View {
 
     private var currentRewriteHotkey: HotkeyPreference.Hotkey {
         HotkeyPreference.Hotkey(
-            keyCode: rewriteHotkeyBinding.wrappedValue,
+            input: rewriteHotkeyInput,
             modifiers: rewriteModifierBinding.wrappedValue,
             sidedModifiers: rewriteSidedModifierBinding.wrappedValue
+        )
+    }
+
+    private var rewriteHotkeyInput: HotkeyPreference.Hotkey.Input {
+        resolvedInput(
+            inputType: rewriteHotkeyInputType,
+            keyCode: rewriteHotkeyKeyCode,
+            mouseButtonNumber: rewriteHotkeyMouseButtonNumber
         )
     }
 
@@ -182,9 +214,17 @@ struct HotkeySettingsView: View {
 
     private var currentCustomPasteHotkey: HotkeyPreference.Hotkey {
         HotkeyPreference.Hotkey(
-            keyCode: customPasteHotkeyBinding.wrappedValue,
+            input: customPasteHotkeyInput,
             modifiers: customPasteModifierBinding.wrappedValue,
             sidedModifiers: customPasteSidedModifierBinding.wrappedValue
+        )
+    }
+
+    private var customPasteHotkeyInput: HotkeyPreference.Hotkey.Input {
+        resolvedInput(
+            inputType: customPasteHotkeyInputType,
+            keyCode: customPasteHotkeyKeyCode,
+            mouseButtonNumber: customPasteHotkeyMouseButtonNumber
         )
     }
 
@@ -253,6 +293,17 @@ struct HotkeySettingsView: View {
         )
     }
 
+    private func resolvedInput(
+        inputType: String,
+        keyCode: Int,
+        mouseButtonNumber: Int
+    ) -> HotkeyPreference.Hotkey.Input {
+        if HotkeyPreference.Hotkey.Input.Kind(rawValue: inputType) == .mouseButton {
+            return .mouseButton(mouseButtonNumber)
+        }
+        return .keyboard(UInt16(keyCode))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             GroupBox {
@@ -306,6 +357,7 @@ struct HotkeySettingsView: View {
                         distinguishModifierSides: distinguishModifierSides,
                         onFocus: { beginRecording(.transcription) },
                         onReset: {
+                            hotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
                             hotkeyBinding.wrappedValue = HotkeyPreference.defaultKeyCode
                             modifierBinding.wrappedValue = HotkeyPreference.defaultModifiers
                             sidedModifierBinding.wrappedValue = []
@@ -323,6 +375,7 @@ struct HotkeySettingsView: View {
                         distinguishModifierSides: distinguishModifierSides,
                         onFocus: { beginRecording(.translation) },
                         onReset: {
+                            translationHotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
                             translationHotkeyBinding.wrappedValue = HotkeyPreference.defaultTranslationKeyCode
                             translationModifierBinding.wrappedValue = HotkeyPreference.defaultTranslationModifiers
                             translationSidedModifierBinding.wrappedValue = []
@@ -345,6 +398,7 @@ struct HotkeySettingsView: View {
                         onModeButtonToggle: toggleRewriteDoubleTapWake,
                         onFocus: { beginRecording(.rewrite) },
                         onReset: {
+                            rewriteHotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
                             rewriteHotkeyBinding.wrappedValue = HotkeyPreference.defaultRewriteKeyCode
                             rewriteModifierBinding.wrappedValue = HotkeyPreference.defaultRewriteModifiers
                             rewriteSidedModifierBinding.wrappedValue = []
@@ -363,6 +417,7 @@ struct HotkeySettingsView: View {
                             distinguishModifierSides: distinguishModifierSides,
                             onFocus: { beginRecording(.customPaste) },
                             onReset: {
+                                customPasteHotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
                                 customPasteHotkeyBinding.wrappedValue = HotkeyPreference.defaultCustomPasteKeyCode
                                 customPasteModifierBinding.wrappedValue = HotkeyPreference.defaultCustomPasteModifiers
                                 customPasteSidedModifierBinding.wrappedValue = []
@@ -466,6 +521,9 @@ struct HotkeySettingsView: View {
                     Text(localized("Use a single key such as fn, or combine it with modifier keys."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Text(localized("Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text(localized("Long Press runs while held. Tap starts and stops with a tap."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -545,27 +603,42 @@ struct HotkeySettingsView: View {
 
         switch field {
         case .transcription:
-            hotkeyBinding.wrappedValue = hotkey.keyCode
+            assign(hotkey.input, inputType: &hotkeyInputType, keyCode: &hotkeyKeyCode, mouseButtonNumber: &hotkeyMouseButtonNumber)
             modifierBinding.wrappedValue = hotkey.modifiers
             sidedModifierBinding.wrappedValue = hotkey.sidedModifiers
         case .translation:
-            translationHotkeyBinding.wrappedValue = hotkey.keyCode
+            assign(hotkey.input, inputType: &translationHotkeyInputType, keyCode: &translationHotkeyKeyCode, mouseButtonNumber: &translationHotkeyMouseButtonNumber)
             translationModifierBinding.wrappedValue = hotkey.modifiers
             translationSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
         case .rewrite:
-            rewriteHotkeyBinding.wrappedValue = hotkey.keyCode
+            assign(hotkey.input, inputType: &rewriteHotkeyInputType, keyCode: &rewriteHotkeyKeyCode, mouseButtonNumber: &rewriteHotkeyMouseButtonNumber)
             rewriteModifierBinding.wrappedValue = hotkey.modifiers
             rewriteSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
         case .customPaste:
-            customPasteHotkeyBinding.wrappedValue = hotkey.keyCode
+            assign(hotkey.input, inputType: &customPasteHotkeyInputType, keyCode: &customPasteHotkeyKeyCode, mouseButtonNumber: &customPasteHotkeyMouseButtonNumber)
             customPasteModifierBinding.wrappedValue = hotkey.modifiers
             customPasteSidedModifierBinding.wrappedValue =
-                hotkey.keyCode == HotkeyPreference.modifierOnlyKeyCode ? hotkey.sidedModifiers : []
+                hotkey.keyCode == HotkeyPreference.modifierOnlyKeyCode || hotkey.isMouseButton ? hotkey.sidedModifiers : []
         }
 
         hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
         pendingCapturedField = nil
         pendingCapturedHotkey = nil
         recordingField = nil
+    }
+
+    private func assign(
+        _ input: HotkeyPreference.Hotkey.Input,
+        inputType: inout String,
+        keyCode: inout Int,
+        mouseButtonNumber: inout Int
+    ) {
+        inputType = input.kind.rawValue
+        switch input {
+        case .keyboard(let value):
+            keyCode = Int(value)
+        case .mouseButton(let value):
+            mouseButtonNumber = value
+        }
     }
 }

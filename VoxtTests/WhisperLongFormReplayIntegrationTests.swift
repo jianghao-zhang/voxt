@@ -5,11 +5,8 @@ import XCTest
 final class WhisperLongFormReplayIntegrationTests: XCTestCase {
     private let minimumLongFormDurationSeconds = WhisperKitTranscriber.realtimeLongFormFinalProfileThresholdSeconds
 
-    private func skipIfCI() throws {
-        let env = ProcessInfo.processInfo.environment
-        if env["CI"] == "true" || env["GITHUB_ACTIONS"] == "true" {
-            throw XCTSkip("Official audio fixture integration tests are local-only and are skipped on CI.")
-        }
+    private func requireModelTestsEnabled() throws {
+        try ModelTestGate.requireEnabled("Whisper long-form replay integration tests")
     }
 
     private func officialFixtureDirectoryURL() -> URL {
@@ -105,7 +102,7 @@ final class WhisperLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testOfflineTranscriptionConfirmsModelSupportsProvidedLongFormClip() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let existingClipPaths = resolvedLongFormCandidateClipPaths()
         guard let clipPath = existingClipPaths.first else {
             throw XCTSkip("No long-form replay clip is available.")
@@ -122,7 +119,7 @@ final class WhisperLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testReplayProvidedLongFormClipProducesFinalTranscript() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let existingClipPaths = resolvedLongFormCandidateClipPaths()
         guard let clipPath = existingClipPaths.first else {
             throw XCTSkip("No long-form replay clip is available.")
@@ -190,7 +187,7 @@ final class WhisperLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testReplayAllAvailableLongFormClipsProduceNonEmptyFinalTranscript() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let candidateClipPaths = resolvedLongFormCandidateClipPaths()
         guard !candidateClipPaths.isEmpty else {
             throw XCTSkip("No available long-form clips found.")
@@ -213,7 +210,7 @@ final class WhisperLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testReplayAllAvailableLongFormClipsTrackOfflineBaseline() async throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let candidateClipPaths = knownGoodLongFormBaselineClipPaths()
         guard !candidateClipPaths.isEmpty else {
             throw XCTSkip("No known-good long-form baseline clips found.")
@@ -257,7 +254,7 @@ final class WhisperLongFormReplayIntegrationTests: XCTestCase {
     }
 
     func testOfficialLongFormFixturesAreAvailableLocally() throws {
-        try skipIfCI()
+        try requireModelTestsEnabled()
         let paths = resolvedOfficialLongFormClipPaths()
         XCTAssertEqual(paths.count, 2, "Expected both official composite long-form fixtures to be present locally.")
 

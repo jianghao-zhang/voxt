@@ -100,4 +100,39 @@ final class HotkeySettingsValidationTests: XCTestCase {
             )
         })
     }
+
+    func testMouseShortcutDuplicateUsesButtonAndModifiers() {
+        let transcriptionHotkey = HotkeyPreference.Hotkey(
+            mouseButtonNumber: 4,
+            modifiers: [.command],
+            sidedModifiers: []
+        )
+
+        let messages = HotkeySettingsValidation.messages(
+            for: .init(
+                transcriptionHotkey: transcriptionHotkey,
+                translationHotkey: transcriptionHotkey,
+                rewriteHotkey: HotkeyPreference.Hotkey(mouseButtonNumber: 5, modifiers: [.command]),
+                shouldValidateRewriteHotkey: true,
+                customPasteHotkey: nil
+            )
+        )
+
+        XCTAssertTrue(messages.contains { $0.id == "duplicate.transcription.translation" })
+        XCTAssertFalse(messages.contains { $0.id == "duplicate.transcription.rewrite" })
+    }
+
+    func testMouseShortcutsWithDifferentModifiersDoNotConflict() {
+        let messages = HotkeySettingsValidation.messages(
+            for: .init(
+                transcriptionHotkey: HotkeyPreference.Hotkey(mouseButtonNumber: 4, modifiers: [.command]),
+                translationHotkey: HotkeyPreference.Hotkey(mouseButtonNumber: 4, modifiers: [.shift]),
+                rewriteHotkey: HotkeyPreference.Hotkey(mouseButtonNumber: 4, modifiers: [.option]),
+                shouldValidateRewriteHotkey: true,
+                customPasteHotkey: nil
+            )
+        )
+
+        XCTAssertFalse(messages.contains { $0.id.hasPrefix("duplicate.") })
+    }
 }

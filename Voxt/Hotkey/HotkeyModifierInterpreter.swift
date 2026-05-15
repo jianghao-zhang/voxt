@@ -4,7 +4,8 @@ import ApplicationServices
 
 struct HotkeyModifierInterpreter {
     static func isModifierOnly(_ hotkey: HotkeyPreference.Hotkey) -> Bool {
-        hotkey.keyCode == HotkeyPreference.modifierOnlyKeyCode
+        guard case .keyboard(let keyCode) = hotkey.input else { return false }
+        return keyCode == HotkeyPreference.modifierOnlyKeyCode
     }
 
     static func isFunctionKeyEvent(_ keyCode: UInt16) -> Bool {

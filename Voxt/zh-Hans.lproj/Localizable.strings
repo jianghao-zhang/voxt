@@ -645,6 +645,7 @@
 "Preset" = "预设";
 "fn Combo" = "fn 组合";
 "Command Combo" = "Command 组合";
+"Mouse Middle + fn Shift" = "鼠标中键 + fn Shift";
 "Custom" = "自定义";
 "Distinguish Left/Right Modifiers" = "区分左右修饰键";
 "When enabled, Left Shift and Right Shift are treated as different shortcuts." = "开启后，左 Shift 和右 Shift 会被视为不同的快捷键。";
@@ -1531,3 +1532,7 @@
 "Generation: Default" = "生成：默认";
 "Configuration: Default" = "配置：默认";
 "Generation Settings" = "生成设置";
+"Mouse Middle Button" = "鼠标中键";
+"Mouse Button %d" = "鼠标按钮 %d";
+"Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys." = "可以把鼠标中键、侧键等录入为快捷键，也可以搭配修饰键。";
+"Uses mouse middle button for transcription, fn+shift for translation, and double-tap middle button for content rewrite." = "转录使用鼠标中键，翻译使用 fn+shift，内容转写使用双击鼠标中键。";
