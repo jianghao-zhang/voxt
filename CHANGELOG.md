@@ -6,6 +6,50 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.4] - 2026-05-15
+
+### English
+
+#### Added
+- Added Codex as an OAuth-backed remote LLM provider.
+- Added middle mouse button support as a transcription hotkey trigger.
+
+#### Changed
+- Updated the default cleanup prompts for more reliable dictated text handling.
+- Updated the permission settings helper used to open newer macOS System Settings destinations.
+
+#### Fixed
+- Fixed a database startup crash caused by WAL setup on new or migrated storage.
+- Improved stability around settings controls, transcription passes, and dictionary diff handling.
+
+### 简体中文
+
+#### 新增
+- 新增 Codex 作为支持 OAuth 的远端 LLM provider。
+- 新增鼠标中键作为转录快捷键触发方式。
+
+#### 改进
+- 更新默认清理提示词，让口述文本处理更稳定。
+- 更新用于打开新版 macOS 系统设置位置的权限设置辅助库。
+
+#### 修复
+- 修复新建或迁移存储时 WAL 设置导致的数据库启动崩溃。
+- 提升设置控件、转录处理和词典 diff 处理的稳定性。
+
+### 日本語
+
+#### 追加
+- OAuth 対応のリモート LLM provider として Codex を追加しました。
+- 文字起こしホットキーのトリガーとしてマウス中ボタンに対応しました。
+
+#### 変更
+- 口述テキスト処理の安定性を高めるため、既定のクリーンアッププロンプトを更新しました。
+- 新しい macOS システム設定の移動先を開くための権限設定ヘルパーを更新しました。
+
+#### 修正
+- 新規または移行済みストレージで WAL 設定によりデータベース起動がクラッシュする問題を修正しました。
+- 設定コントロール、文字起こし処理、辞書 diff 処理まわりの安定性を改善しました。
+
 ## [1.11.3] - 2026-05-14
 
 ### English
