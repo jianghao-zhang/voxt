@@ -42,10 +42,13 @@ struct RemoteLLMRuntimeClient {
 
     func authorizationHeaders(
         provider: RemoteLLMProvider,
-        configuration _: RemoteProviderConfiguration
+        configuration: RemoteProviderConfiguration
     ) async throws -> [String: String] {
         guard provider == .codex else { return [:] }
-        return try await CodexOAuthCredentialProvider().authorizationHeaders()
+        return try await CodexOAuthCredentialProvider(
+            authFilePath: configuration.codexAuthFilePath,
+            authFileBookmark: configuration.codexAuthFileBookmark
+        ).authorizationHeaders()
     }
 
     private struct StreamingPartialDeliveryState {

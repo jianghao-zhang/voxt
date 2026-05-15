@@ -1484,6 +1484,11 @@
 "ChatGPT Codex" = "ChatGPT Codex";
 "Codex Login" = "Codex ログイン";
 "Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails." = "Voxt は ~/.codex/auth.json のローカル Codex ログインを使用します。テストに失敗する場合は、先に `codex login` を実行してください。";
+"Voxt uses the local Codex login at ~/.codex/auth.json by default. Choose a different auth.json if Codex stores credentials elsewhere." = "Voxt は既定で ~/.codex/auth.json のローカル Codex ログインを使用します。Codex の認証情報が別の場所にある場合は、その auth.json を選択してください。";
+"Auth File" = "Auth ファイル";
+"Choose Codex auth.json" = "Codex auth.json を選択";
+"Selected Codex auth file. Clear to return to the default path." = "Codex auth ファイルを選択済みです。クリアすると既定のパスに戻ります。";
+"Failed to update Codex auth path: %@" = "Codex auth パスの更新に失敗しました: %@";
 "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex は ChatGPT サブスクリプションのバックエンドとローカルの Codex OAuth 認証情報を使用します。";
 "Codex auth not found at %@. Run `codex login` first." = "%@ に Codex auth が見つかりません。先に `codex login` を実行してください。";
 "Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first." = "Codex auth.json に ChatGPT OAuth トークンがありません。先に `codex login` を実行してください。";

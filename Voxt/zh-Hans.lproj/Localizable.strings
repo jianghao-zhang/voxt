@@ -1541,6 +1541,11 @@
 "ChatGPT Codex" = "ChatGPT Codex";
 "Codex Login" = "Codex 登录";
 "Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails." = "Voxt 使用本地 Codex 登录凭证（~/.codex/auth.json）。如果测试失败，请先运行 `codex login`。";
+"Voxt uses the local Codex login at ~/.codex/auth.json by default. Choose a different auth.json if Codex stores credentials elsewhere." = "Voxt 默认使用本地 Codex 登录凭证（~/.codex/auth.json）。如果 Codex 凭证存放在其他位置，请选择对应的 auth.json。";
+"Auth File" = "Auth 文件";
+"Choose Codex auth.json" = "选择 Codex auth.json";
+"Selected Codex auth file. Clear to return to the default path." = "已选择 Codex auth 文件。清除后会恢复默认路径。";
+"Failed to update Codex auth path: %@" = "更新 Codex auth 路径失败：%@";
 "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex 使用 ChatGPT 订阅后端和本地 Codex OAuth 凭证。";
 "Codex auth not found at %@. Run `codex login` first." = "未在 %@ 找到 Codex auth。请先运行 `codex login`。";
 "Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first." = "Codex auth.json 中没有 ChatGPT OAuth token。请先运行 `codex login`。";

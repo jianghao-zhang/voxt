@@ -428,7 +428,10 @@ struct RemoteProviderConnectivityTester {
                 headers["Authorization"] = "Bearer \(configuration.apiKey)"
             }
             if provider == .codex {
-                for (key, value) in try await CodexOAuthCredentialProvider().authorizationHeaders() {
+                for (key, value) in try await RemoteLLMRuntimeClient().authorizationHeaders(
+                    provider: .codex,
+                    configuration: configuration
+                ) {
                     headers[key] = value
                 }
             }

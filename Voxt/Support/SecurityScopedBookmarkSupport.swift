@@ -25,6 +25,20 @@ enum SecurityScopedBookmarkSupport {
         return URL(fileURLWithPath: trimmedPath, isDirectory: true)
     }
 
+    static func resolveFileURL(
+        bookmarkData: Data?,
+        fallbackPath: String
+    ) -> URL? {
+        if let bookmarkData,
+           let resolved = resolveURL(from: bookmarkData) {
+            return resolved
+        }
+
+        let trimmedPath = fallbackPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPath.isEmpty else { return nil }
+        return URL(fileURLWithPath: trimmedPath, isDirectory: false)
+    }
+
     private static func resolveURL(from bookmarkData: Data) -> URL? {
         var isStale = false
         guard let resolved = try? URL(

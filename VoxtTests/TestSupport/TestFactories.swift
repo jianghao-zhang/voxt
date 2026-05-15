@@ -52,6 +52,8 @@ enum TestFactories {
         ollamaLogprobsEnabled: Bool = false,
         ollamaTopLogprobs: Int? = nil,
         ollamaOptionsJSON: String = "",
+        codexAuthFilePath: String = "",
+        codexAuthFileBookmark: Data? = nil,
         generationSettings: LLMGenerationSettings? = nil
     ) -> RemoteProviderConfiguration {
         RemoteProviderConfiguration(
@@ -75,6 +77,8 @@ enum TestFactories {
             ollamaLogprobsEnabled: ollamaLogprobsEnabled,
             ollamaTopLogprobs: ollamaTopLogprobs,
             ollamaOptionsJSON: ollamaOptionsJSON,
+            codexAuthFilePath: codexAuthFilePath,
+            codexAuthFileBookmark: codexAuthFileBookmark,
             generationSettings: generationSettings
         )
     }

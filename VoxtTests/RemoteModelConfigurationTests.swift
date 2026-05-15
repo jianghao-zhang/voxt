@@ -273,6 +273,73 @@ final class RemoteModelConfigurationTests: XCTestCase {
         XCTAssertEqual(headers["originator"], "codex_cli_rs")
     }
 
+    func testCodexCredentialProviderReadsSelectedAuthFilePath() async throws {
+        let directory = try TemporaryDirectory()
+        let token = try makeTestJWT(payload: [
+            "exp": Date().addingTimeInterval(3600).timeIntervalSince1970
+        ])
+        let authURL = directory.url.appendingPathComponent("selected-auth.json")
+        let authData = try JSONSerialization.data(withJSONObject: [
+            "auth_mode": "chatgpt",
+            "tokens": [
+                "access_token": token,
+                "refresh_token": "refresh-token",
+                "account_id": "acct_selected"
+            ]
+        ])
+        try authData.write(to: authURL)
+
+        let headers = try await CodexOAuthCredentialProvider(
+            environment: ["CODEX_HOME": "/missing-codex-home"],
+            authFilePath: authURL.path
+        ).authorizationHeaders()
+
+        XCTAssertEqual(headers["Authorization"], "Bearer \(token)")
+        XCTAssertEqual(headers["ChatGPT-Account-ID"], "acct_selected")
+    }
+
+    func testCodexConfigurationRoundTripPreservesAuthFileSelection() {
+        let bookmark = Data([1, 2, 3, 4])
+        let stored: [String: RemoteProviderConfiguration] = [
+            RemoteLLMProvider.codex.rawValue: TestFactories.makeRemoteConfiguration(
+                providerID: RemoteLLMProvider.codex.rawValue,
+                model: "gpt-5.3-codex-spark",
+                codexAuthFilePath: "/Users/test/.config/codex/auth.json",
+                codexAuthFileBookmark: bookmark
+            )
+        ]
+
+        let raw = RemoteModelConfigurationStore.saveConfigurations(stored)
+        let roundTrip = RemoteModelConfigurationStore.loadConfigurations(from: raw)
+        let restored = roundTrip[RemoteLLMProvider.codex.rawValue]
+
+        XCTAssertEqual(restored?.codexAuthFilePath, "/Users/test/.config/codex/auth.json")
+        XCTAssertEqual(restored?.codexAuthFileBookmark, bookmark)
+    }
+
+    func testCodexCredentialProviderUsesUserHomeOutsideAppContainer() {
+        let provider = CodexOAuthCredentialProvider(
+            environment: [
+                "HOME": "/Users/test/Library/Containers/com.voxt.Voxt/Data"
+            ],
+            userHomeDirectory: "/Users/test"
+        )
+
+        XCTAssertEqual(provider.authFilePath(), "/Users/test/.codex/auth.json")
+    }
+
+    func testCodexCredentialProviderExpandsCodexHomeWithUserHome() {
+        let provider = CodexOAuthCredentialProvider(
+            environment: [
+                "CODEX_HOME": "~/.config/codex",
+                "HOME": "/Users/test/Library/Containers/com.voxt.Voxt/Data"
+            ],
+            userHomeDirectory: "/Users/test"
+        )
+
+        XCTAssertEqual(provider.authFilePath(), "/Users/test/.config/codex/auth.json")
+    }
+
     func testOpenAIModelCatalogUsesOfficialModelIDs() {
         XCTAssertEqual(RemoteLLMProvider.openAI.suggestedModel, "gpt-5.2")
 

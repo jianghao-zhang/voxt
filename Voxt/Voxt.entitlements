@@ -8,6 +8,12 @@
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
 
+	<!-- Local Codex OAuth credentials, including token refresh writes -->
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
+	<array>
+		<string>.codex/</string>
+	</array>
+
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
 

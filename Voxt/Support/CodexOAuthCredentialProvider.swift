@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct CodexOAuthCredentialProvider {
@@ -68,15 +69,27 @@ struct CodexOAuthCredentialProvider {
 
     private let fileManager: FileManager
     private let environment: [String: String]
+    private let userHomeDirectory: String
+    private let authFilePathOverride: String
+    private let authFileBookmark: Data?
     private let refreshURL = URL(string: "https://auth.openai.com/oauth/token")!
     private let clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
 
     init(
         fileManager: FileManager = .default,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        userHomeDirectory: String? = nil,
+        authFilePath: String = "",
+        authFileBookmark: Data? = nil
     ) {
         self.fileManager = fileManager
         self.environment = environment
+        self.userHomeDirectory = userHomeDirectory ?? Self.defaultUserHomeDirectory(
+            environment: environment,
+            fileManager: fileManager
+        )
+        self.authFilePathOverride = authFilePath
+        self.authFileBookmark = authFileBookmark
     }
 
     func authorizationHeaders() async throws -> [String: String] {
@@ -93,8 +106,8 @@ struct CodexOAuthCredentialProvider {
     }
 
     func credential() async throws -> Credential {
-        let path = authFilePath()
-        var auth = try readAuthFile(path: path)
+        let url = authFileURL()
+        var auth = try readAuthFile(url: url)
         guard let tokens = auth.tokens,
               let accessToken = tokens.accessToken,
               !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -124,7 +137,7 @@ struct CodexOAuthCredentialProvider {
             accountID: tokens.accountID
         )
         auth.lastRefresh = ISO8601DateFormatter().string(from: Date())
-        try writeAuthFile(auth, path: path)
+        try writeAuthFile(auth, url: url)
 
         return Credential(
             accessToken: newAccessToken,
@@ -132,20 +145,67 @@ struct CodexOAuthCredentialProvider {
         )
     }
 
-    private func authFilePath() -> String {
+    func authFilePath() -> String {
+        let overridePath = authFilePathOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !overridePath.isEmpty {
+            return expandedPath(overridePath)
+        }
         if let codexHome = environment["CODEX_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !codexHome.isEmpty {
-            return (codexHome as NSString).expandingTildeInPath.appending("/auth.json")
+            return (expandedPath(codexHome) as NSString).appendingPathComponent("auth.json")
         }
-        return ("~/.codex/auth.json" as NSString).expandingTildeInPath
+        return (userHomeDirectory as NSString).appendingPathComponent(".codex/auth.json")
     }
 
-    private func readAuthFile(path: String) throws -> AuthFile {
+    private func authFileURL() -> URL {
+        if let url = SecurityScopedBookmarkSupport.resolveFileURL(
+            bookmarkData: authFileBookmark,
+            fallbackPath: authFilePath()
+        ) {
+            return url
+        }
+        return URL(fileURLWithPath: authFilePath(), isDirectory: false)
+    }
+
+    private static func defaultUserHomeDirectory(
+        environment: [String: String],
+        fileManager: FileManager
+    ) -> String {
+        if let path = posixUserHomeDirectory(), !path.isEmpty {
+            return path
+        }
+        if let home = environment["HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !home.isEmpty {
+            return home
+        }
+        return fileManager.homeDirectoryForCurrentUser.path
+    }
+
+    private static func posixUserHomeDirectory() -> String? {
+        guard let passwd = getpwuid(getuid()),
+              let directory = passwd.pointee.pw_dir else {
+            return nil
+        }
+        return String(cString: directory)
+    }
+
+    private func expandedPath(_ path: String) -> String {
+        if path == "~" {
+            return userHomeDirectory
+        }
+        if path.hasPrefix("~/") {
+            return (userHomeDirectory as NSString).appendingPathComponent(String(path.dropFirst(2)))
+        }
+        return path
+    }
+
+    private func readAuthFile(url: URL) throws -> AuthFile {
+        let path = url.path
         guard fileManager.fileExists(atPath: path) else {
             throw CredentialError.authFileNotFound(path)
         }
         do {
-            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            let data = try Data(contentsOf: url)
             return try JSONDecoder().decode(AuthFile.self, from: data)
         } catch let error as CredentialError {
             throw error
@@ -154,9 +214,9 @@ struct CodexOAuthCredentialProvider {
         }
     }
 
-    private func writeAuthFile(_ auth: AuthFile, path: String) throws {
+    private func writeAuthFile(_ auth: AuthFile, url: URL) throws {
+        let path = url.path
         do {
-            let url = URL(fileURLWithPath: path)
             var object: [String: Any] = [:]
             if let existingData = try? Data(contentsOf: url),
                let existingObject = try? JSONSerialization.jsonObject(with: existingData) as? [String: Any] {

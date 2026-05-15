@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 extension RemoteProviderConfigurationSheet {
     var isOllamaLLMProvider: Bool {
@@ -259,6 +260,8 @@ extension RemoteProviderConfigurationSheet {
             omlxJSONSchema: omlxJSONSchema.trimmingCharacters(in: .whitespacesAndNewlines),
             omlxIncludeUsageStreamOptions: omlxIncludeUsageStreamOptions,
             omlxExtraBodyJSON: isOMLXLLMProvider ? generationExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines) : omlxExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines),
+            codexAuthFilePath: isCodexLLMProvider ? codexAuthFilePath.trimmingCharacters(in: .whitespacesAndNewlines) : configuration.codexAuthFilePath,
+            codexAuthFileBookmark: isCodexLLMProvider ? codexAuthFileBookmark : configuration.codexAuthFileBookmark,
             generationSettings: currentGenerationSettingsSnapshot()
         )
     }
@@ -499,9 +502,56 @@ extension RemoteProviderConfigurationSheet {
         )
     }
 
+    var codexAuthFileDisplayPath: String {
+        let selectedPath = codexAuthFilePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !selectedPath.isEmpty {
+            return selectedPath
+        }
+        return CodexOAuthCredentialProvider().authFilePath()
+    }
+
+    var hasCustomCodexAuthFilePath: Bool {
+        !codexAuthFilePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func chooseCodexAuthFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.allowedContentTypes = [.json]
+        panel.directoryURL = URL(fileURLWithPath: codexAuthFileDisplayPath)
+            .deletingLastPathComponent()
+        panel.message = AppLocalization.localizedString("Choose Codex auth.json")
+
+        guard panel.runModal() == .OK, let selectedURL = panel.url else { return }
+
+        do {
+            codexAuthFileBookmark = try SecurityScopedBookmarkSupport.createBookmark(for: selectedURL)
+            codexAuthFilePath = selectedURL.path
+            codexAuthFileSelectionError = nil
+            dynamicCodexModelOptions = nil
+            loadCodexModelOptionsIfNeeded()
+        } catch {
+            codexAuthFileSelectionError = AppLocalization.format(
+                "Failed to update Codex auth path: %@",
+                error.localizedDescription
+            )
+        }
+    }
+
+    func clearCodexAuthFileSelection() {
+        codexAuthFilePath = ""
+        codexAuthFileBookmark = nil
+        codexAuthFileSelectionError = nil
+        dynamicCodexModelOptions = nil
+        loadCodexModelOptionsIfNeeded()
+    }
+
     func loadCodexModelOptionsIfNeeded() {
         guard isCodexLLMProvider else { return }
-        var snapshot = configuration
+        var snapshot = currentConfigurationSnapshot
         snapshot.endpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
 
         Task {

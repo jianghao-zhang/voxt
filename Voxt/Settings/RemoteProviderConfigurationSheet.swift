@@ -58,6 +58,9 @@ struct RemoteProviderConfigurationSheet: View {
     @State var omlxJSONSchema = ""
     @State var omlxIncludeUsageStreamOptions = false
     @State var omlxExtraBodyJSON = ""
+    @State var codexAuthFilePath = ""
+    @State var codexAuthFileBookmark: Data?
+    @State var codexAuthFileSelectionError: String?
     @State var dynamicCodexModelOptions: [RemoteModelOption]?
     @State var isTestingConnection = false
     @State var testResultMessage: String?
@@ -174,6 +177,8 @@ struct RemoteProviderConfigurationSheet: View {
             omlxJSONSchema = configuration.omlxJSONSchema
             omlxIncludeUsageStreamOptions = configuration.omlxIncludeUsageStreamOptions
             omlxExtraBodyJSON = configuration.omlxExtraBodyJSON
+            codexAuthFilePath = configuration.codexAuthFilePath
+            codexAuthFileBookmark = configuration.codexAuthFileBookmark
             loadCodexModelOptionsIfNeeded()
         }
     }

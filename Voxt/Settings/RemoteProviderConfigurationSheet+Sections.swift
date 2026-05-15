@@ -120,10 +120,58 @@ extension RemoteProviderConfigurationSheet {
                     Text(apiKeyFieldTitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Text(AppLocalization.localizedString("Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails."))
+                    Text(AppLocalization.localizedString("Voxt uses the local Codex login at ~/.codex/auth.json by default. Choose a different auth.json if Codex stores credentials elsewhere."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    Text(AppLocalization.localizedString("Auth File"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    HStack(alignment: .center, spacing: 10) {
+                        Text(codexAuthFileDisplayPath)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.75))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
+                            )
+
+                        Button(AppLocalization.localizedString("Choose")) {
+                            chooseCodexAuthFile()
+                        }
+                        .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 30))
+
+                        if hasCustomCodexAuthFilePath {
+                            Button(AppLocalization.localizedString("Clear")) {
+                                clearCodexAuthFileSelection()
+                            }
+                            .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 30))
+                        }
+                    }
+
+                    if hasCustomCodexAuthFilePath {
+                        Text(AppLocalization.localizedString("Selected Codex auth file. Clear to return to the default path."))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let codexAuthFileSelectionError, !codexAuthFileSelectionError.isEmpty {
+                        Text(codexAuthFileSelectionError)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {

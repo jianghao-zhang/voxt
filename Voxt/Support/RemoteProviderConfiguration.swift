@@ -199,6 +199,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     var omlxJSONSchema: String
     var omlxIncludeUsageStreamOptions: Bool
     var omlxExtraBodyJSON: String
+    var codexAuthFilePath: String
+    var codexAuthFileBookmark: Data?
     var generationSettings: LLMGenerationSettings
 
     var id: String { providerID }
@@ -231,6 +233,10 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
 
     var omlxResponseFormatValue: OMLXResponseFormat {
         OMLXResponseFormat(rawValue: omlxResponseFormat) ?? .plain
+    }
+
+    var resolvedCodexAuthFilePath: String {
+        codexAuthFilePath.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var openAIReasoningEffortValue: OpenAIReasoningEffort {
@@ -267,6 +273,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         omlxJSONSchema: String = "",
         omlxIncludeUsageStreamOptions: Bool = false,
         omlxExtraBodyJSON: String = "",
+        codexAuthFilePath: String = "",
+        codexAuthFileBookmark: Data? = nil,
         generationSettings: LLMGenerationSettings? = nil
     ) {
         self.providerID = providerID
@@ -294,6 +302,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         self.omlxJSONSchema = omlxJSONSchema
         self.omlxIncludeUsageStreamOptions = omlxIncludeUsageStreamOptions
         self.omlxExtraBodyJSON = omlxExtraBodyJSON
+        self.codexAuthFilePath = codexAuthFilePath
+        self.codexAuthFileBookmark = codexAuthFileBookmark
         self.generationSettings = generationSettings ?? LLMGenerationSettings.legacy(
             providerID: providerID,
             openAIReasoningEffort: openAIReasoningEffort,
@@ -334,6 +344,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         case omlxJSONSchema
         case omlxIncludeUsageStreamOptions
         case omlxExtraBodyJSON
+        case codexAuthFilePath
+        case codexAuthFileBookmark
         case generationSettings
     }
 
@@ -365,6 +377,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         omlxJSONSchema = try container.decodeIfPresent(String.self, forKey: .omlxJSONSchema) ?? ""
         omlxIncludeUsageStreamOptions = try container.decodeIfPresent(Bool.self, forKey: .omlxIncludeUsageStreamOptions) ?? false
         omlxExtraBodyJSON = try container.decodeIfPresent(String.self, forKey: .omlxExtraBodyJSON) ?? ""
+        codexAuthFilePath = try container.decodeIfPresent(String.self, forKey: .codexAuthFilePath) ?? ""
+        codexAuthFileBookmark = try container.decodeIfPresent(Data.self, forKey: .codexAuthFileBookmark)
         generationSettings = try container.decodeIfPresent(LLMGenerationSettings.self, forKey: .generationSettings)
             ?? LLMGenerationSettings.legacy(
                 providerID: providerID,

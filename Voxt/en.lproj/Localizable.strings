@@ -1539,6 +1539,11 @@
 "ChatGPT Codex" = "ChatGPT Codex";
 "Codex Login" = "Codex Login";
 "Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails." = "Voxt uses the local Codex login at ~/.codex/auth.json. Run `codex login` first if the test fails.";
+"Voxt uses the local Codex login at ~/.codex/auth.json by default. Choose a different auth.json if Codex stores credentials elsewhere." = "Voxt uses the local Codex login at ~/.codex/auth.json by default. Choose a different auth.json if Codex stores credentials elsewhere.";
+"Auth File" = "Auth File";
+"Choose Codex auth.json" = "Choose Codex auth.json";
+"Selected Codex auth file. Clear to return to the default path." = "Selected Codex auth file. Clear to return to the default path.";
+"Failed to update Codex auth path: %@" = "Failed to update Codex auth path: %@";
 "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials.";
 "Codex auth not found at %@. Run `codex login` first." = "Codex auth not found at %@. Run `codex login` first.";
 "Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first." = "Codex auth.json has no ChatGPT OAuth tokens. Run `codex login` first.";
