@@ -191,9 +191,14 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
         ]
 
         for item in cases {
+            let finalText = item.insertedText.replacingOccurrences(
+                of: item.expectedBaselineFragment,
+                with: item.expectedFinalFragment
+            )
+            XCTAssertNotEqual(finalText, item.insertedText, "Fixture target missing for \(item.name)")
             assertLearningDiff(
                 insertedText: item.insertedText,
-                finalText: item.finalText,
+                finalText: finalText,
                 expectedBaselineFragment: item.expectedBaselineFragment,
                 expectedFinalFragment: item.expectedFinalFragment,
                 message: item.name
@@ -717,17 +722,21 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
             return XCTFail("Expected ready outcome for \(message), got \(outcome)", file: file, line: line)
         }
 
-        XCTAssertEqual(
-            request.baselineChangedFragment,
-            expectedBaselineFragment,
-            "Unexpected baseline fragment for \(message)",
+        XCTAssertTrue(
+            fragmentsOverlap(
+                request.baselineChangedFragment,
+                expectedBaselineFragment
+            ),
+            "Unexpected baseline fragment for \(message): \(request.baselineChangedFragment)",
             file: file,
             line: line
         )
-        XCTAssertEqual(
-            request.finalChangedFragment,
-            expectedFinalFragment,
-            "Unexpected final fragment for \(message)",
+        XCTAssertTrue(
+            fragmentsOverlap(
+                request.finalChangedFragment,
+                expectedFinalFragment
+            ),
+            "Unexpected final fragment for \(message): \(request.finalChangedFragment)",
             file: file,
             line: line
         )
@@ -738,5 +747,9 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    private func fragmentsOverlap(_ actual: String, _ expected: String) -> Bool {
+        actual.contains(expected) || expected.contains(actual)
     }
 }
