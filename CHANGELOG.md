@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.5] - 2026-05-15
+
+### English
+
+#### Fixed
+- Fixed a startup crash that could affect existing users after the SQLite storage update.
+
+### 简体中文
+
+#### 修复
+- 修复 SQLite 存储更新后可能影响已有用户的启动崩溃问题。
+
+### 日本語
+
+#### 修正
+- SQLite ストレージ更新後に既存ユーザーで発生する可能性がある起動クラッシュを修正しました。
+
 ## [1.11.4] - 2026-05-15
 
 ### English
